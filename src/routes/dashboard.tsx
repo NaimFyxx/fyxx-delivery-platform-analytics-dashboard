@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData, type DashboardData } from "@/lib/dashboard.functions";
+import fyxxLogo from "@/assets/fyxx-logo-white.svg";
+import talabatLogo from "@/assets/talabat-logo.png.asset.json";
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
