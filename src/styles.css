@@ -65,8 +65,8 @@
   --color-careem-foreground: var(--careem-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
