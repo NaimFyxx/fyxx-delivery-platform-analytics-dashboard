@@ -278,7 +278,7 @@ function PublicDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} />
+      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} allTime={allTime} />
 
       <div className="max-w-[1180px] mx-auto px-7 pt-7 pb-20">
         {/* Filters */}
