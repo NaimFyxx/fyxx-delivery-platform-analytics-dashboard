@@ -46,46 +46,34 @@ export type Database = {
       }
       import_log: {
         Row: {
-          created_at: string
           error_message: string | null
+          file_name: string
           id: string
-          imported_by: string | null
-          notes: string | null
-          rows_failed: number
-          rows_inserted: number
-          rows_total: number
-          rows_updated: number
-          source: string
+          imported_at: string
+          platform: string
+          report_type: string
+          rows_imported: number
           status: string
-          target_table: string
         }
         Insert: {
-          created_at?: string
           error_message?: string | null
+          file_name: string
           id?: string
-          imported_by?: string | null
-          notes?: string | null
-          rows_failed?: number
-          rows_inserted?: number
-          rows_total?: number
-          rows_updated?: number
-          source: string
+          imported_at?: string
+          platform: string
+          report_type: string
+          rows_imported?: number
           status?: string
-          target_table: string
         }
         Update: {
-          created_at?: string
           error_message?: string | null
+          file_name?: string
           id?: string
-          imported_by?: string | null
-          notes?: string | null
-          rows_failed?: number
-          rows_inserted?: number
-          rows_total?: number
-          rows_updated?: number
-          source?: string
+          imported_at?: string
+          platform?: string
+          report_type?: string
+          rows_imported?: number
           status?: string
-          target_table?: string
         }
         Relationships: []
       }
