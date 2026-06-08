@@ -31,3 +31,20 @@ export async function requireUser() {
   const { data } = await supabase.auth.getUser();
   return data.user;
 }
+
+/** Log a successful manual entry to import_log so the dashboard can show
+ *  a "last updated" freshness indicator per source. */
+export async function logImport(args: {
+  platform: string;
+  report_type: "performance" | "popular_dishes" | "invoice";
+  file_name?: string;
+  rows_imported?: number;
+}) {
+  await supabase.from("import_log").insert({
+    platform: args.platform,
+    report_type: args.report_type,
+    file_name: args.file_name ?? "manual entry",
+    rows_imported: args.rows_imported ?? 1,
+    status: "success",
+  });
+}
