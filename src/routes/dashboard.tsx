@@ -180,6 +180,15 @@ function PublicDashboard() {
   const totals = useMemo(() => sum(monthAggs), [monthAggs]);
   const priorTotals = useMemo(() => (priorAggs ? sum(priorAggs) : null), [priorAggs]);
 
+  // All-time totals (ignore filters — everything since day one)
+  const allTime = useMemo(() => {
+    if (!data) return { sales: 0, orders: 0 };
+    return data.daily.reduce(
+      (acc, d) => ({ sales: acc.sales + d.sales, orders: acc.orders + (d.orders ?? 0) }),
+      { sales: 0, orders: 0 },
+    );
+  }, [data]);
+
   const kpis = computeKpis(totals);
   const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
 
