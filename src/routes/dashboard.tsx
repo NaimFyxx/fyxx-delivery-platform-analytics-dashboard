@@ -11,6 +11,7 @@ import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
+import { MonthPicker } from "@/components/fyxx/date-picker";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -296,11 +297,9 @@ function PublicDashboard() {
           {range === "custom" && (
             <div className="flex gap-2 items-center bg-card border border-border rounded-full px-3 py-1 text-xs">
               <label className="text-muted-foreground">From</label>
-              <input type="month" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-                className="bg-background border border-border rounded px-2 py-1 text-xs" />
+              <div className="w-36"><MonthPicker value={customFrom} onChange={setCustomFrom} /></div>
               <label className="text-muted-foreground">To</label>
-              <input type="month" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
-                className="bg-background border border-border rounded px-2 py-1 text-xs" />
+              <div className="w-36"><MonthPicker value={customTo} onChange={setCustomTo} /></div>
             </div>
           )}
           <Segmented
