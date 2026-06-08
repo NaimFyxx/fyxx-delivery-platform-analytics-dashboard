@@ -5,6 +5,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData, type DashboardData } from "@/lib/dashboard.functions";
 import fyxxLogo from "@/assets/fyxx-logo-white.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
+import careemLogo from "@/assets/careem-logo.png.asset.json";
+import tgrLogo from "@/assets/tgr-logo.png.asset.json";
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -441,9 +443,9 @@ function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string
           <span className="text-muted-foreground text-xs">×</span>
           <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
           <span className="text-muted-foreground text-xs">×</span>
-          <LogoBadge text="careem" bg="var(--careem)" />
+          <img src={careemLogo.url} alt="Careem" className="h-5 w-auto" />
           <span className="text-muted-foreground text-xs">×</span>
-          <LogoBadge text="TGR" bg="var(--primary)" fg="#1a1a1a" />
+          <img src={tgrLogo.url} alt="The Green Room" className="h-8 w-auto" />
         </div>
         <div>
           <h1 className="font-display text-[17px] font-semibold leading-none">The Green Room — Delivery Dashboard</h1>
@@ -457,17 +459,6 @@ function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string
         </div>
       </div>
     </div>
-  );
-}
-
-function LogoBadge({ text, bg, fg = "#fff" }: { text: string; bg: string; fg?: string }) {
-  return (
-    <span
-      className="font-display text-[11px] font-bold rounded px-1.5 py-1 leading-none"
-      style={{ background: bg, color: fg, letterSpacing: 0.3 }}
-    >
-      {text}
-    </span>
   );
 }
 
