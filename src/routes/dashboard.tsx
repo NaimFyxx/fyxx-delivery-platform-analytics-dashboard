@@ -565,6 +565,120 @@ function ChartCard({ title, sub, children }: { title: string; sub: string; child
   );
 }
 
+type PaceData = {
+  rows: { platform: "Talabat" | "Careem"; sales: number; target: number; achievement: number }[];
+  totalSales: number; totalTarget: number; totalAchievement: number;
+  proRated: number; proRatedAch: number;
+  dayOfMonth: number; daysInMonth: number; workingDay: number;
+};
+
+function PaceTracker({ pace, currentMonth, platform }: {
+  pace: PaceData | null; currentMonth: string; platform: PlatformKey;
+}) {
+  if (!pace) return null;
+  const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "#FF5A00" : "#1BD15D";
+  const pctColor = (n: number) => n >= 100 ? "var(--careem)" : "#f5b400";
+  const careem = pace.rows.find((r) => r.platform === "Careem");
+  const talabat = pace.rows.find((r) => r.platform === "Talabat");
+  // Segments of the combined bar (against the combined target). Each platform's
+  // contribution is sales / totalTarget; cap visual at 100%.
+  const segCareem  = pace.totalTarget > 0 ? Math.min((careem?.sales  ?? 0) / pace.totalTarget * 100, 100) : 0;
+  const segTalabat = pace.totalTarget > 0 ? Math.min((talabat?.sales ?? 0) / pace.totalTarget * 100, 100) : 0;
+  const segCappedTalabat = Math.max(0, Math.min(segTalabat, 100 - segCareem));
+
+  return (
+    <div className="rounded-2xl border border-border p-5 mb-4"
+         style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
+      {/* Top row: title + working/passing day counters + hero achievement */}
+      <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+        <div>
+          <h3 className="font-display text-base font-semibold">
+            {monthLabel(currentMonth)} Pace vs Target · {platform === "All" ? "Combined" : platform}
+          </h3>
+          <div className="flex gap-3 mt-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-background/40 border border-border">
+              <span className="text-muted-foreground">Working Day</span>
+              <span style={{ color: "var(--primary)" }}>{pace.workingDay}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-background/40 border border-border">
+              <span className="text-muted-foreground">Passing Day</span>
+              <span style={{ color: "var(--primary)" }}>{pace.dayOfMonth}<span className="text-muted-foreground"> / {pace.daysInMonth}</span></span>
+            </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-display text-[38px] font-bold leading-none"
+               style={{ color: pctColor(pace.totalAchievement) }}>
+            {pace.totalTarget ? Math.round(pace.totalAchievement) + "%" : "—"}
+          </div>
+          <div className="text-[10.5px] text-muted-foreground mt-1">combined achievement · full-month target</div>
+          <div className="text-[10.5px] text-muted-foreground">
+            {pace.totalTarget ? `Pro-rated pace: ${Math.round(pace.proRatedAch)}%` : "no target set"}
+          </div>
+        </div>
+      </div>
+
+      {/* Combined stacked progress bar */}
+      <div className="h-3 bg-background rounded-md overflow-hidden flex">
+        <div className="h-full transition-all" style={{ width: `${segCareem}%`, background: colorFor("Careem") }} title={`Careem ${segCareem.toFixed(1)}%`} />
+        <div className="h-full transition-all" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }} title={`Talabat ${segTalabat.toFixed(1)}%`} />
+      </div>
+      <div className="flex flex-wrap gap-3 mt-2 text-[10.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Careem") }} />
+          Careem {Math.round(careem?.sales ?? 0).toLocaleString()} JOD
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Talabat") }} />
+          Talabat {Math.round(talabat?.sales ?? 0).toLocaleString()} JOD
+        </span>
+        <span className="ml-auto">
+          Combined {Math.round(pace.totalSales).toLocaleString()} / {Math.round(pace.totalTarget).toLocaleString()} JOD
+        </span>
+      </div>
+
+      {/* GM tracking sheet table */}
+      <div className="mt-4 rounded-lg border border-border overflow-hidden">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-background/40 text-muted-foreground">
+              <th className="text-left font-semibold px-3 py-2">Channel</th>
+              <th className="text-right font-semibold px-3 py-2">Sales (JOD)</th>
+              <th className="text-right font-semibold px-3 py-2">Target (JOD)</th>
+              <th className="text-right font-semibold px-3 py-2">Achievement</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pace.rows.map((r) => (
+              <tr key={r.platform} className="border-t border-border">
+                <td className="px-3 py-2">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(r.platform) }} />
+                    {r.platform}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right text-num">{Math.round(r.sales).toLocaleString()}</td>
+                <td className="px-3 py-2 text-right text-num text-muted-foreground">{Math.round(r.target).toLocaleString()}</td>
+                <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: pctColor(r.achievement) }}>
+                  {r.target > 0 ? `${Math.round(r.achievement)}%` : "—"}
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t border-border bg-background/30 font-semibold">
+              <td className="px-3 py-2">TOTAL</td>
+              <td className="px-3 py-2 text-right text-num">{Math.round(pace.totalSales).toLocaleString()}</td>
+              <td className="px-3 py-2 text-right text-num">{Math.round(pace.totalTarget).toLocaleString()}</td>
+              <td className="px-3 py-2 text-right text-num" style={{ color: pctColor(pace.totalAchievement) }}>
+                {pace.totalTarget > 0 ? `${Math.round(pace.totalAchievement)}%` : "—"}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const tooltipStyle = {
   contentStyle: {
     background: "var(--popover)", border: "1px solid var(--border)",
