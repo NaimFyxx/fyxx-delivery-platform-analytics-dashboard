@@ -584,17 +584,23 @@ const tooltipStyle = {
 };
 
 // ---------- math ----------
-function sum(rows: { gross: number; payout: number; cogs: number }[]) {
+function sum(rows: { gross: number; payout: number; cogs: number; orders: number }[]) {
   return rows.reduce(
-    (acc, r) => ({ gross: acc.gross + r.gross, payout: acc.payout + r.payout, cogs: acc.cogs + r.cogs }),
-    { gross: 0, payout: 0, cogs: 0 },
+    (acc, r) => ({
+      gross: acc.gross + r.gross,
+      payout: acc.payout + r.payout,
+      cogs: acc.cogs + r.cogs,
+      orders: acc.orders + r.orders,
+    }),
+    { gross: 0, payout: 0, cogs: 0, orders: 0 },
   );
 }
-function computeKpis(t: { gross: number; payout: number; cogs: number }) {
+function computeKpis(t: { gross: number; payout: number; cogs: number; orders: number }) {
   const prodMargin = t.gross > 0 ? ((exVat(t.gross) - t.cogs) / exVat(t.gross)) * 100 : 0;
   const netMargin = t.payout > 0 ? ((exVat(t.payout) - t.cogs) / exVat(t.payout)) * 100 : 0;
   const netProfit = exVat(t.payout) - t.cogs;
-  return { gross: t.gross, payout: t.payout, cogs: t.cogs, prodMargin, netMargin, netProfit };
+  const aov = t.orders > 0 ? t.gross / t.orders : 0;
+  return { gross: t.gross, payout: t.payout, cogs: t.cogs, orders: t.orders, prodMargin, netMargin, netProfit, aov };
 }
 function pctDelta(cur: number, prev: number) {
   if (!prev || !isFinite(prev)) return null;
