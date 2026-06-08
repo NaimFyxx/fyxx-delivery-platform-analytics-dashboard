@@ -105,6 +105,7 @@ export type Database = {
         Row: {
           actual_payout: number
           cogs: number
+          commission: number
           created_at: string
           gross_sales: number
           id: string
@@ -114,7 +115,8 @@ export type Database = {
         }
         Insert: {
           actual_payout: number
-          cogs: number
+          cogs?: number
+          commission?: number
           created_at?: string
           gross_sales: number
           id?: string
@@ -125,6 +127,7 @@ export type Database = {
         Update: {
           actual_payout?: number
           cogs?: number
+          commission?: number
           created_at?: string
           gross_sales?: number
           id?: string
