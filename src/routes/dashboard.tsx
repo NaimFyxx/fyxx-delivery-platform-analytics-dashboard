@@ -462,17 +462,6 @@ function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string
   );
 }
 
-function LogoBadge({ text, bg, fg = "#fff" }: { text: string; bg: string; fg?: string }) {
-  return (
-    <span
-      className="font-display text-[11px] font-bold rounded px-1.5 py-1 leading-none"
-      style={{ background: bg, color: fg, letterSpacing: 0.3 }}
-    >
-      {text}
-    </span>
-  );
-}
-
 function useFreshness(today: string, last: string | null): { text: string; color: string } {
   if (!last) return { text: "No data yet", color: "var(--muted-foreground)" };
   const days = Math.round((Date.parse(today) - Date.parse(last)) / 86400_000);
