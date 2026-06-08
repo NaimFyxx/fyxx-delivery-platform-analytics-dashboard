@@ -110,6 +110,7 @@ export type Database = {
           gross_sales: number
           id: string
           month: string
+          orders: number
           platform: Database["public"]["Enums"]["platform"]
           updated_at: string
         }
@@ -121,6 +122,7 @@ export type Database = {
           gross_sales: number
           id?: string
           month: string
+          orders?: number
           platform: Database["public"]["Enums"]["platform"]
           updated_at?: string
         }
@@ -132,6 +134,7 @@ export type Database = {
           gross_sales?: number
           id?: string
           month?: string
+          orders?: number
           platform?: Database["public"]["Enums"]["platform"]
           updated_at?: string
         }
