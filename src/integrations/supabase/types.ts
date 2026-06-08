@@ -14,7 +14,174 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      daily_sales: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          orders: number
+          platform: Database["public"]["Enums"]["platform"]
+          sales_jod: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          orders: number
+          platform: Database["public"]["Enums"]["platform"]
+          sales_jod: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          orders?: number
+          platform?: Database["public"]["Enums"]["platform"]
+          sales_jod?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      item_costs: {
+        Row: {
+          cost_exvat: number
+          created_at: string
+          effective_from: string
+          id: string
+          item_name: string
+        }
+        Insert: {
+          cost_exvat: number
+          created_at?: string
+          effective_from: string
+          id?: string
+          item_name: string
+        }
+        Update: {
+          cost_exvat?: number
+          created_at?: string
+          effective_from?: string
+          id?: string
+          item_name?: string
+        }
+        Relationships: []
+      }
+      monthly_financials: {
+        Row: {
+          actual_payout: number
+          cogs: number
+          created_at: string
+          gross_sales: number
+          id: string
+          month: string
+          platform: Database["public"]["Enums"]["platform"]
+          updated_at: string
+        }
+        Insert: {
+          actual_payout: number
+          cogs: number
+          created_at?: string
+          gross_sales: number
+          id?: string
+          month: string
+          platform: Database["public"]["Enums"]["platform"]
+          updated_at?: string
+        }
+        Update: {
+          actual_payout?: number
+          cogs?: number
+          created_at?: string
+          gross_sales?: number
+          id?: string
+          month?: string
+          platform?: Database["public"]["Enums"]["platform"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      monthly_item_sales: {
+        Row: {
+          created_at: string
+          id: string
+          item_name: string
+          month: string
+          platform: Database["public"]["Enums"]["platform"]
+          units: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_name: string
+          month: string
+          platform: Database["public"]["Enums"]["platform"]
+          units: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_name?: string
+          month?: string
+          platform?: Database["public"]["Enums"]["platform"]
+          units?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      targets: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          orders_target: number
+          platform: Database["public"]["Enums"]["platform"]
+          sales_target_jod: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          orders_target: number
+          platform: Database["public"]["Enums"]["platform"]
+          sales_target_jod: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          orders_target?: number
+          platform?: Database["public"]["Enums"]["platform"]
+          sales_target_jod?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +190,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      platform: "Talabat" | "Careem"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +317,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      platform: ["Talabat", "Careem"],
+    },
   },
 } as const
