@@ -443,9 +443,9 @@ function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string
           <span className="text-muted-foreground text-xs">×</span>
           <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
           <span className="text-muted-foreground text-xs">×</span>
-          <LogoBadge text="careem" bg="var(--careem)" />
+          <img src={careemLogo.url} alt="Careem" className="h-5 w-auto" />
           <span className="text-muted-foreground text-xs">×</span>
-          <LogoBadge text="TGR" bg="var(--primary)" fg="#1a1a1a" />
+          <img src={tgrLogo.url} alt="The Green Room" className="h-8 w-auto" />
         </div>
         <div>
           <h1 className="font-display text-[17px] font-semibold leading-none">The Green Room — Delivery Dashboard</h1>
