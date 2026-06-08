@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedTargetsRouteImport } from './routes/_authenticated/targets'
 import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/items'
 import { Route as AuthenticatedFinancialsRouteImport } from './routes/_authenticated/financials'
+import { Route as AuthenticatedEntryRouteImport } from './routes/_authenticated/entry'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 
 const AuthRoute = AuthRouteImport.update({
@@ -46,6 +47,11 @@ const AuthenticatedFinancialsRoute = AuthenticatedFinancialsRouteImport.update({
   path: '/financials',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEntryRoute = AuthenticatedEntryRouteImport.update({
+  id: '/entry',
+  path: '/entry',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -56,6 +62,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/entry': typeof AuthenticatedEntryRoute
   '/financials': typeof AuthenticatedFinancialsRoute
   '/items': typeof AuthenticatedItemsRoute
   '/targets': typeof AuthenticatedTargetsRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/entry': typeof AuthenticatedEntryRoute
   '/financials': typeof AuthenticatedFinancialsRoute
   '/items': typeof AuthenticatedItemsRoute
   '/targets': typeof AuthenticatedTargetsRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/entry': typeof AuthenticatedEntryRoute
   '/_authenticated/financials': typeof AuthenticatedFinancialsRoute
   '/_authenticated/items': typeof AuthenticatedItemsRoute
   '/_authenticated/targets': typeof AuthenticatedTargetsRoute
@@ -84,17 +93,26 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/entry'
     | '/financials'
     | '/items'
     | '/targets'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/dashboard' | '/financials' | '/items' | '/targets'
+  to:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/entry'
+    | '/financials'
+    | '/items'
+    | '/targets'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/dashboard'
+    | '/_authenticated/entry'
     | '/_authenticated/financials'
     | '/_authenticated/items'
     | '/_authenticated/targets'
@@ -150,6 +168,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinancialsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/entry': {
+      id: '/_authenticated/entry'
+      path: '/entry'
+      fullPath: '/entry'
+      preLoaderRoute: typeof AuthenticatedEntryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -162,6 +187,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedEntryRoute: typeof AuthenticatedEntryRoute
   AuthenticatedFinancialsRoute: typeof AuthenticatedFinancialsRoute
   AuthenticatedItemsRoute: typeof AuthenticatedItemsRoute
   AuthenticatedTargetsRoute: typeof AuthenticatedTargetsRoute
@@ -169,6 +195,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedEntryRoute: AuthenticatedEntryRoute,
   AuthenticatedFinancialsRoute: AuthenticatedFinancialsRoute,
   AuthenticatedItemsRoute: AuthenticatedItemsRoute,
   AuthenticatedTargetsRoute: AuthenticatedTargetsRoute,
