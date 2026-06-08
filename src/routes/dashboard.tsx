@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData, type DashboardData } from "@/lib/dashboard.functions";
+import fyxxLogo from "@/assets/fyxx-logo-white.svg";
+import talabatLogo from "@/assets/talabat-logo.png.asset.json";
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -434,8 +436,10 @@ function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string
   return (
     <div className="flex items-center justify-between px-7 py-4 border-b border-border bg-card sticky top-0 z-50">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <LogoBadge text="talabat" bg="var(--talabat)" />
+        <div className="flex items-center gap-3">
+          <img src={fyxxLogo} alt="Fyxx" className="h-8 w-auto" />
+          <span className="text-muted-foreground text-xs">×</span>
+          <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
           <span className="text-muted-foreground text-xs">×</span>
           <LogoBadge text="careem" bg="var(--careem)" />
           <span className="text-muted-foreground text-xs">×</span>
