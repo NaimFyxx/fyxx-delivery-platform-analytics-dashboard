@@ -70,50 +70,51 @@
 }
 
 :root {
-  /* Dark, editorial dashboard. Charcoal/navy base, citrus-amber primary,
-     hot-pink accent. Reads as a serious ops cockpit, not a kid's app. */
+  /* Fyxx Delivery Tracker — deep teal/green ops cockpit.
+     bg #061616, cards #0b2222, borders #1b4040, text #dde9e6,
+     accent yellow #EEC36A, Talabat orange #FF5A00, Careem green #1BD15D. */
   --radius: 0.75rem;
-  --background: oklch(0.16 0.018 260);
-  --foreground: oklch(0.97 0.005 90);
-  --card: oklch(0.21 0.02 260);
-  --card-foreground: oklch(0.97 0.005 90);
-  --popover: oklch(0.21 0.02 260);
-  --popover-foreground: oklch(0.97 0.005 90);
-  --primary: oklch(0.78 0.17 65);
-  --primary-foreground: oklch(0.18 0.02 60);
-  --secondary: oklch(0.27 0.025 260);
-  --secondary-foreground: oklch(0.97 0.005 90);
-  --muted: oklch(0.25 0.02 260);
-  --muted-foreground: oklch(0.7 0.015 260);
-  --accent: oklch(0.7 0.21 15);
-  --accent-foreground: oklch(0.99 0.005 90);
-  --destructive: oklch(0.62 0.24 25);
-  --destructive-foreground: oklch(0.99 0.005 90);
-  --border: oklch(0.3 0.02 260);
-  --input: oklch(0.27 0.02 260);
-  --ring: oklch(0.78 0.17 65);
-  --talabat: oklch(0.72 0.19 35);
-  --talabat-foreground: oklch(0.18 0.02 50);
-  --careem: oklch(0.68 0.2 165);
-  --careem-foreground: oklch(0.16 0.02 170);
-  --success: oklch(0.78 0.17 155);
-  --warning: oklch(0.82 0.16 80);
-  --chart-1: oklch(0.78 0.17 65);
-  --chart-2: oklch(0.68 0.2 165);
-  --chart-3: oklch(0.7 0.21 15);
-  --chart-4: oklch(0.65 0.17 280);
-  --chart-5: oklch(0.82 0.16 80);
-  --sidebar: oklch(0.19 0.02 260);
-  --sidebar-foreground: oklch(0.97 0.005 90);
-  --sidebar-primary: oklch(0.78 0.17 65);
-  --sidebar-primary-foreground: oklch(0.18 0.02 60);
-  --sidebar-accent: oklch(0.27 0.025 260);
-  --sidebar-accent-foreground: oklch(0.97 0.005 90);
-  --sidebar-border: oklch(0.3 0.02 260);
-  --sidebar-ring: oklch(0.78 0.17 65);
-  --gradient-primary: linear-gradient(135deg, oklch(0.78 0.17 65), oklch(0.7 0.21 15));
-  --gradient-surface: linear-gradient(180deg, oklch(0.21 0.02 260), oklch(0.17 0.018 260));
-  --shadow-glow: 0 20px 60px -20px oklch(0.78 0.17 65 / 0.35);
+  --background: #061616;
+  --foreground: #dde9e6;
+  --card: #0b2222;
+  --card-foreground: #dde9e6;
+  --popover: #0b2222;
+  --popover-foreground: #dde9e6;
+  --primary: #EEC36A;
+  --primary-foreground: #061616;
+  --secondary: #112e2e;
+  --secondary-foreground: #dde9e6;
+  --muted: #0f2828;
+  --muted-foreground: #8aa6a1;
+  --accent: #EEC36A;
+  --accent-foreground: #061616;
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+  --border: #1b4040;
+  --input: #1b4040;
+  --ring: #EEC36A;
+  --talabat: #FF5A00;
+  --talabat-foreground: #ffffff;
+  --careem: #1BD15D;
+  --careem-foreground: #061616;
+  --success: #1BD15D;
+  --warning: #EEC36A;
+  --chart-1: #EEC36A;
+  --chart-2: #1BD15D;
+  --chart-3: #FF5A00;
+  --chart-4: #6ad0d0;
+  --chart-5: #dde9e6;
+  --sidebar: #081b1b;
+  --sidebar-foreground: #dde9e6;
+  --sidebar-primary: #EEC36A;
+  --sidebar-primary-foreground: #061616;
+  --sidebar-accent: #112e2e;
+  --sidebar-accent-foreground: #dde9e6;
+  --sidebar-border: #1b4040;
+  --sidebar-ring: #EEC36A;
+  --gradient-primary: linear-gradient(135deg, #EEC36A, #c69a3a);
+  --gradient-surface: linear-gradient(180deg, #0b2222, #061616);
+  --shadow-glow: 0 20px 60px -20px rgb(238 195 106 / 0.35);
 }
 
 .dark {
