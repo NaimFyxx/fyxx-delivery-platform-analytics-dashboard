@@ -140,7 +140,7 @@ function PublicDashboard() {
   const rangeIsSingleMonth = rangeMonths.length === 1;
 
   // --- Aggregations per month, respecting platform filter ---
-  type MonthAgg = { month: string; gross: number; payout: number; cogs: number };
+  type MonthAgg = { month: string; gross: number; payout: number; cogs: number; orders: number };
   const monthAggs: MonthAgg[] = useMemo(() => {
     if (!data) return [];
     return rangeMonths.map((m) => {
@@ -148,12 +148,13 @@ function PublicDashboard() {
       const finGross = finRows.reduce((s, r) => s + r.gross, 0);
       const payout = finRows.reduce((s, r) => s + r.payout, 0);
       // Prefer monthly_financials.gross; fall back to summed daily_sales for that month.
-      const dailyGross = data.daily
+      const dailyRows = data.daily
         .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-        .reduce((s, d) => s + d.sales, 0);
+      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
+      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
       const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
-      return { month: m, gross, payout, cogs };
+      return { month: m, gross, payout, cogs, orders };
     });
   }, [data, rangeMonths, platforms]);
 
@@ -169,12 +170,13 @@ function PublicDashboard() {
       const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
       const finGross = finRows.reduce((s, r) => s + r.gross, 0);
       const payout = finRows.reduce((s, r) => s + r.payout, 0);
-      const dailyGross = data.daily
+      const dailyRows = data.daily
         .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-        .reduce((s, d) => s + d.sales, 0);
+      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
+      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
       const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
-      return { month: m, gross, payout, cogs };
+      return { month: m, gross, payout, cogs, orders };
     });
   }, [data, range, rangeMonths, platforms, allMonths]);
 
