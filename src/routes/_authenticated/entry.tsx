@@ -184,6 +184,7 @@ function FinancialsForm() {
 /* ---------- Item costs (versioned) ---------- */
 function ItemCostsForm() {
   const [item, setItem] = useState("");
+  const [mode, setMode] = useState<"existing" | "new">("existing");
   const [cost, setCost] = useState("");
   const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
   const invalidate = useInvalidateAll();
@@ -199,13 +200,15 @@ function ItemCostsForm() {
 
   const save = useMutation({
     mutationFn: async () => {
+      const name = item.trim();
+      if (!name) throw new Error("Item name is required");
       const { error } = await supabase.from("item_costs").insert({
-        item_name: item.trim(), cost_exvat: Number(cost), effective_from: from,
+        item_name: name, cost_exvat: Number(cost), effective_from: from,
       });
       if (error) throw error;
-      await logImport({ platform: "—", report_type: "invoice", file_name: `cost: ${item.trim()}` });
+      await logImport({ platform: "—", report_type: "invoice", file_name: `cost: ${name}` });
     },
-    onSuccess: () => { toast.success("Cost version added"); setItem(""); setCost(""); invalidate(); },
+    onSuccess: () => { toast.success("Cost version added"); setCost(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -231,12 +234,37 @@ function ItemCostsForm() {
     return new Set(Array.from(byItem.values()).map((v) => v.id));
   }, [rows, today]);
 
+  const itemNames = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.item_name))).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
         <p className="text-xs text-muted-foreground mb-3">Each save adds a new version. The dashboard uses the latest version on or before the requested month.</p>
         <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Item name"><Input value={item} onChange={(e) => setItem(e.target.value)} required placeholder="e.g. Chicken Shawarma" /></Field>
+          <Field label="Item name">
+            {mode === "existing" ? (
+              <Select
+                value={item}
+                onValueChange={(v) => {
+                  if (v === "__new__") { setMode("new"); setItem(""); }
+                  else setItem(v);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+                <SelectContent>
+                  {itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  <SelectItem value="__new__" className="text-primary">+ Add new item</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex gap-2">
+                <Input value={item} onChange={(e) => setItem(e.target.value)} required placeholder="New item name" autoFocus />
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode("existing"); setItem(""); }}>Cancel</Button>
+              </div>
+            )}
+          </Field>
           <Field label="Cost (ex-VAT, JOD)"><Input type="number" step="0.0001" min="0" value={cost} onChange={(e) => setCost(e.target.value)} required /></Field>
           <Field label="Effective from"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} required /></Field>
           <SubmitBtn pending={save.isPending} />
