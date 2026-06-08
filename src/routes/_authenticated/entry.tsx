@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
+import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/entry")({
   head: () => ({ meta: [{ title: "Data entry · Fyxx" }] }),
@@ -72,6 +72,7 @@ function DailySalesForm() {
         { onConflict: "date,platform" },
       );
       if (error) throw error;
+      await logImport({ platform, report_type: "performance" });
     },
     onSuccess: () => { toast.success("Saved"); setSales(""); setOrders(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -137,6 +138,7 @@ function FinancialsForm() {
         { onConflict: "month,platform" },
       );
       if (error) throw error;
+      await logImport({ platform, report_type: "invoice" });
     },
     onSuccess: () => { toast.success("Saved"); setGross(""); setPayout(""); setCogs(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -201,6 +203,7 @@ function ItemCostsForm() {
         item_name: item.trim(), cost_exvat: Number(cost), effective_from: from,
       });
       if (error) throw error;
+      await logImport({ platform: "—", report_type: "invoice", file_name: `cost: ${item.trim()}` });
     },
     onSuccess: () => { toast.success("Cost version added"); setItem(""); setCost(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -215,6 +218,19 @@ function ItemCostsForm() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Determine which row is the "current" version per item (latest effective_from
+  // that is on or before today). Everything else for that item is "superseded".
+  const today = new Date().toISOString().slice(0, 10);
+  const currentIds = useMemo(() => {
+    const byItem = new Map<string, { id: string; date: string }>();
+    for (const r of rows) {
+      if (r.effective_from > today) continue;
+      const cur = byItem.get(r.item_name);
+      if (!cur || r.effective_from > cur.date) byItem.set(r.item_name, { id: r.id, date: r.effective_from });
+    }
+    return new Set(Array.from(byItem.values()).map((v) => v.id));
+  }, [rows, today]);
+
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
@@ -228,13 +244,24 @@ function ItemCostsForm() {
       </Card>
       <RecentTable
         title="Cost history"
-        headers={["Item", "Cost (ex-VAT)", "Effective from", ""]}
-        rows={rows.map((r) => [
-          r.item_name,
-          fmtJOD(Number(r.cost_exvat)),
-          r.effective_from,
-          <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
-        ])}
+        headers={["Item", "Cost (ex-VAT)", "Effective from", "Status", ""]}
+        rows={rows.map((r) => {
+          const isCurrent = currentIds.has(r.id);
+          const isFuture = r.effective_from > today;
+          return [
+            r.item_name,
+            fmtJOD(Number(r.cost_exvat)),
+            r.effective_from,
+            isFuture ? (
+              <Badge key="s" variant="outline" className="bg-primary/10 text-primary border-primary/30">scheduled</Badge>
+            ) : isCurrent ? (
+              <Badge key="s" variant="outline" className="bg-success/15 text-success border-success/30">current</Badge>
+            ) : (
+              <Badge key="s" variant="outline" className="text-muted-foreground">superseded</Badge>
+            ),
+            <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
+          ];
+        })}
       />
     </div>
   );
@@ -264,6 +291,7 @@ function ItemSalesForm() {
         { onConflict: "month,platform,item_name" },
       );
       if (error) throw error;
+      await logImport({ platform, report_type: "popular_dishes" });
     },
     onSuccess: () => { toast.success("Saved"); setItem(""); setUnits(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -328,6 +356,7 @@ function TargetsForm() {
         { onConflict: "month,platform" },
       );
       if (error) throw error;
+      await logImport({ platform, report_type: "invoice", file_name: `target: ${month}` });
     },
     onSuccess: () => { toast.success("Saved"); setSalesT(""); setOrdersT(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
