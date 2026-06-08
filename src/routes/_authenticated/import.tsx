@@ -316,9 +316,19 @@ function CareemInvoiceFlow({ report, platform, qc }: {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [building, setBuilding] = useState(false);
 
+  const VAT = 0.16;
   const grossN = num(gross);
-  const fees = num(platformFee) + num(cplusFee) + num(pgFee) + num(bankFee);
-  const payout = grossN - fees;
+  const feeRows = [
+    { key: "pg",       label: "Payment gateway fee", value: pgFee,       set: setPgFee },
+    { key: "platform", label: "Platform fee",        value: platformFee, set: setPlatformFee },
+    { key: "cplus",    label: "CPlus fee",           value: cplusFee,    set: setCplusFee },
+    { key: "bank",     label: "Bank transfer fee",   value: bankFee,     set: setBankFee },
+  ];
+  const netTotals = feeRows.map((r) => num(r.value));
+  const totalNet = netTotals.reduce((s, n) => s + n, 0);
+  const totalVat = totalNet * VAT;
+  const grandTotal = totalNet + totalVat;
+  const payout = grossN - grandTotal;
 
   const canPreview = /^\d{4}-\d{2}$/.test(month) && grossN > 0;
 
@@ -333,19 +343,24 @@ function CareemInvoiceFlow({ report, platform, qc }: {
         month, platform,
         gross_sales: grossN,
         actual_payout: payout,
-        commission: Math.abs(fees),
+        // Store net (excl-VAT) fees — margins use VAT-stripped values.
+        commission: totalNet,
         orders: Math.round(num(orders)),
       };
       setPreview({
         rows: [{ key: `${month}|${platform}`, exists, payload }],
         willAdd: exists ? 0 : 1, willUpdate: exists ? 1 : 0, skipped: 0,
         notes: [
-          `Payout = Gross (${fmtJOD(grossN)}) − Fees (${fmtJOD(fees)}) = ${fmtJOD(payout)}.`,
+          `Stored commission = sum of Net Prices (excl. VAT) = ${fmtJOD(totalNet)}.`,
+          `Payout = Gross incl. VAT (${fmtJOD(grossN)}) − Grand Total incl. VAT (${fmtJOD(grandTotal)}) = ${fmtJOD(payout)}.`,
           "COGS is preserved — manual invoice entry does not overwrite it.",
         ],
-        previewCols: ["Month", "Gross", "Fees", "Payout", "Orders"],
+        previewCols: ["Month", "Gross (incl VAT)", "Fees (net)", "Fees (incl VAT)", "Payout", "Orders"],
         previewRows: [{
-          Month: month, Gross: fmtJOD(grossN), Fees: fmtJOD(fees),
+          Month: month,
+          "Gross (incl VAT)": fmtJOD(grossN),
+          "Fees (net)": fmtJOD(totalNet),
+          "Fees (incl VAT)": fmtJOD(grandTotal),
           Payout: fmtJOD(payout), Orders: fmtInt(num(orders)),
         }],
         table: "monthly_financials",
@@ -380,35 +395,78 @@ function CareemInvoiceFlow({ report, platform, qc }: {
   return (
     <>
       <Card className="p-5 mt-4 space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <Field label="Invoice month">
-            <Input value={month} onChange={(e) => setMonth(e.target.value)} pattern="\d{4}-\d{2}" placeholder="YYYY-MM" />
+            <MonthPicker value={month} onChange={setMonth} />
+          </Field>
+          <Field label="Total Gross Amount (incl. VAT)">
+            <Input value={gross} onChange={(e) => setGross(e.target.value)} inputMode="decimal" placeholder="0.00" />
           </Field>
           <Field label="Orders count (optional)">
             <Input value={orders} onChange={(e) => setOrders(e.target.value)} inputMode="numeric" placeholder="0" />
           </Field>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Gross amount (JOD)">
-            <Input value={gross} onChange={(e) => setGross(e.target.value)} inputMode="decimal" placeholder="0.00" />
-          </Field>
-          <Field label="Platform fee (JOD)">
-            <Input value={platformFee} onChange={(e) => setPlatformFee(e.target.value)} inputMode="decimal" placeholder="0.00" />
-          </Field>
-          <Field label="CPlus fee (JOD)">
-            <Input value={cplusFee} onChange={(e) => setCplusFee(e.target.value)} inputMode="decimal" placeholder="0.00" />
-          </Field>
-          <Field label="Payment gateway fee (JOD)">
-            <Input value={pgFee} onChange={(e) => setPgFee(e.target.value)} inputMode="decimal" placeholder="0.00" />
-          </Field>
-          <Field label="Bank transfer fee (JOD)">
-            <Input value={bankFee} onChange={(e) => setBankFee(e.target.value)} inputMode="decimal" placeholder="0.00" />
-          </Field>
+
+        <div className="space-y-2">
+          <div>
+            <Label className="text-sm font-semibold">Fees</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Enter the Net Price (excl. VAT) for each fee — from the invoice's "Net Price" column. VAT (16%) and Total (incl. VAT) are calculated for confirmation.
+            </p>
+          </div>
+          <div className="rounded-md border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fee</TableHead>
+                  <TableHead className="text-right">Net Price (excl. VAT)</TableHead>
+                  <TableHead className="text-right">VAT 16%</TableHead>
+                  <TableHead className="text-right">Total (incl. VAT)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {feeRows.map((r, i) => {
+                  const net = netTotals[i];
+                  const vat = net * VAT;
+                  return (
+                    <TableRow key={r.key}>
+                      <TableCell className="font-medium">{r.label}</TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          value={r.value}
+                          onChange={(e) => r.set(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          className="text-right ml-auto max-w-[140px]"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right text-num text-muted-foreground">{fmtJOD(vat)}</TableCell>
+                      <TableCell className="text-right text-num">{fmtJOD(net + vat)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
-        <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-1">
-          <div className="flex justify-between"><span className="text-muted-foreground">Total fees</span><span className="text-num">{fmtJOD(fees)}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Computed payout</span><span className="text-num font-medium">{fmtJOD(payout)}</span></div>
+        <div className="rounded-md border border-border bg-muted/30 p-4 text-sm space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total Fees (Excl. VAT)</span>
+            <span className="text-num">{fmtJOD(totalNet)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total VAT</span>
+            <span className="text-num">{fmtJOD(totalVat)}</span>
+          </div>
+          <div className="flex justify-between pt-1.5 border-t border-border">
+            <span className="font-semibold">Grand Total (Incl. VAT)</span>
+            <span className="text-num font-semibold">{fmtJOD(grandTotal)}</span>
+          </div>
+          <div className="flex justify-between pt-1.5 text-xs">
+            <span className="text-muted-foreground">Computed payout (Gross − Grand Total)</span>
+            <span className="text-num font-medium">{fmtJOD(payout)}</span>
+          </div>
         </div>
 
         <div>
