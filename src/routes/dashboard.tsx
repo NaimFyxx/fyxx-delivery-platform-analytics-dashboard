@@ -196,20 +196,45 @@ function PublicDashboard() {
   const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
 
   // --- Pace tracker: always current month, ignores range filter ---
+  // Always shows the current month, but respects the platform filter
+  // (single platform → only that row). Mirrors the GM tracking sheet:
+  // Channel | Sales | Target | Achievement %, plus a combined "TOTAL".
   const pace = useMemo(() => {
     if (!data) return null;
-    const mtd = data.daily
-      .filter((d) => monthOfDate(d.date) === currentMonth && platforms.includes(d.platform))
-      .reduce((s, d) => s + d.sales, 0);
-    const target = data.targets
-      .filter((t) => t.month === currentMonth && platforms.includes(t.platform))
-      .reduce((s, t) => s + t.salesTarget, 0);
     const dayOfMonth = Number(today.slice(8, 10));
     const [y, mm] = currentMonth.split("-").map(Number);
     const daysInMonth = new Date(Date.UTC(y, mm, 0)).getUTCDate();
-    const proRated = target * (dayOfMonth / daysInMonth);
-    const achievement = proRated ? (mtd / proRated) * 100 : 0;
-    return { mtd, target, proRated, achievement, dayOfMonth, daysInMonth };
+
+    // Working day = distinct dates in current month (≤ today) with any sales.
+    const workingDates = new Set(
+      data.daily
+        .filter((d) => monthOfDate(d.date) === currentMonth && d.date <= today)
+        .map((d) => d.date),
+    );
+    const workingDay = workingDates.size;
+
+    const platformsOnSheet = platforms as ("Talabat" | "Careem")[];
+    const rows = platformsOnSheet.map((p) => {
+      const sales = data.daily
+        .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
+        .reduce((s, d) => s + d.sales, 0);
+      const target = data.targets
+        .filter((t) => t.month === currentMonth && t.platform === p)
+        .reduce((s, t) => s + t.salesTarget, 0);
+      const achievement = target > 0 ? (sales / target) * 100 : 0;
+      return { platform: p, sales, target, achievement };
+    });
+
+    const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+    const totalTarget = rows.reduce((s, r) => s + r.target, 0);
+    const totalAchievement = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+    const proRated = totalTarget * (dayOfMonth / daysInMonth);
+    const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
+
+    return {
+      rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
+      dayOfMonth, daysInMonth, workingDay,
+    };
   }, [data, currentMonth, today, platforms]);
 
   // --- Chart series ---
