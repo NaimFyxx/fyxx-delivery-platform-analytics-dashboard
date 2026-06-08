@@ -442,7 +442,13 @@ function PublicDashboard() {
 }
 
 // ---------- small UI primitives ----------
-function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string | null }) {
+function Header({
+  today, lastDailyDate, allTime,
+}: {
+  today: string;
+  lastDailyDate: string | null;
+  allTime: { sales: number; orders: number };
+}) {
   const fresh = useFreshness(today, lastDailyDate);
   return (
     <div className="flex items-center justify-between px-7 py-4 border-b border-border bg-card sticky top-0 z-50">
@@ -461,10 +467,18 @@ function Header({ today, lastDailyDate }: { today: string; lastDailyDate: string
           <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
         </div>
       </div>
-      <div className="text-right text-[11px]">
-        <div className="flex items-center justify-end gap-1.5">
+      <div className="text-right">
+        <div className="flex items-center justify-end gap-1.5 text-[11px]">
           <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: fresh.color }} />
           <span style={{ color: fresh.color }}>{fresh.text}</span>
+        </div>
+        <div className="flex items-center justify-end gap-2 mt-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a]" style={{ color: "var(--careem)" }}>
+            All-time sales: {Math.round(allTime.sales).toLocaleString()} JOD
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a]" style={{ color: "var(--primary)" }}>
+            Orders: {allTime.orders.toLocaleString()}
+          </span>
         </div>
       </div>
     </div>
