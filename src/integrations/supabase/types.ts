@@ -105,30 +105,36 @@ export type Database = {
         Row: {
           actual_payout: number
           cogs: number
+          commission: number
           created_at: string
           gross_sales: number
           id: string
           month: string
+          orders: number
           platform: Database["public"]["Enums"]["platform"]
           updated_at: string
         }
         Insert: {
           actual_payout: number
-          cogs: number
+          cogs?: number
+          commission?: number
           created_at?: string
           gross_sales: number
           id?: string
           month: string
+          orders?: number
           platform: Database["public"]["Enums"]["platform"]
           updated_at?: string
         }
         Update: {
           actual_payout?: number
           cogs?: number
+          commission?: number
           created_at?: string
           gross_sales?: number
           id?: string
           month?: string
+          orders?: number
           platform?: Database["public"]["Enums"]["platform"]
           updated_at?: string
         }

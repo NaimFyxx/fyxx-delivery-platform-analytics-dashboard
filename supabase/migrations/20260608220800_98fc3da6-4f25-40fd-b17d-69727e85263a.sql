@@ -1,0 +1,1 @@
+ALTER TABLE public.monthly_financials ADD COLUMN IF NOT EXISTS orders integer NOT NULL DEFAULT 0;
