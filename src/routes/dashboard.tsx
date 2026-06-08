@@ -140,7 +140,7 @@ function PublicDashboard() {
   const rangeIsSingleMonth = rangeMonths.length === 1;
 
   // --- Aggregations per month, respecting platform filter ---
-  type MonthAgg = { month: string; gross: number; payout: number; cogs: number };
+  type MonthAgg = { month: string; gross: number; payout: number; cogs: number; orders: number };
   const monthAggs: MonthAgg[] = useMemo(() => {
     if (!data) return [];
     return rangeMonths.map((m) => {
@@ -148,12 +148,13 @@ function PublicDashboard() {
       const finGross = finRows.reduce((s, r) => s + r.gross, 0);
       const payout = finRows.reduce((s, r) => s + r.payout, 0);
       // Prefer monthly_financials.gross; fall back to summed daily_sales for that month.
-      const dailyGross = data.daily
+      const dailyRows = data.daily
         .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-        .reduce((s, d) => s + d.sales, 0);
+      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
+      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
       const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
-      return { month: m, gross, payout, cogs };
+      return { month: m, gross, payout, cogs, orders };
     });
   }, [data, rangeMonths, platforms]);
 
@@ -169,12 +170,13 @@ function PublicDashboard() {
       const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
       const finGross = finRows.reduce((s, r) => s + r.gross, 0);
       const payout = finRows.reduce((s, r) => s + r.payout, 0);
-      const dailyGross = data.daily
+      const dailyRows = data.daily
         .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-        .reduce((s, d) => s + d.sales, 0);
+      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
+      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
       const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
-      return { month: m, gross, payout, cogs };
+      return { month: m, gross, payout, cogs, orders };
     });
   }, [data, range, rangeMonths, platforms, allMonths]);
 
@@ -194,20 +196,45 @@ function PublicDashboard() {
   const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
 
   // --- Pace tracker: always current month, ignores range filter ---
+  // Always shows the current month, but respects the platform filter
+  // (single platform → only that row). Mirrors the GM tracking sheet:
+  // Channel | Sales | Target | Achievement %, plus a combined "TOTAL".
   const pace = useMemo(() => {
     if (!data) return null;
-    const mtd = data.daily
-      .filter((d) => monthOfDate(d.date) === currentMonth && platforms.includes(d.platform))
-      .reduce((s, d) => s + d.sales, 0);
-    const target = data.targets
-      .filter((t) => t.month === currentMonth && platforms.includes(t.platform))
-      .reduce((s, t) => s + t.salesTarget, 0);
     const dayOfMonth = Number(today.slice(8, 10));
     const [y, mm] = currentMonth.split("-").map(Number);
     const daysInMonth = new Date(Date.UTC(y, mm, 0)).getUTCDate();
-    const proRated = target * (dayOfMonth / daysInMonth);
-    const achievement = proRated ? (mtd / proRated) * 100 : 0;
-    return { mtd, target, proRated, achievement, dayOfMonth, daysInMonth };
+
+    // Working day = distinct dates in current month (≤ today) with any sales.
+    const workingDates = new Set(
+      data.daily
+        .filter((d) => monthOfDate(d.date) === currentMonth && d.date <= today)
+        .map((d) => d.date),
+    );
+    const workingDay = workingDates.size;
+
+    const platformsOnSheet = platforms as ("Talabat" | "Careem")[];
+    const rows = platformsOnSheet.map((p) => {
+      const sales = data.daily
+        .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
+        .reduce((s, d) => s + d.sales, 0);
+      const target = data.targets
+        .filter((t) => t.month === currentMonth && t.platform === p)
+        .reduce((s, t) => s + t.salesTarget, 0);
+      const achievement = target > 0 ? (sales / target) * 100 : 0;
+      return { platform: p, sales, target, achievement };
+    });
+
+    const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+    const totalTarget = rows.reduce((s, r) => s + r.target, 0);
+    const totalAchievement = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+    const proRated = totalTarget * (dayOfMonth / daysInMonth);
+    const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
+
+    return {
+      rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
+      dayOfMonth, daysInMonth, workingDay,
+    };
   }, [data, currentMonth, today, platforms]);
 
   // --- Chart series ---
@@ -316,51 +343,16 @@ function PublicDashboard() {
 
         {/* PACE TRACKER */}
         <SectionLabel>Current Month — Live Pace</SectionLabel>
-        <div className="rounded-2xl border border-border p-5 mb-4"
-             style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <h3 className="font-display text-base font-semibold">
-                {monthLabel(currentMonth)} Pace vs Target · {platform === "All" ? "Combined" : platform}
-              </h3>
-              <div className="text-xs text-muted-foreground mt-1">
-                Day {pace?.dayOfMonth} of {pace?.daysInMonth} · current month
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-display text-[38px] font-bold leading-none"
-                   style={{ color: (pace?.achievement ?? 0) >= 100 ? "var(--careem)" : "var(--primary)" }}>
-                {pace?.target ? Math.round(pace.achievement) + "%" : "—"}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">of pro-rated target</div>
-            </div>
-          </div>
-          <div className="h-2.5 bg-background rounded-md overflow-hidden mt-3">
-            <div
-              className="h-full rounded-md transition-all"
-              style={{
-                width: `${Math.min(pace?.achievement ?? 0, 100)}%`,
-                background: "linear-gradient(90deg, var(--careem), var(--primary))",
-              }}
-            />
-          </div>
-          <div className="flex justify-between mt-2.5 text-[11px] text-muted-foreground">
-            <span>
-              {pace?.target
-                ? `Actual MTD: ${Math.round(pace.mtd)} JOD · pro-rated target ${Math.round(pace.proRated)}`
-                : "No target set for this month"}
-            </span>
-            <span>
-              {pace?.target ? `Full ${monthLabel(currentMonth)} target: ${pace.target.toLocaleString()} JOD` : ""}
-            </span>
-          </div>
-        </div>
+        <PaceTracker pace={pace} currentMonth={currentMonth} platform={platform} />
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
           <Kpi label="Sales (incl VAT)" value={`${Math.round(kpis.gross).toLocaleString()}`} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
                prior={priorKpis ? `Prior: ${Math.round(priorKpis.gross).toLocaleString()} JOD` : platformContext(platform)} />
+          <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "—"} unit="JOD"
+               delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
+               prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"} />
           <Kpi label="Product Margin" value={kpis.prodMargin.toFixed(1)} unit="%"
                delta={priorKpis ? ptDelta(kpis.prodMargin, priorKpis.prodMargin) : null}
                prior={priorKpis ? `Prior: ${priorKpis.prodMargin.toFixed(1)}%` : "on menu price exVAT"} />
@@ -573,6 +565,120 @@ function ChartCard({ title, sub, children }: { title: string; sub: string; child
   );
 }
 
+type PaceData = {
+  rows: { platform: "Talabat" | "Careem"; sales: number; target: number; achievement: number }[];
+  totalSales: number; totalTarget: number; totalAchievement: number;
+  proRated: number; proRatedAch: number;
+  dayOfMonth: number; daysInMonth: number; workingDay: number;
+};
+
+function PaceTracker({ pace, currentMonth, platform }: {
+  pace: PaceData | null; currentMonth: string; platform: PlatformKey;
+}) {
+  if (!pace) return null;
+  const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "#FF5A00" : "#1BD15D";
+  const pctColor = (n: number) => n >= 100 ? "var(--careem)" : "#f5b400";
+  const careem = pace.rows.find((r) => r.platform === "Careem");
+  const talabat = pace.rows.find((r) => r.platform === "Talabat");
+  // Segments of the combined bar (against the combined target). Each platform's
+  // contribution is sales / totalTarget; cap visual at 100%.
+  const segCareem  = pace.totalTarget > 0 ? Math.min((careem?.sales  ?? 0) / pace.totalTarget * 100, 100) : 0;
+  const segTalabat = pace.totalTarget > 0 ? Math.min((talabat?.sales ?? 0) / pace.totalTarget * 100, 100) : 0;
+  const segCappedTalabat = Math.max(0, Math.min(segTalabat, 100 - segCareem));
+
+  return (
+    <div className="rounded-2xl border border-border p-5 mb-4"
+         style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
+      {/* Top row: title + working/passing day counters + hero achievement */}
+      <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+        <div>
+          <h3 className="font-display text-base font-semibold">
+            {monthLabel(currentMonth)} Pace vs Target · {platform === "All" ? "Combined" : platform}
+          </h3>
+          <div className="flex gap-3 mt-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-background/40 border border-border">
+              <span className="text-muted-foreground">Working Day</span>
+              <span style={{ color: "var(--primary)" }}>{pace.workingDay}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-background/40 border border-border">
+              <span className="text-muted-foreground">Passing Day</span>
+              <span style={{ color: "var(--primary)" }}>{pace.dayOfMonth}<span className="text-muted-foreground"> / {pace.daysInMonth}</span></span>
+            </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-display text-[38px] font-bold leading-none"
+               style={{ color: pctColor(pace.totalAchievement) }}>
+            {pace.totalTarget ? Math.round(pace.totalAchievement) + "%" : "—"}
+          </div>
+          <div className="text-[10.5px] text-muted-foreground mt-1">combined achievement · full-month target</div>
+          <div className="text-[10.5px] text-muted-foreground">
+            {pace.totalTarget ? `Pro-rated pace: ${Math.round(pace.proRatedAch)}%` : "no target set"}
+          </div>
+        </div>
+      </div>
+
+      {/* Combined stacked progress bar */}
+      <div className="h-3 bg-background rounded-md overflow-hidden flex">
+        <div className="h-full transition-all" style={{ width: `${segCareem}%`, background: colorFor("Careem") }} title={`Careem ${segCareem.toFixed(1)}%`} />
+        <div className="h-full transition-all" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }} title={`Talabat ${segTalabat.toFixed(1)}%`} />
+      </div>
+      <div className="flex flex-wrap gap-3 mt-2 text-[10.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Careem") }} />
+          Careem {Math.round(careem?.sales ?? 0).toLocaleString()} JOD
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Talabat") }} />
+          Talabat {Math.round(talabat?.sales ?? 0).toLocaleString()} JOD
+        </span>
+        <span className="ml-auto">
+          Combined {Math.round(pace.totalSales).toLocaleString()} / {Math.round(pace.totalTarget).toLocaleString()} JOD
+        </span>
+      </div>
+
+      {/* GM tracking sheet table */}
+      <div className="mt-4 rounded-lg border border-border overflow-hidden">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-background/40 text-muted-foreground">
+              <th className="text-left font-semibold px-3 py-2">Channel</th>
+              <th className="text-right font-semibold px-3 py-2">Sales (JOD)</th>
+              <th className="text-right font-semibold px-3 py-2">Target (JOD)</th>
+              <th className="text-right font-semibold px-3 py-2">Achievement</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pace.rows.map((r) => (
+              <tr key={r.platform} className="border-t border-border">
+                <td className="px-3 py-2">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(r.platform) }} />
+                    {r.platform}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right text-num">{Math.round(r.sales).toLocaleString()}</td>
+                <td className="px-3 py-2 text-right text-num text-muted-foreground">{Math.round(r.target).toLocaleString()}</td>
+                <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: pctColor(r.achievement) }}>
+                  {r.target > 0 ? `${Math.round(r.achievement)}%` : "—"}
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t border-border bg-background/30 font-semibold">
+              <td className="px-3 py-2">TOTAL</td>
+              <td className="px-3 py-2 text-right text-num">{Math.round(pace.totalSales).toLocaleString()}</td>
+              <td className="px-3 py-2 text-right text-num">{Math.round(pace.totalTarget).toLocaleString()}</td>
+              <td className="px-3 py-2 text-right text-num" style={{ color: pctColor(pace.totalAchievement) }}>
+                {pace.totalTarget > 0 ? `${Math.round(pace.totalAchievement)}%` : "—"}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const tooltipStyle = {
   contentStyle: {
     background: "var(--popover)", border: "1px solid var(--border)",
@@ -582,17 +688,23 @@ const tooltipStyle = {
 };
 
 // ---------- math ----------
-function sum(rows: { gross: number; payout: number; cogs: number }[]) {
+function sum(rows: { gross: number; payout: number; cogs: number; orders: number }[]) {
   return rows.reduce(
-    (acc, r) => ({ gross: acc.gross + r.gross, payout: acc.payout + r.payout, cogs: acc.cogs + r.cogs }),
-    { gross: 0, payout: 0, cogs: 0 },
+    (acc, r) => ({
+      gross: acc.gross + r.gross,
+      payout: acc.payout + r.payout,
+      cogs: acc.cogs + r.cogs,
+      orders: acc.orders + r.orders,
+    }),
+    { gross: 0, payout: 0, cogs: 0, orders: 0 },
   );
 }
-function computeKpis(t: { gross: number; payout: number; cogs: number }) {
+function computeKpis(t: { gross: number; payout: number; cogs: number; orders: number }) {
   const prodMargin = t.gross > 0 ? ((exVat(t.gross) - t.cogs) / exVat(t.gross)) * 100 : 0;
   const netMargin = t.payout > 0 ? ((exVat(t.payout) - t.cogs) / exVat(t.payout)) * 100 : 0;
   const netProfit = exVat(t.payout) - t.cogs;
-  return { gross: t.gross, payout: t.payout, cogs: t.cogs, prodMargin, netMargin, netProfit };
+  const aov = t.orders > 0 ? t.gross / t.orders : 0;
+  return { gross: t.gross, payout: t.payout, cogs: t.cogs, orders: t.orders, prodMargin, netMargin, netProfit, aov };
 }
 function pctDelta(cur: number, prev: number) {
   if (!prev || !isFinite(prev)) return null;
