@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { Loader2, Upload, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
 import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
+import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 import {
   REPORTS, reportsForPlatform, autoMap, loadMapping, saveMapping, parseCsv,
   parseDate, dateToMonth, monthFromColumns, num,
@@ -180,7 +181,7 @@ function CsvFlow({ report, platform, qc }: {
       <Card className="p-5 mt-4 space-y-4">
         {report.monthSource === "ask" && (
           <Field label="Month this export covers">
-            <Input value={month} onChange={(e) => setMonth(e.target.value)} pattern="\d{4}-\d{2}" placeholder="YYYY-MM" className="max-w-xs" />
+            <div className="max-w-xs"><MonthPicker value={month} onChange={setMonth} /></div>
           </Field>
         )}
         <div>
