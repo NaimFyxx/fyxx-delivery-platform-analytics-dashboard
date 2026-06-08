@@ -14,6 +14,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform } from "@/lib/fyxx";
+import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 
 export const Route = createFileRoute("/_authenticated/entry")({
   head: () => ({ meta: [{ title: "Data entry · Fyxx" }] }),
@@ -91,7 +92,7 @@ function DailySalesForm() {
     <div className="space-y-6 mt-4">
       <Card className="p-5">
         <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
+          <Field label="Date"><DatePicker value={date} onChange={setDate} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Gross sales (JOD)"><Input type="number" step="0.001" min="0" value={sales} onChange={(e) => setSales(e.target.value)} required /></Field>
           <Field label="Orders"><Input type="number" step="1" min="0" value={orders} onChange={(e) => setOrders(e.target.value)} required /></Field>
@@ -157,7 +158,7 @@ function FinancialsForm() {
     <div className="space-y-6 mt-4">
       <Card className="p-5">
         <form className="grid gap-4 md:grid-cols-6" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Month (YYYY-MM)"><Input value={month} onChange={(e) => setMonth(e.target.value)} pattern="\d{4}-\d{2}" required /></Field>
+          <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Gross sales"><Input type="number" step="0.001" value={gross} onChange={(e) => setGross(e.target.value)} required /></Field>
           <Field label="Actual payout"><Input type="number" step="0.001" value={payout} onChange={(e) => setPayout(e.target.value)} required /></Field>
@@ -266,7 +267,7 @@ function ItemCostsForm() {
             )}
           </Field>
           <Field label="Cost (ex-VAT, JOD)"><Input type="number" step="0.0001" min="0" value={cost} onChange={(e) => setCost(e.target.value)} required /></Field>
-          <Field label="Effective from"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} required /></Field>
+          <Field label="Effective from"><DatePicker value={from} onChange={setFrom} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
@@ -338,7 +339,7 @@ function ItemSalesForm() {
     <div className="space-y-6 mt-4">
       <Card className="p-5">
         <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Month"><Input value={month} onChange={(e) => setMonth(e.target.value)} pattern="\d{4}-\d{2}" required /></Field>
+          <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Item"><Input value={item} onChange={(e) => setItem(e.target.value)} required /></Field>
           <Field label="Units"><Input type="number" min="0" step="1" value={units} onChange={(e) => setUnits(e.target.value)} required /></Field>
@@ -403,7 +404,7 @@ function TargetsForm() {
     <div className="space-y-6 mt-4">
       <Card className="p-5">
         <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Month"><Input value={month} onChange={(e) => setMonth(e.target.value)} pattern="\d{4}-\d{2}" required /></Field>
+          <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Sales target (JOD)"><Input type="number" step="0.001" min="0" value={salesT} onChange={(e) => setSalesT(e.target.value)} required /></Field>
           <Field label="Orders target"><Input type="number" min="0" step="1" value={ordersT} onChange={(e) => setOrdersT(e.target.value)} required /></Field>
