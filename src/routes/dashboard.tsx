@@ -343,51 +343,16 @@ function PublicDashboard() {
 
         {/* PACE TRACKER */}
         <SectionLabel>Current Month — Live Pace</SectionLabel>
-        <div className="rounded-2xl border border-border p-5 mb-4"
-             style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <h3 className="font-display text-base font-semibold">
-                {monthLabel(currentMonth)} Pace vs Target · {platform === "All" ? "Combined" : platform}
-              </h3>
-              <div className="text-xs text-muted-foreground mt-1">
-                Day {pace?.dayOfMonth} of {pace?.daysInMonth} · current month
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-display text-[38px] font-bold leading-none"
-                   style={{ color: (pace?.achievement ?? 0) >= 100 ? "var(--careem)" : "var(--primary)" }}>
-                {pace?.target ? Math.round(pace.achievement) + "%" : "—"}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">of pro-rated target</div>
-            </div>
-          </div>
-          <div className="h-2.5 bg-background rounded-md overflow-hidden mt-3">
-            <div
-              className="h-full rounded-md transition-all"
-              style={{
-                width: `${Math.min(pace?.achievement ?? 0, 100)}%`,
-                background: "linear-gradient(90deg, var(--careem), var(--primary))",
-              }}
-            />
-          </div>
-          <div className="flex justify-between mt-2.5 text-[11px] text-muted-foreground">
-            <span>
-              {pace?.target
-                ? `Actual MTD: ${Math.round(pace.mtd)} JOD · pro-rated target ${Math.round(pace.proRated)}`
-                : "No target set for this month"}
-            </span>
-            <span>
-              {pace?.target ? `Full ${monthLabel(currentMonth)} target: ${pace.target.toLocaleString()} JOD` : ""}
-            </span>
-          </div>
-        </div>
+        <PaceTracker pace={pace} currentMonth={currentMonth} platform={platform} />
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
           <Kpi label="Sales (incl VAT)" value={`${Math.round(kpis.gross).toLocaleString()}`} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
                prior={priorKpis ? `Prior: ${Math.round(priorKpis.gross).toLocaleString()} JOD` : platformContext(platform)} />
+          <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "—"} unit="JOD"
+               delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
+               prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"} />
           <Kpi label="Product Margin" value={kpis.prodMargin.toFixed(1)} unit="%"
                delta={priorKpis ? ptDelta(kpis.prodMargin, priorKpis.prodMargin) : null}
                prior={priorKpis ? `Prior: ${priorKpis.prodMargin.toFixed(1)}%` : "on menu price exVAT"} />
