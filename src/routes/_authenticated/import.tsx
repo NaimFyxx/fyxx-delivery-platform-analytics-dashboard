@@ -196,7 +196,7 @@ function ImportPage() {
               Build preview
             </Button>
             {missingFields.length > 0 && (
-              <div className="text-xs text-amber flex items-center gap-1">
+              <div className="text-xs text-destructive flex items-center gap-1">
                 <AlertCircle className="size-3.5" /> Missing: {missingFields.map((f) => f.label).join(", ")}
               </div>
             )}
