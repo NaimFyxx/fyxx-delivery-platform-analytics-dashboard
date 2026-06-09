@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData, type DashboardData } from "@/lib/dashboard.functions";
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
-import careemLogo from "@/assets/careem-logo.png.asset.json";
+import careemLogo from "@/assets/careem-logo-full.svg";
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -447,7 +447,7 @@ export function Header({
           <span className="text-muted-foreground text-xs">×</span>
           <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
           <span className="text-muted-foreground text-xs">×</span>
-          <img src={careemLogo.url} alt="Careem" className="h-5 w-auto" />
+          <img src={careemLogo} alt="Careem" className="h-5 w-auto" />
         </div>
         <div>
           <h1 className="font-display text-[17px] font-semibold leading-none">The Green Room — Delivery Dashboard</h1>
