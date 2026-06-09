@@ -346,9 +346,13 @@ function CompletenessPanel({
    CSV upload flow
    ========================================================================= */
 
-function CsvFlow({ report, platform, qc }: {
+function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   report: ReportDef; platform: Platform;
   qc: ReturnType<typeof useQueryClient>;
+  step: 3 | 4;
+  goNext: () => void;
+  goBack: () => void;
+  onDone: () => void;
 }) {
   const [month, setMonth] = useState(currentMonth());
   const [file, setFile] = useState<File | null>(null);
@@ -418,15 +422,32 @@ function CsvFlow({ report, platform, qc }: {
       toast.success(`Imported ${preview?.rows.length ?? 0} rows`);
       setFile(null); setHeaders([]); setRawRows([]); setPreview(null);
       qc.invalidateQueries();
+      onDone();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const allFields = [...report.fields, ...(report.optionalFields ?? [])];
 
+  async function nextToPreview() {
+    if (!canPreview) return;
+    await buildPreview();
+    goNext();
+  }
+
   return (
     <>
+      {step === 3 && (
+      <>
       <Card className="p-5 mt-4 space-y-4">
+        <div className="text-sm font-semibold">Step 3 — Upload {report.label}</div>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">{report.hint}</div>
+          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            {report.portalLabel} <ExternalLink className="size-3.5" />
+          </a>
+        </div>
         {report.monthSource === "ask" && (
           <Field label="Month this export covers">
             <div className="max-w-xs"><MonthPicker value={month} onChange={setMonth} /></div>
@@ -475,22 +496,28 @@ function CsvFlow({ report, platform, qc }: {
               </Field>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={buildPreview} disabled={!canPreview || building} className="bg-gradient-primary text-primary-foreground">
-              {building && <Loader2 className="size-4 animate-spin mr-2" />}
-              Build preview
-            </Button>
-            {missingFields.length > 0 && (
-              <div className="text-xs text-destructive flex items-center gap-1">
-                <AlertCircle className="size-3.5" /> Missing: {missingFields.map((f) => f.label).join(", ")}
-              </div>
-            )}
-          </div>
+          {missingFields.length > 0 && (
+            <div className="mt-3 text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="size-3.5" /> Missing: {missingFields.map((f) => f.label).join(", ")}
+            </div>
+          )}
         </Card>
       )}
 
-      {preview && (
+      <div className="mt-4 flex justify-between">
+        <Button variant="ghost" onClick={goBack}><ChevronLeft className="size-3.5" /> Back</Button>
+        <Button onClick={nextToPreview} disabled={!canPreview || building}
+          className="bg-gradient-primary text-primary-foreground">
+          {building && <Loader2 className="size-4 animate-spin mr-2" />}
+          Next: Preview <ChevronRight className="size-3.5" />
+        </Button>
+      </div>
+      </>
+      )}
+
+      {step === 4 && preview && (
         <Card className="p-5 mt-4 space-y-4">
+          <div className="text-sm font-semibold">Step 4 — Preview &amp; confirm</div>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <CheckCircle2 className="size-4 text-success" /> Preview
@@ -532,14 +559,22 @@ function CsvFlow({ report, platform, qc }: {
             </Table>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex justify-between">
+            <Button variant="ghost" onClick={() => { setPreview(null); goBack(); }}>
+              <ChevronLeft className="size-3.5" /> Back to upload
+            </Button>
             <Button onClick={() => importMut.mutate()} disabled={importMut.isPending || preview.rows.length === 0}
               className="bg-gradient-primary text-primary-foreground">
               {importMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               Confirm import ({preview.rows.length} rows)
             </Button>
-            <Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button>
           </div>
+        </Card>
+      )}
+
+      {step === 4 && !preview && (
+        <Card className="p-5 mt-4 text-sm text-muted-foreground">
+          No preview built yet. <button className="underline" onClick={goBack}>Go back to upload</button>.
         </Card>
       )}
     </>
