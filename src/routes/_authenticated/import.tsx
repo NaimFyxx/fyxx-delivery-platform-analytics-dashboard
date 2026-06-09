@@ -615,13 +615,18 @@ async function buildDaily(
 async function buildItems(
   platform: Platform, month: string, m: Mapping, rows: Record<string, string>[],
 ): Promise<Preview> {
-  const grouped = new Map<string, number>();
+  const grouped = new Map<string, { units: number; revenue: number }>();
+  const hasRevenue = Boolean(m.revenue_jod);
   let skipped = 0;
   for (const r of rows) {
     const name = (r[m.item_name] ?? "").trim();
     if (!name) { skipped++; continue; }
     const u = num(r[m.units]);
-    grouped.set(name, (grouped.get(name) ?? 0) + u);
+    const rev = hasRevenue ? num(r[m.revenue_jod]) : 0;
+    const cur = grouped.get(name) ?? { units: 0, revenue: 0 };
+    cur.units += u;
+    cur.revenue += rev;
+    grouped.set(name, cur);
   }
   const items = Array.from(grouped.keys());
   const { data: existing } = await supabase
@@ -632,21 +637,31 @@ async function buildItems(
   const ops: RowOp[] = [];
   const previewRows: Array<Record<string, string | number>> = [];
   let willAdd = 0, willUpdate = 0;
-  for (const [name, units] of Array.from(grouped.entries()).sort((a, b) => b[1] - a[1])) {
+  const entries = Array.from(grouped.entries()).sort((a, b) =>
+    hasRevenue ? b[1].revenue - a[1].revenue : b[1].units - a[1].units,
+  );
+  for (const [name, agg] of entries) {
     const exists = existingSet.has(name);
     if (exists) willUpdate++; else willAdd++;
     ops.push({
       key: `${month}|${platform}|${name}`, exists,
-      payload: { month, platform, item_name: name, units: Math.round(units) },
+      payload: {
+        month, platform, item_name: name,
+        units: Math.round(agg.units),
+        revenue_jod: Number(agg.revenue.toFixed(2)),
+      },
     });
-    previewRows.push({ Item: name, Units: fmtInt(units) });
+    previewRows.push(hasRevenue
+      ? { Item: name, Units: fmtInt(agg.units), Revenue: `${fmtInt(agg.revenue)} JOD` }
+      : { Item: name, Units: fmtInt(agg.units) });
   }
   const notes = [
     `All ${items.length} item(s) tagged with month ${month} on ${platform}.`,
+    hasRevenue ? "Revenue (JOD) per item will be stored." : "No revenue column mapped — revenue will save as 0 (Insights ranks by units in that case).",
     skipped > 0 ? `${skipped} row(s) skipped (blank name).` : "",
   ].filter(Boolean);
   return { rows: ops, willAdd, willUpdate, skipped, notes,
-    previewCols: ["Item", "Units"], previewRows,
+    previewCols: hasRevenue ? ["Item", "Units", "Revenue"] : ["Item", "Units"], previewRows,
     table: "monthly_item_sales", onConflict: "month,platform,item_name" };
 }
 
