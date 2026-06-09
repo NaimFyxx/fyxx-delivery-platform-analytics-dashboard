@@ -156,6 +156,7 @@ export type Database = {
           item_name: string
           month: string
           platform: Database["public"]["Enums"]["platform"]
+          revenue_jod: number
           units: number
           updated_at: string
         }
@@ -165,6 +166,7 @@ export type Database = {
           item_name: string
           month: string
           platform: Database["public"]["Enums"]["platform"]
+          revenue_jod?: number
           units: number
           updated_at?: string
         }
@@ -174,6 +176,7 @@ export type Database = {
           item_name?: string
           month?: string
           platform?: Database["public"]["Enums"]["platform"]
+          revenue_jod?: number
           units?: number
           updated_at?: string
         }
