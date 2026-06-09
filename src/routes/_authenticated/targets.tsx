@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { fmtJOD, fmtInt, fmtPct, currentMonth, platformBg, PLATFORMS, type Platform } from "@/lib/fyxx";
+import { fmtJOD, fmtPct, currentMonth, platformBg, PLATFORMS, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/targets")({
   head: () => ({ meta: [{ title: "Targets · Fyxx" }] }),
@@ -40,13 +40,12 @@ function TargetsPage() {
   });
 
   const actualsByPlatform = useMemo(() => {
-    const m: Record<Platform, { sales: number; orders: number }> = {
-      Talabat: { sales: 0, orders: 0 },
-      Careem: { sales: 0, orders: 0 },
+    const m: Record<Platform, { sales: number }> = {
+      Talabat: { sales: 0 },
+      Careem: { sales: 0 },
     };
     for (const r of sales) {
       m[r.platform as Platform].sales += Number(r.sales_jod);
-      m[r.platform as Platform].orders += r.orders;
     }
     return m;
   }, [sales]);
@@ -59,7 +58,7 @@ function TargetsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader title="Targets vs actuals" description="Monthly sales and order targets for each platform." actions={
+      <PageHeader title="Targets vs actuals" description="Monthly sales targets for each platform." actions={
         <Select value={month} onValueChange={setMonth}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>{months.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
@@ -71,9 +70,7 @@ function TargetsPage() {
           const t = targets.find((x) => x.platform === p);
           const a = actualsByPlatform[p];
           const salesT = Number(t?.sales_target_jod ?? 0);
-          const ordersT = Number(t?.orders_target ?? 0);
           const salesPct = salesT ? Math.min(a.sales / salesT, 1) : 0;
-          const ordersPct = ordersT ? Math.min(a.orders / ordersT, 1) : 0;
           return (
             <Card key={p} className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -85,7 +82,6 @@ function TargetsPage() {
               ) : (
                 <div className="space-y-5">
                   <Row label="Sales (gross)" actual={fmtJOD(a.sales)} target={fmtJOD(salesT)} pct={salesPct} />
-                  <Row label="Orders" actual={fmtInt(a.orders)} target={fmtInt(ordersT)} pct={ordersPct} />
                 </div>
               )}
             </Card>

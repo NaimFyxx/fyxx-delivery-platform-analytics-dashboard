@@ -208,7 +208,7 @@ export type Database = {
           created_at: string
           id: string
           month: string
-          orders_target: number
+          orders_target: number | null
           platform: Database["public"]["Enums"]["platform"]
           sales_target_jod: number
           updated_at: string
@@ -217,7 +217,7 @@ export type Database = {
           created_at?: string
           id?: string
           month: string
-          orders_target: number
+          orders_target?: number | null
           platform: Database["public"]["Enums"]["platform"]
           sales_target_jod: number
           updated_at?: string
@@ -226,7 +226,7 @@ export type Database = {
           created_at?: string
           id?: string
           month?: string
-          orders_target?: number
+          orders_target?: number | null
           platform?: Database["public"]["Enums"]["platform"]
           sales_target_jod?: number
           updated_at?: string

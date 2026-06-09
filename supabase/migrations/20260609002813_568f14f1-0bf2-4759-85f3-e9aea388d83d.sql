@@ -1,0 +1,1 @@
+ALTER TABLE public.targets ALTER COLUMN orders_target DROP NOT NULL;
