@@ -73,7 +73,7 @@
   /* The Green Room — cream surface with deep teal brand anchor.
      bg #f4efe7 (cream), foreground #092727 (deep teal),
      sidebar #092727 with cream text, accent gold #EEC36A,
-     Talabat orange #FF5A00, Careem green #1BD15D. */
+     Talabat orange #FF5A00, Careem green #00493E. */
   color-scheme: light;
   --radius: 0.75rem;
   --background: #f4efe7;
@@ -97,12 +97,12 @@
   --ring: #092727;
   --talabat: #FF5A00;
   --talabat-foreground: #ffffff;
-  --careem: #1BD15D;
-  --careem-foreground: #092727;
+  --careem: #00493E;
+  --careem-foreground: #ffffff;
   --success: #1f8a4c;
   --warning: #b8862a;
   --chart-1: #092727;
-  --chart-2: #1BD15D;
+  --chart-2: #00493E;
   --chart-3: #FF5A00;
   --chart-4: #EEC36A;
   --chart-5: #5c6b6b;
