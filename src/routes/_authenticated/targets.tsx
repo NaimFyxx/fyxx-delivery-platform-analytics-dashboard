@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { fmtJOD, fmtInt, fmtPct, currentMonth, platformBg, PLATFORMS, type Platform } from "@/lib/fyxx";
+import { fmtJOD, fmtPct, currentMonth, platformBg, PLATFORMS, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/targets")({
   head: () => ({ meta: [{ title: "Targets · Fyxx" }] }),
