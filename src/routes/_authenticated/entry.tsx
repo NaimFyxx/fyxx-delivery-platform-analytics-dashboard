@@ -366,7 +366,6 @@ function TargetsForm() {
   const [month, setMonth] = useState(currentMonth());
   const [platform, setPlatform] = useState<Platform>("Talabat");
   const [salesT, setSalesT] = useState("");
-  const [ordersT, setOrdersT] = useState("");
   const invalidate = useInvalidateAll();
 
   const { data: rows = [] } = useQuery({
@@ -381,13 +380,13 @@ function TargetsForm() {
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("targets").upsert(
-        { month, platform, sales_target_jod: Number(salesT), orders_target: Number(ordersT) },
+        { month, platform, sales_target_jod: Number(salesT) },
         { onConflict: "month,platform" },
       );
       if (error) throw error;
       await logImport({ platform, report_type: "invoice", file_name: `target: ${month}` });
     },
-    onSuccess: () => { toast.success("Saved"); setSalesT(""); setOrdersT(""); invalidate(); },
+    onSuccess: () => { toast.success("Saved"); setSalesT(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -403,11 +402,10 @@ function TargetsForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
-        <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+        <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Sales target (JOD)"><Input type="number" step="0.001" min="0" value={salesT} onChange={(e) => setSalesT(e.target.value)} required /></Field>
-          <Field label="Orders target"><Input type="number" min="0" step="1" value={ordersT} onChange={(e) => setOrdersT(e.target.value)} required /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
