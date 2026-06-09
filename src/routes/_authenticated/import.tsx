@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Loader2, Upload, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { Loader2, Upload, CheckCircle2, AlertCircle, ExternalLink, ChevronLeft, ChevronRight, Check, Circle } from "lucide-react";
 import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 import {
@@ -19,6 +19,7 @@ import {
   parseDate, dateToMonth, monthFromColumns, num,
   type Mapping, type ReportDef, type ReportId,
 } from "@/lib/csv-import";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/import")({
   head: () => ({ meta: [{ title: "CSV import · Fyxx" }] }),
@@ -40,57 +41,304 @@ type Preview = {
 
 function ImportPage() {
   const qc = useQueryClient();
-  const [platform, setPlatform] = useState<Platform>("Talabat");
-  const reports = useMemo(() => reportsForPlatform(platform), [platform]);
-  const [reportId, setReportId] = useState<ReportId>(reports[0].id);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [platform, setPlatform] = useState<Platform | null>(null);
+  const [reportId, setReportId] = useState<ReportId | null>(null);
+  const [checklistMonth, setChecklistMonth] = useState(currentMonth());
 
-  // Keep reportId in-sync when platform changes
-  useEffect(() => {
-    if (!reports.find((r) => r.id === reportId)) setReportId(reports[0].id);
-  }, [reports, reportId]);
+  const report = reportId ? REPORTS[reportId] : null;
 
-  const report = REPORTS[reportId];
+  function restart() {
+    setStep(1); setPlatform(null); setReportId(null);
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <PageHeader
-        title="CSV import"
-        description="Pick a platform and a report. Mappings save per report — one-click next time."
+        title="CSV import wizard"
+        description="Four quick steps: pick a platform, pick a report, upload, then confirm."
       />
 
-      <Card className="p-5 space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Platform">
-            <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-            </Select>
-          </Field>
-          <Field label="Report type">
-            <Select value={reportId} onValueChange={(v) => setReportId(v as ReportId)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {reports.map((r) => <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
+      <CompletenessPanel month={checklistMonth} onMonthChange={setChecklistMonth} />
 
-        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">{report.hint}</div>
-          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-            {report.portalLabel} <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-      </Card>
+      <Stepper
+        step={step}
+        platform={platform}
+        reportLabel={report?.label ?? null}
+        onJump={(s) => {
+          // allow jumping backward to a completed step
+          if (s < step) setStep(s as 1 | 2 | 3 | 4);
+        }}
+      />
 
-      {report.kind === "csv" ? (
-        <CsvFlow key={reportId} report={report} platform={platform} qc={qc} />
-      ) : (
-        <CareemInvoiceFlow key={reportId} report={report} platform={platform} qc={qc} />
+      {step === 1 && (
+        <Step1Platform
+          value={platform}
+          onPick={(p) => { setPlatform(p); setReportId(null); setStep(2); }}
+        />
+      )}
+
+      {step === 2 && platform && (
+        <Step2Report
+          platform={platform}
+          value={reportId}
+          onBack={() => setStep(1)}
+          onPick={(id) => { setReportId(id); setStep(3); }}
+        />
+      )}
+
+      {step >= 3 && report && platform && (
+        report.kind === "csv" ? (
+          <CsvFlow
+            key={report.id}
+            report={report} platform={platform} qc={qc}
+            step={step as 3 | 4}
+            goNext={() => setStep(4)}
+            goBack={() => setStep(step === 4 ? 3 : 2)}
+            onDone={restart}
+          />
+        ) : (
+          <CareemInvoiceFlow
+            key={report.id}
+            report={report} platform={platform} qc={qc}
+            step={step as 3 | 4}
+            goNext={() => setStep(4)}
+            goBack={() => setStep(step === 4 ? 3 : 2)}
+            onDone={restart}
+          />
+        )
       )}
     </div>
+  );
+}
+
+/* ----- Wizard chrome ----- */
+
+function Stepper({
+  step, platform, reportLabel, onJump,
+}: {
+  step: 1 | 2 | 3 | 4;
+  platform: Platform | null;
+  reportLabel: string | null;
+  onJump: (s: number) => void;
+}) {
+  const steps = [
+    { n: 1, label: "Platform",         sub: platform ?? "—" },
+    { n: 2, label: "Report",           sub: reportLabel ?? "—" },
+    { n: 3, label: "Upload",           sub: step >= 3 ? "in progress" : "—" },
+    { n: 4, label: "Preview & Confirm", sub: step === 4 ? "in progress" : "—" },
+  ];
+  return (
+    <div className="mt-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
+      {steps.map((s) => {
+        const active = s.n === step;
+        const done = s.n < step;
+        const clickable = s.n < step;
+        return (
+          <button
+            key={s.n}
+            type="button"
+            disabled={!clickable}
+            onClick={() => onJump(s.n)}
+            className={cn(
+              "text-left rounded-xl border px-3 py-2.5 transition-colors",
+              active   && "border-primary bg-primary/10",
+              done     && "border-success/40 bg-success/5 hover:bg-success/10 cursor-pointer",
+              !active && !done && "border-border bg-card opacity-70",
+            )}
+          >
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold">
+              <span className={cn(
+                "inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px]",
+                done   ? "bg-success/30 text-success" :
+                active ? "bg-primary text-primary-foreground" :
+                         "bg-muted text-muted-foreground",
+              )}>
+                {done ? <Check className="size-3" /> : s.n}
+              </span>
+              <span className={cn(active && "text-primary", done && "text-success")}>
+                Step {s.n} — {s.label}
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1 truncate">{s.sub}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Step1Platform({
+  value, onPick,
+}: {
+  value: Platform | null;
+  onPick: (p: Platform) => void;
+}) {
+  return (
+    <Card className="p-6">
+      <div className="text-sm font-semibold mb-1">Step 1 — Which platform?</div>
+      <p className="text-xs text-muted-foreground mb-4">Pick the delivery platform this report came from.</p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {PLATFORMS.map((p) => {
+          const active = value === p;
+          return (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPick(p)}
+              className={cn(
+                "rounded-xl border p-5 text-left transition-colors hover:border-primary",
+                active ? "border-primary bg-primary/10" : "border-border bg-card",
+              )}
+            >
+              <div className="font-display text-lg font-semibold">{p}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {p === "Talabat" ? "Talabat partner portal exports" : "Careem partner portal exports + manual invoice"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function Step2Report({
+  platform, value, onBack, onPick,
+}: {
+  platform: Platform; value: ReportId | null;
+  onBack: () => void; onPick: (id: ReportId) => void;
+}) {
+  const reports = reportsForPlatform(platform);
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-sm font-semibold">Step 2 — Which report?</div>
+        <Button variant="ghost" size="sm" onClick={onBack}><ChevronLeft className="size-3.5" /> Back</Button>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">
+        Each report writes to a different table. Pick the one you exported from {platform}.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {reports.map((r) => {
+          const active = value === r.id;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => onPick(r.id)}
+              className={cn(
+                "rounded-xl border p-4 text-left transition-colors hover:border-primary",
+                active ? "border-primary bg-primary/10" : "border-border bg-card",
+              )}
+            >
+              <div className="font-semibold text-sm">{r.label}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
+              <div className="text-[10.5px] mt-2">
+                <span className="text-muted-foreground">Writes to: </span>
+                <span className="font-mono">{r.table}</span>
+                <span className="text-muted-foreground"> · {r.kind === "manual" ? "manual form" : "CSV upload"}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/* ----- Monthly completeness checklist (informational) ----- */
+
+function CompletenessPanel({
+  month, onMonthChange,
+}: {
+  month: string; onMonthChange: (m: string) => void;
+}) {
+  const { data } = useQuery({
+    queryKey: ["import_completeness", month],
+    queryFn: async () => {
+      const start = `${month}-01`;
+      const end   = `${month}-31`;
+      const [daily, items, fin] = await Promise.all([
+        supabase.from("daily_sales").select("platform,date").gte("date", start).lte("date", end),
+        supabase.from("monthly_item_sales").select("platform").eq("month", month),
+        supabase.from("monthly_financials").select("platform").eq("month", month),
+      ]);
+      const has = (rows: { platform: string }[] | null, p: Platform) =>
+        !!rows?.some((r) => r.platform === p);
+      return {
+        Talabat: {
+          daily: has(daily.data ?? [], "Talabat"),
+          items: has(items.data ?? [], "Talabat"),
+          invoice: has(fin.data ?? [], "Talabat"),
+        },
+        Careem: {
+          daily: has(daily.data ?? [], "Careem"),
+          items: has(items.data ?? [], "Careem"),
+          invoice: has(fin.data ?? [], "Careem"),
+        },
+      };
+    },
+  });
+
+  const rowsByPlatform: Record<Platform, { label: string; key: "daily" | "items" | "invoice" }[]> = {
+    Talabat: [
+      { label: "Daily sales (Performance)", key: "daily" },
+      { label: "Popular Dishes (items)",    key: "items" },
+      { label: "Invoice",                   key: "invoice" },
+    ],
+    Careem: [
+      { label: "Daily sales",                       key: "daily" },
+      { label: "Gross Sales Breakdown (items)",     key: "items" },
+      { label: "Invoice (manual)",                  key: "invoice" },
+    ],
+  };
+
+  return (
+    <Card className="p-5 mb-4" style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div>
+          <div className="text-sm font-semibold">Monthly completeness</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Informational only — you can always import any report. Margin / COGS calculations need items + invoice for the month.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <Label className="text-muted-foreground text-xs">Month</Label>
+          <div className="w-44"><MonthPicker value={month} onChange={onMonthChange} /></div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        {PLATFORMS.map((p) => {
+          const status = data?.[p];
+          const incomplete = status && (!status.items || !status.invoice);
+          return (
+            <div key={p} className="rounded-xl border border-border bg-background/40 p-4">
+              <div className="font-display font-semibold mb-2">{p}</div>
+              <ul className="space-y-1.5">
+                {rowsByPlatform[p].map((row) => {
+                  const ok = status?.[row.key] ?? false;
+                  return (
+                    <li key={row.key} className="flex items-center gap-2 text-[12.5px]">
+                      {ok
+                        ? <Check className="size-4 text-success" />
+                        : <Circle className="size-4 text-muted-foreground" />}
+                      <span className={ok ? "" : "text-muted-foreground"}>{row.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {incomplete && (
+                <div className="mt-2 text-[10.5px] text-muted-foreground italic">
+                  Margin incomplete — items / invoice not yet imported for {month}.
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
@@ -98,9 +346,13 @@ function ImportPage() {
    CSV upload flow
    ========================================================================= */
 
-function CsvFlow({ report, platform, qc }: {
+function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   report: ReportDef; platform: Platform;
   qc: ReturnType<typeof useQueryClient>;
+  step: 3 | 4;
+  goNext: () => void;
+  goBack: () => void;
+  onDone: () => void;
 }) {
   const [month, setMonth] = useState(currentMonth());
   const [file, setFile] = useState<File | null>(null);
@@ -170,15 +422,32 @@ function CsvFlow({ report, platform, qc }: {
       toast.success(`Imported ${preview?.rows.length ?? 0} rows`);
       setFile(null); setHeaders([]); setRawRows([]); setPreview(null);
       qc.invalidateQueries();
+      onDone();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const allFields = [...report.fields, ...(report.optionalFields ?? [])];
 
+  async function nextToPreview() {
+    if (!canPreview) return;
+    await buildPreview();
+    goNext();
+  }
+
   return (
     <>
+      {step === 3 && (
+      <>
       <Card className="p-5 mt-4 space-y-4">
+        <div className="text-sm font-semibold">Step 3 — Upload {report.label}</div>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">{report.hint}</div>
+          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            {report.portalLabel} <ExternalLink className="size-3.5" />
+          </a>
+        </div>
         {report.monthSource === "ask" && (
           <Field label="Month this export covers">
             <div className="max-w-xs"><MonthPicker value={month} onChange={setMonth} /></div>
@@ -227,22 +496,28 @@ function CsvFlow({ report, platform, qc }: {
               </Field>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button onClick={buildPreview} disabled={!canPreview || building} className="bg-gradient-primary text-primary-foreground">
-              {building && <Loader2 className="size-4 animate-spin mr-2" />}
-              Build preview
-            </Button>
-            {missingFields.length > 0 && (
-              <div className="text-xs text-destructive flex items-center gap-1">
-                <AlertCircle className="size-3.5" /> Missing: {missingFields.map((f) => f.label).join(", ")}
-              </div>
-            )}
-          </div>
+          {missingFields.length > 0 && (
+            <div className="mt-3 text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="size-3.5" /> Missing: {missingFields.map((f) => f.label).join(", ")}
+            </div>
+          )}
         </Card>
       )}
 
-      {preview && (
+      <div className="mt-4 flex justify-between">
+        <Button variant="ghost" onClick={goBack}><ChevronLeft className="size-3.5" /> Back</Button>
+        <Button onClick={nextToPreview} disabled={!canPreview || building}
+          className="bg-gradient-primary text-primary-foreground">
+          {building && <Loader2 className="size-4 animate-spin mr-2" />}
+          Next: Preview <ChevronRight className="size-3.5" />
+        </Button>
+      </div>
+      </>
+      )}
+
+      {step === 4 && preview && (
         <Card className="p-5 mt-4 space-y-4">
+          <div className="text-sm font-semibold">Step 4 — Preview &amp; confirm</div>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <CheckCircle2 className="size-4 text-success" /> Preview
@@ -284,14 +559,22 @@ function CsvFlow({ report, platform, qc }: {
             </Table>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex justify-between">
+            <Button variant="ghost" onClick={() => { setPreview(null); goBack(); }}>
+              <ChevronLeft className="size-3.5" /> Back to upload
+            </Button>
             <Button onClick={() => importMut.mutate()} disabled={importMut.isPending || preview.rows.length === 0}
               className="bg-gradient-primary text-primary-foreground">
               {importMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               Confirm import ({preview.rows.length} rows)
             </Button>
-            <Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button>
           </div>
+        </Card>
+      )}
+
+      {step === 4 && !preview && (
+        <Card className="p-5 mt-4 text-sm text-muted-foreground">
+          No preview built yet. <button className="underline" onClick={goBack}>Go back to upload</button>.
         </Card>
       )}
     </>
@@ -302,9 +585,13 @@ function CsvFlow({ report, platform, qc }: {
    Careem invoice — manual entry (PDF source)
    ========================================================================= */
 
-function CareemInvoiceFlow({ report, platform, qc }: {
+function CareemInvoiceFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   report: ReportDef; platform: Platform;
   qc: ReturnType<typeof useQueryClient>;
+  step: 3 | 4;
+  goNext: () => void;
+  goBack: () => void;
+  onDone: () => void;
 }) {
   const [month, setMonth] = useState(currentMonth());
   const [gross, setGross] = useState("");
@@ -388,13 +675,30 @@ function CareemInvoiceFlow({ report, platform, qc }: {
       setPreview(null); setGross(""); setPlatformFee(""); setCplusFee("");
       setPgFee(""); setBankFee(""); setOrders("");
       qc.invalidateQueries();
+      onDone();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  async function nextToPreview() {
+    if (!canPreview) return;
+    await buildPreview();
+    goNext();
+  }
+
   return (
     <>
+      {step === 3 && (
+      <>
       <Card className="p-5 mt-4 space-y-4">
+        <div className="text-sm font-semibold">Step 3 — Enter Careem invoice</div>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">{report.hint}</div>
+          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            {report.portalLabel} <ExternalLink className="size-3.5" />
+          </a>
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Invoice month">
             <MonthPicker value={month} onChange={setMonth} />
@@ -469,17 +773,21 @@ function CareemInvoiceFlow({ report, platform, qc }: {
           </div>
         </div>
 
-        <div>
-          <Button onClick={buildPreview} disabled={!canPreview || building}
-            className="bg-gradient-primary text-primary-foreground">
-            {building && <Loader2 className="size-4 animate-spin mr-2" />}
-            Build preview
-          </Button>
-        </div>
       </Card>
+      <div className="mt-4 flex justify-between">
+        <Button variant="ghost" onClick={goBack}><ChevronLeft className="size-3.5" /> Back</Button>
+        <Button onClick={nextToPreview} disabled={!canPreview || building}
+          className="bg-gradient-primary text-primary-foreground">
+          {building && <Loader2 className="size-4 animate-spin mr-2" />}
+          Next: Preview <ChevronRight className="size-3.5" />
+        </Button>
+      </div>
+      </>
+      )}
 
-      {preview && (
+      {step === 4 && preview && (
         <Card className="p-5 mt-4 space-y-4">
+          <div className="text-sm font-semibold">Step 4 — Preview &amp; confirm</div>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <CheckCircle2 className="size-4 text-success" /> Preview
@@ -514,14 +822,22 @@ function CareemInvoiceFlow({ report, platform, qc }: {
               </TableBody>
             </Table>
           </div>
-          <div className="flex gap-2">
+          <div className="flex justify-between">
+            <Button variant="ghost" onClick={() => { setPreview(null); goBack(); }}>
+              <ChevronLeft className="size-3.5" /> Back
+            </Button>
             <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
               className="bg-gradient-primary text-primary-foreground">
               {saveMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               Confirm save
             </Button>
-            <Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button>
           </div>
+        </Card>
+      )}
+
+      {step === 4 && !preview && (
+        <Card className="p-5 mt-4 text-sm text-muted-foreground">
+          No preview built yet. <button className="underline" onClick={goBack}>Go back to the form</button>.
         </Card>
       )}
     </>
