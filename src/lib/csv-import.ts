@@ -74,6 +74,9 @@ export const REPORTS: Record<ReportId, ReportDef> = {
       { key: "item_name", label: "Dish", defaults: ["Dish", "Item"], required: true },
       { key: "units", label: "Units", defaults: ["Total", "Units", "Quantity"], required: true },
     ],
+    optionalFields: [
+      { key: "revenue_jod", label: "Revenue (JOD)", defaults: ["Sales", "Sales (JOD)", "Gross Sales", "Revenue", "Total Sales"], required: false },
+    ],
   },
   "talabat:invoice": {
     id: "talabat:invoice",
@@ -130,6 +133,9 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     fields: [
       { key: "item_name", label: "Item name", defaults: ["Name"], required: true },
       { key: "units", label: "Orders (units)", defaults: ["Orders"], required: true },
+    ],
+    optionalFields: [
+      { key: "revenue_jod", label: "Revenue (JOD)", defaults: ["Gross Sales", "Sales", "Sales (JOD)", "Revenue", "Total"], required: false },
     ],
   },
   "careem:invoice": {

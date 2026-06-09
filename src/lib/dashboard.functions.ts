@@ -18,7 +18,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     supabaseAdmin.from("daily_sales").select("date,platform,sales_jod,orders,cplus_sales_jod,cplus_orders,cplus_aov").order("date"),
     supabaseAdmin.from("monthly_financials").select("month,platform,gross_sales,actual_payout,cogs"),
     supabaseAdmin.from("item_costs").select("item_name,cost_exvat,effective_from").order("effective_from"),
-    supabaseAdmin.from("monthly_item_sales").select("month,platform,item_name,units"),
+    supabaseAdmin.from("monthly_item_sales").select("month,platform,item_name,units,revenue_jod"),
     supabaseAdmin.from("targets").select("month,platform,sales_target_jod,orders_target"),
     supabaseAdmin.from("import_log").select("imported_at").order("imported_at", { ascending: false }).limit(1),
     supabaseAdmin.from("import_log").select("platform,report_type,imported_at").eq("status", "success").order("imported_at", { ascending: false }),
@@ -39,7 +39,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       item: r.item_name, cost: Number(r.cost_exvat), effective_from: r.effective_from,
     })),
     itemSales: (itemSales.data ?? []).map((r) => ({
-      month: r.month, platform: r.platform as string, item: r.item_name, units: r.units,
+      month: r.month, platform: r.platform as string, item: r.item_name,
+      units: r.units, revenue: Number(r.revenue_jod ?? 0),
     })),
     targets: (targets.data ?? []).map((r) => ({
       month: r.month, platform: r.platform as string,

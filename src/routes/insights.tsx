@@ -24,7 +24,7 @@ export const Route = createFileRoute("/insights")({
   component: InsightsPage,
 });
 
-type SortKey = "item" | "units" | "cogs" | "cost";
+type SortKey = "item" | "units" | "revenue" | "cogs" | "cost" | "margin";
 
 function InsightsPage() {
   const fetchData = useServerFn(getDashboardData);
@@ -68,40 +68,49 @@ function InsightsPage() {
     return allMonths;
   }, [range, currentMonth, customFrom, customTo, allMonths]);
 
-  const [sortBy, setSortBy] = useState<SortKey>("units");
+  const [sortBy, setSortBy] = useState<SortKey>("revenue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // --- Per-item aggregation across selected months + platforms ---
   const items = useMemo(() => {
     if (!data) return [];
-    const map = new Map<string, { item: string; units: number; cogs: number; lastCost: number | null }>();
+    const map = new Map<string, { item: string; units: number; revenue: number; cogs: number; lastCost: number | null }>();
     for (const s of data.itemSales) {
       if (!rangeMonths.includes(s.month)) continue;
       if (!platforms.includes(s.platform)) continue;
       const asOf = `${s.month}-28`;
       const c = costAsOf(data.costs, s.item, asOf);
-      const row = map.get(s.item) ?? { item: s.item, units: 0, cogs: 0, lastCost: null };
+      const row = map.get(s.item) ?? { item: s.item, units: 0, revenue: 0, cogs: 0, lastCost: null };
       row.units += s.units;
+      row.revenue += s.revenue ?? 0;
       if (c != null) {
         row.cogs += s.units * c;
         row.lastCost = c;
       }
       map.set(s.item, row);
     }
-    const rows = Array.from(map.values());
+    const rows = Array.from(map.values()).map((r) => ({
+      ...r,
+      margin: r.revenue > 0 ? ((r.revenue / (1 + 0.16) - r.cogs) / (r.revenue / (1 + 0.16))) * 100 : 0,
+    }));
     rows.sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortBy === "item") return a.item.localeCompare(b.item) * dir;
       if (sortBy === "units") return (a.units - b.units) * dir;
+      if (sortBy === "revenue") return (a.revenue - b.revenue) * dir;
       if (sortBy === "cogs") return (a.cogs - b.cogs) * dir;
+      if (sortBy === "margin") return (a.margin - b.margin) * dir;
       return ((a.lastCost ?? 0) - (b.lastCost ?? 0)) * dir;
     });
     return rows;
   }, [data, rangeMonths, platforms, sortBy, sortDir]);
 
+  const anyRevenue = useMemo(() => items.some((r) => r.revenue > 0), [items]);
   const topProducts = useMemo(
-    () => [...items].sort((a, b) => b.units - a.units).slice(0, 10),
-    [items],
+    () => [...items]
+      .sort((a, b) => (anyRevenue ? b.revenue - a.revenue : b.units - a.units))
+      .slice(0, 10),
+    [items, anyRevenue],
   );
 
   // --- Tiers: Careem+ vs non-CPlus over selected range/platforms ---
@@ -222,7 +231,9 @@ function InsightsPage() {
         <SectionLabel>Top Products — Ranked by Units Sold</SectionLabel>
         <Panel
           title="Top 10 items"
-          sub={`From popular-dishes / gross-breakdown imports · per-item revenue isn't tracked in source data, so ranked by units`}
+          sub={anyRevenue
+            ? "Ranked by revenue (JOD) from popular-dishes / gross-breakdown imports."
+            : "Ranked by units — no revenue values imported yet. Re-import with the Revenue column mapped to populate."}
           asOf={freshness.items}
         >
           <div className="h-[320px]">
@@ -235,9 +246,11 @@ function InsightsPage() {
                          tickLine={false} axisLine={false} width={140} />
                   <Tooltip
                     contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => [`${v.toLocaleString()} units`, "Units"]}
+                    formatter={(v: number) => anyRevenue
+                      ? [`${Math.round(v).toLocaleString()} JOD`, "Revenue"]
+                      : [`${v.toLocaleString()} units`, "Units"]}
                   />
-                  <Bar dataKey="units" radius={[0, 3, 3, 0]}>
+                  <Bar dataKey={anyRevenue ? "revenue" : "units"} radius={[0, 3, 3, 0]}>
                     {topProducts.map((_, i) => (
                       <Cell key={i} fill={i === 0 ? "var(--careem)" : "rgba(63,209,122,0.7)"} />
                     ))}
@@ -252,7 +265,7 @@ function InsightsPage() {
         <SectionLabel>Sales by Item</SectionLabel>
         <Panel
           title="Per-item breakdown"
-          sub="Units sold + COGS (units × cost version active that month). Tap a column to sort."
+          sub="Units, revenue (JOD), COGS (units × cost version active that month), and product margin. Tap a column to sort."
           asOf={freshness.items}
         >
           {items.length === 0 ? <Empty text="No item-level data for this range." /> : (
@@ -262,8 +275,10 @@ function InsightsPage() {
                   <tr>
                     <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" />
                     <ThSort label="Units" col="units" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Revenue (JOD)" col="revenue" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <ThSort label="Cost / unit (exVAT)" col="cost" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <ThSort label="COGS (JOD)" col="cogs" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Margin %" col="margin" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                   </tr>
                 </thead>
                 <tbody>
@@ -271,11 +286,18 @@ function InsightsPage() {
                     <tr key={r.item} className="border-t border-border">
                       <td className="px-3 py-2">{r.item}</td>
                       <td className="px-3 py-2 text-right text-num">{r.units.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right text-num font-semibold">
+                        {r.revenue > 0 ? Math.round(r.revenue).toLocaleString() : "—"}
+                      </td>
                       <td className="px-3 py-2 text-right text-num text-muted-foreground">
                         {r.lastCost != null ? r.lastCost.toFixed(2) : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right text-num font-semibold">
+                      <td className="px-3 py-2 text-right text-num">
                         {r.cogs > 0 ? Math.round(r.cogs).toLocaleString() : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-num"
+                          style={{ color: r.revenue > 0 && r.cogs > 0 ? (r.margin >= 45 ? "var(--careem)" : "#f5b400") : "var(--muted-foreground)" }}>
+                        {r.revenue > 0 && r.cogs > 0 ? `${r.margin.toFixed(1)}%` : "—"}
                       </td>
                     </tr>
                   ))}
