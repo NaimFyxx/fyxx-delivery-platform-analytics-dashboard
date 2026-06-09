@@ -457,6 +457,20 @@ export function Header({
           <h1 className="font-display text-[17px] font-semibold leading-none">The Green Room — Delivery Dashboard</h1>
           <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
         </div>
+        <nav className="ml-2 flex items-center gap-1 bg-background border border-border rounded-full p-1">
+          <Link
+            to="/dashboard"
+            className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+            activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+            inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+          >Dashboard</Link>
+          <Link
+            to="/insights"
+            className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+            activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+            inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+          >Insights</Link>
+        </nav>
       </div>
       <div className="text-right">
         <div className="flex items-center justify-end gap-1.5 text-[11px]">
