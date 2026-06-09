@@ -597,8 +597,7 @@ function PaceTracker({ pace, currentMonth }: {
   const segCappedTalabat = Math.max(0, Math.min(segTalabat, 100 - segCareem));
 
   return (
-    <div className="rounded-2xl border border-border p-4 mb-4"
-         style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
+    <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
@@ -625,7 +624,7 @@ function PaceTracker({ pace, currentMonth }: {
       </div>
 
       {/* Combined stacked progress bar with visible % labels */}
-      <div className="mt-3 h-2.5 rounded-md overflow-hidden flex relative" style={{ background: "rgba(255,255,255,0.08)" }}>
+      <div className="mt-3 h-2.5 rounded-md overflow-hidden flex relative bg-muted">
         <div className="h-full transition-all relative group" style={{ width: `${segCareem}%`, background: colorFor("Careem") }}>
           {segCareem > 8 && (
             <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-black/70 pointer-events-none">{Math.round(segCareem)}%</span>

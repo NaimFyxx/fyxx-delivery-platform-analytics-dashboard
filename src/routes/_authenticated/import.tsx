@@ -295,7 +295,7 @@ function CompletenessPanel({
   };
 
   return (
-    <Card className="p-5 mb-4" style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}>
+    <Card className="p-5 mb-4">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div>
           <div className="text-sm font-semibold">Monthly completeness</div>
