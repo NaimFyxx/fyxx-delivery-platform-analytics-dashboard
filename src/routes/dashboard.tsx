@@ -433,7 +433,7 @@ function PublicDashboard() {
 }
 
 // ---------- small UI primitives ----------
-function Header({
+export function Header({
   today, lastDailyDate, allTime,
 }: {
   today: string;
@@ -485,7 +485,7 @@ function useFreshness(today: string, last: string | null): { text: string; color
   return { text: `⚠ Stale — last update ${days} days ago (${nice})`, color: "var(--destructive)" };
 }
 
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   options, value, onChange, platform = false,
 }: {
   options: { v: T; l: string }[];
@@ -523,7 +523,7 @@ function Segmented<T extends string>({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[10px] uppercase tracking-[1px] font-bold mt-6 mb-3" style={{ color: "var(--primary)" }}>
       {children}
