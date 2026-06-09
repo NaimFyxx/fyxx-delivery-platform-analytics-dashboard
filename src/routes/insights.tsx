@@ -371,7 +371,12 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-function CareemTierBody({ t }: { t: NonNullable<ReturnType<typeof computeCareemForType>> }) {
+type CareemTiers = {
+  totalSales: number; totalOrders: number; cplusSales: number; cplusOrders: number;
+  nonSales: number; nonOrders: number; cplusAov: number; regAov: number; overallAov: number; hasCplus: boolean;
+};
+
+function CareemTierBody({ t }: { t: CareemTiers }) {
   const sharePctSales = t.totalSales > 0 ? (t.cplusSales / t.totalSales) * 100 : 0;
   const sharePctOrders = t.totalOrders > 0 ? (t.cplusOrders / t.totalOrders) * 100 : 0;
   return (
@@ -385,14 +390,6 @@ function CareemTierBody({ t }: { t: NonNullable<ReturnType<typeof computeCareemF
       </div>
     </div>
   );
-}
-
-// Type helper so CareemTierBody can type its `t` prop without re-declaring.
-function computeCareemForType() {
-  return null as null | {
-    totalSales: number; totalOrders: number; cplusSales: number; cplusOrders: number;
-    nonSales: number; nonOrders: number; cplusAov: number; regAov: number; overallAov: number; hasCplus: boolean;
-  };
 }
 
 function ShareRow({ label, cplus, other, pct, unit }: { label: string; cplus: number; other: number; pct: number; unit: string }) {
