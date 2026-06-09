@@ -585,9 +585,13 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
    Careem invoice — manual entry (PDF source)
    ========================================================================= */
 
-function CareemInvoiceFlow({ report, platform, qc }: {
+function CareemInvoiceFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   report: ReportDef; platform: Platform;
   qc: ReturnType<typeof useQueryClient>;
+  step: 3 | 4;
+  goNext: () => void;
+  goBack: () => void;
+  onDone: () => void;
 }) {
   const [month, setMonth] = useState(currentMonth());
   const [gross, setGross] = useState("");
@@ -671,13 +675,30 @@ function CareemInvoiceFlow({ report, platform, qc }: {
       setPreview(null); setGross(""); setPlatformFee(""); setCplusFee("");
       setPgFee(""); setBankFee(""); setOrders("");
       qc.invalidateQueries();
+      onDone();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  async function nextToPreview() {
+    if (!canPreview) return;
+    await buildPreview();
+    goNext();
+  }
+
   return (
     <>
+      {step === 3 && (
+      <>
       <Card className="p-5 mt-4 space-y-4">
+        <div className="text-sm font-semibold">Step 3 — Enter Careem invoice</div>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
+          <div className="text-xs text-muted-foreground">{report.hint}</div>
+          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            {report.portalLabel} <ExternalLink className="size-3.5" />
+          </a>
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Invoice month">
             <MonthPicker value={month} onChange={setMonth} />
@@ -752,17 +773,21 @@ function CareemInvoiceFlow({ report, platform, qc }: {
           </div>
         </div>
 
-        <div>
-          <Button onClick={buildPreview} disabled={!canPreview || building}
-            className="bg-gradient-primary text-primary-foreground">
-            {building && <Loader2 className="size-4 animate-spin mr-2" />}
-            Build preview
-          </Button>
-        </div>
       </Card>
+      <div className="mt-4 flex justify-between">
+        <Button variant="ghost" onClick={goBack}><ChevronLeft className="size-3.5" /> Back</Button>
+        <Button onClick={nextToPreview} disabled={!canPreview || building}
+          className="bg-gradient-primary text-primary-foreground">
+          {building && <Loader2 className="size-4 animate-spin mr-2" />}
+          Next: Preview <ChevronRight className="size-3.5" />
+        </Button>
+      </div>
+      </>
+      )}
 
-      {preview && (
+      {step === 4 && preview && (
         <Card className="p-5 mt-4 space-y-4">
+          <div className="text-sm font-semibold">Step 4 — Preview &amp; confirm</div>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <CheckCircle2 className="size-4 text-success" /> Preview
@@ -797,14 +822,22 @@ function CareemInvoiceFlow({ report, platform, qc }: {
               </TableBody>
             </Table>
           </div>
-          <div className="flex gap-2">
+          <div className="flex justify-between">
+            <Button variant="ghost" onClick={() => { setPreview(null); goBack(); }}>
+              <ChevronLeft className="size-3.5" /> Back
+            </Button>
             <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
               className="bg-gradient-primary text-primary-foreground">
               {saveMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               Confirm save
             </Button>
-            <Button variant="ghost" onClick={() => setPreview(null)}>Cancel</Button>
           </div>
+        </Card>
+      )}
+
+      {step === 4 && !preview && (
+        <Card className="p-5 mt-4 text-sm text-muted-foreground">
+          No preview built yet. <button className="underline" onClick={goBack}>Go back to the form</button>.
         </Card>
       )}
     </>
