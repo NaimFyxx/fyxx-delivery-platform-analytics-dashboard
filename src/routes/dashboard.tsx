@@ -213,7 +213,7 @@ function PublicDashboard() {
     );
     const workingDay = workingDates.size;
 
-    const platformsOnSheet = platforms as ("Talabat" | "Careem")[];
+    const platformsOnSheet: ("Talabat" | "Careem")[] = ["Talabat", "Careem"];
     const rows = platformsOnSheet.map((p) => {
       const sales = data.daily
         .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
@@ -235,7 +235,7 @@ function PublicDashboard() {
       rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
       dayOfMonth, daysInMonth, workingDay,
     };
-  }, [data, currentMonth, today, platforms]);
+  }, [data, currentMonth, today]);
 
   // --- Chart series ---
   const chartData = useMemo(() => {
@@ -341,9 +341,8 @@ function PublicDashboard() {
           />
         </div>
 
-        {/* PACE TRACKER */}
-        <SectionLabel>Current Month — Live Pace</SectionLabel>
-        <PaceTracker pace={pace} currentMonth={currentMonth} platform={platform} />
+        {/* PACE TRACKER — always current month, always all platforms, ignores all filters */}
+        <PaceTracker pace={pace} currentMonth={currentMonth} />
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
@@ -586,16 +585,16 @@ type PaceData = {
   dayOfMonth: number; daysInMonth: number; workingDay: number;
 };
 
-function PaceTracker({ pace, currentMonth, platform }: {
-  pace: PaceData | null; currentMonth: string; platform: PlatformKey;
+function PaceTracker({ pace, currentMonth }: {
+  pace: PaceData | null; currentMonth: string;
 }) {
   if (!pace) return null;
   const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "#FF5A00" : "#1BD15D";
   const pctColor = (n: number) => n >= 100 ? "var(--careem)" : "#f5b400";
   const careem = pace.rows.find((r) => r.platform === "Careem");
   const talabat = pace.rows.find((r) => r.platform === "Talabat");
-  // Segments of the combined bar (against the combined target). Each platform's
-  // contribution is sales / totalTarget; cap visual at 100%.
+
+  // Segments of the combined bar (against the combined target).
   const segCareem  = pace.totalTarget > 0 ? Math.min((careem?.sales  ?? 0) / pace.totalTarget * 100, 100) : 0;
   const segTalabat = pace.totalTarget > 0 ? Math.min((talabat?.sales ?? 0) / pace.totalTarget * 100, 100) : 0;
   const segCappedTalabat = Math.max(0, Math.min(segTalabat, 100 - segCareem));
@@ -606,7 +605,7 @@ function PaceTracker({ pace, currentMonth, platform }: {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
-            {monthLabel(currentMonth)} pace · {platform === "All" ? "Combined" : platform}
+            {monthLabel(currentMonth)} pace · Combined
           </h3>
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">WD</span>
@@ -628,10 +627,18 @@ function PaceTracker({ pace, currentMonth, platform }: {
         </div>
       </div>
 
-      {/* Combined stacked progress bar */}
-      <div className="mt-3 h-2.5 rounded-md overflow-hidden flex" style={{ background: "rgba(255,255,255,0.08)" }}>
-        <div className="h-full transition-all" style={{ width: `${segCareem}%`, background: colorFor("Careem") }} title={`Careem ${segCareem.toFixed(1)}%`} />
-        <div className="h-full transition-all" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }} title={`Talabat ${segTalabat.toFixed(1)}%`} />
+      {/* Combined stacked progress bar with visible % labels */}
+      <div className="mt-3 h-2.5 rounded-md overflow-hidden flex relative" style={{ background: "rgba(255,255,255,0.08)" }}>
+        <div className="h-full transition-all relative group" style={{ width: `${segCareem}%`, background: colorFor("Careem") }}>
+          {segCareem > 8 && (
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-black/70 pointer-events-none">{Math.round(segCareem)}%</span>
+          )}
+        </div>
+        <div className="h-full transition-all relative group" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }}>
+          {segCappedTalabat > 8 && (
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/80 pointer-events-none">{Math.round(segTalabat)}%</span>
+          )}
+        </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
@@ -640,8 +647,8 @@ function PaceTracker({ pace, currentMonth, platform }: {
           <span className="text-muted-foreground">Careem</span>
           <span className="text-num font-semibold">{Math.round(careem?.sales ?? 0).toLocaleString()}</span>
           <span className="text-muted-foreground">/ {Math.round(careem?.target ?? 0).toLocaleString()} JOD</span>
-          <span className="text-num" style={{ color: pctColor(careem?.achievement ?? 0) }}>
-            ({careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "—"})
+          <span className="text-num font-semibold" style={{ color: pctColor(careem?.achievement ?? 0) }}>
+            {careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "—"}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5">
@@ -649,8 +656,8 @@ function PaceTracker({ pace, currentMonth, platform }: {
           <span className="text-muted-foreground">Talabat</span>
           <span className="text-num font-semibold">{Math.round(talabat?.sales ?? 0).toLocaleString()}</span>
           <span className="text-muted-foreground">/ {Math.round(talabat?.target ?? 0).toLocaleString()} JOD</span>
-          <span className="text-num" style={{ color: pctColor(talabat?.achievement ?? 0) }}>
-            ({talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "—"})
+          <span className="text-num font-semibold" style={{ color: pctColor(talabat?.achievement ?? 0) }}>
+            {talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "—"}
           </span>
         </span>
         <span className="ml-auto text-muted-foreground text-num">
