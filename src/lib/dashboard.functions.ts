@@ -19,7 +19,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     supabaseAdmin.from("monthly_financials").select("month,platform,gross_sales,actual_payout,cogs"),
     supabaseAdmin.from("item_costs").select("item_name,cost_exvat,effective_from").order("effective_from"),
     supabaseAdmin.from("monthly_item_sales").select("month,platform,item_name,units,revenue_jod"),
-    supabaseAdmin.from("targets").select("month,platform,sales_target_jod,orders_target"),
+    supabaseAdmin.from("targets").select("month,platform,sales_target_jod"),
     supabaseAdmin.from("import_log").select("imported_at").order("imported_at", { ascending: false }).limit(1),
     supabaseAdmin.from("import_log").select("platform,report_type,imported_at").eq("status", "success").order("imported_at", { ascending: false }),
   ]);

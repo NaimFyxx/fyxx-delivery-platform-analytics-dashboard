@@ -411,12 +411,11 @@ function TargetsForm() {
       </Card>
       <RecentTable
         title="Targets"
-        headers={["Month", "Platform", "Sales target", "Orders target", ""]}
+        headers={["Month", "Platform", "Sales target", ""]}
         rows={rows.map((r) => [
           r.month,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           fmtJOD(Number(r.sales_target_jod)),
-          fmtInt(r.orders_target),
           <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
         ])}
       />
