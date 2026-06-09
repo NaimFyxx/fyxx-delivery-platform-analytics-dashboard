@@ -44,7 +44,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     })),
     targets: (targets.data ?? []).map((r) => ({
       month: r.month, platform: r.platform as string,
-      salesTarget: Number(r.sales_target_jod), ordersTarget: r.orders_target,
+      salesTarget: Number(r.sales_target_jod),
     })),
     lastImportAt: lastImport.data?.[0]?.imported_at ?? null,
     imports: (allImports.data ?? []).map((r) => ({
