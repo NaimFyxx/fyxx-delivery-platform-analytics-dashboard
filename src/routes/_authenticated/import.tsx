@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/import")({
-  head: () => ({ meta: [{ title: "CSV import · Fyxx" }] }),
+  head: () => ({ meta: [{ title: "CSV import · TGR" }] }),
   component: ImportPage,
 });
 

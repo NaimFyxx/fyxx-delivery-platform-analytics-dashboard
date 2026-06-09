@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtJOD, fmtPct, currentMonth, platformBg, PLATFORMS, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/targets")({
-  head: () => ({ meta: [{ title: "Targets · Fyxx" }] }),
+  head: () => ({ meta: [{ title: "Targets · TGR" }] }),
   component: TargetsPage,
 });
 
