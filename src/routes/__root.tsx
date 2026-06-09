@@ -79,10 +79,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Fyxx Delivery Tracker" },
+      { title: "TGR Delivery Tracker" },
       { name: "description", content: "Performance dashboard for Talabat and Careem delivery sales." },
-      { name: "author", content: "Fyxx" },
-      { property: "og:title", content: "Fyxx Delivery Tracker" },
+      { name: "author", content: "The Green Room" },
+      { property: "og:title", content: "TGR Delivery Tracker" },
       { property: "og:description", content: "Performance dashboard for Talabat and Careem delivery sales." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

@@ -17,7 +17,7 @@ import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Pl
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 
 export const Route = createFileRoute("/_authenticated/entry")({
-  head: () => ({ meta: [{ title: "Data entry · Fyxx" }] }),
+  head: () => ({ meta: [{ title: "Data entry · TGR" }] }),
   component: Entry,
 });
 

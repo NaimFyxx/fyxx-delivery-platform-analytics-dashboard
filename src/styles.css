@@ -70,55 +70,57 @@
 }
 
 :root {
-  /* Fyxx Delivery Tracker — deep teal/green ops cockpit.
-     bg #061616, cards #0b2222, borders #1b4040, text #dde9e6,
-     accent yellow #EEC36A, Talabat orange #FF5A00, Careem green #1BD15D. */
+  /* The Green Room — cream surface with deep teal brand anchor.
+     bg #f4efe7 (cream), foreground #092727 (deep teal),
+     sidebar #092727 with cream text, accent gold #EEC36A,
+     Talabat orange #FF5A00, Careem green #1BD15D. */
+  color-scheme: light;
   --radius: 0.75rem;
-  --background: #061616;
-  --foreground: #dde9e6;
-  --card: #0b2222;
-  --card-foreground: #dde9e6;
-  --popover: #0b2222;
-  --popover-foreground: #dde9e6;
-  --primary: #EEC36A;
-  --primary-foreground: #061616;
-  --secondary: #112e2e;
-  --secondary-foreground: #dde9e6;
-  --muted: #0f2828;
-  --muted-foreground: #8aa6a1;
+  --background: #f4efe7;
+  --foreground: #092727;
+  --card: #ffffff;
+  --card-foreground: #092727;
+  --popover: #ffffff;
+  --popover-foreground: #092727;
+  --primary: #092727;
+  --primary-foreground: #f4efe7;
+  --secondary: #e7e0d3;
+  --secondary-foreground: #092727;
+  --muted: #ece5d8;
+  --muted-foreground: #5c6b6b;
   --accent: #EEC36A;
-  --accent-foreground: #061616;
-  --destructive: #e5484d;
+  --accent-foreground: #092727;
+  --destructive: #c43d3d;
   --destructive-foreground: #ffffff;
-  --border: #1b4040;
-  --input: #1b4040;
-  --ring: #EEC36A;
+  --border: #ddd4c2;
+  --input: #ddd4c2;
+  --ring: #092727;
   --talabat: #FF5A00;
   --talabat-foreground: #ffffff;
   --careem: #1BD15D;
-  --careem-foreground: #061616;
-  --success: #1BD15D;
-  --warning: #EEC36A;
-  --chart-1: #EEC36A;
+  --careem-foreground: #092727;
+  --success: #1f8a4c;
+  --warning: #b8862a;
+  --chart-1: #092727;
   --chart-2: #1BD15D;
   --chart-3: #FF5A00;
-  --chart-4: #6ad0d0;
-  --chart-5: #dde9e6;
-  --sidebar: #081b1b;
-  --sidebar-foreground: #dde9e6;
+  --chart-4: #EEC36A;
+  --chart-5: #5c6b6b;
+  --sidebar: #092727;
+  --sidebar-foreground: #f4efe7;
   --sidebar-primary: #EEC36A;
-  --sidebar-primary-foreground: #061616;
-  --sidebar-accent: #112e2e;
-  --sidebar-accent-foreground: #dde9e6;
-  --sidebar-border: #1b4040;
+  --sidebar-primary-foreground: #092727;
+  --sidebar-accent: #143838;
+  --sidebar-accent-foreground: #f4efe7;
+  --sidebar-border: #143838;
   --sidebar-ring: #EEC36A;
-  --gradient-primary: linear-gradient(135deg, #EEC36A, #c69a3a);
-  --gradient-surface: linear-gradient(180deg, #0b2222, #061616);
-  --shadow-glow: 0 20px 60px -20px rgb(238 195 106 / 0.35);
+  --gradient-primary: linear-gradient(135deg, #092727, #143838);
+  --gradient-surface: linear-gradient(180deg, #f4efe7, #ece5d8);
+  --shadow-glow: 0 20px 60px -20px rgb(9 39 39 / 0.25);
 }
 
 .dark {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @layer base {

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtJOD, fmtPct, exVat, platformBg, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/financials")({
-  head: () => ({ meta: [{ title: "Financials · Fyxx" }] }),
+  head: () => ({ meta: [{ title: "Financials · TGR" }] }),
   component: Financials,
 });
 

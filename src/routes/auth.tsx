@@ -8,9 +8,12 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import tgrLogoLight from "@/assets/tgr-logo-light.svg";
+import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
+import fyxxLogo from "@/assets/fyxx-logo-black.svg";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "Sign in · Fyxx Delivery Tracker" }] }),
+  head: () => ({ meta: [{ title: "Sign in · The Green Room" }] }),
   component: AuthPage,
 });
 
@@ -49,8 +52,8 @@ function AuthPage() {
       <div className="hidden lg:flex relative overflow-hidden bg-gradient-surface border-r border-border">
         <div className="absolute inset-0 opacity-30 bg-gradient-primary blur-3xl" />
         <div className="relative z-10 p-12 flex flex-col justify-between w-full">
-          <Link to="/" className="font-display text-2xl font-bold tracking-tight">
-            Fyxx<span className="text-primary">.</span>
+          <Link to="/" className="block">
+            <img src={tgrLogoLight} alt="The Green Room" className="h-12 w-auto" />
           </Link>
           <div>
             <h1 className="text-5xl font-bold leading-[1.05]">
@@ -62,13 +65,17 @@ function AuthPage() {
               margin and targets — without the spreadsheet gymnastics.
             </p>
           </div>
-          <div className="text-xs text-muted-foreground">© Fyxx Delivery Tracker</div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80">
+            <span>TGR</span>
+            <span>×</span>
+            <img src={fyxxLogo} alt="Fyxx" className="h-3 w-auto opacity-70" />
+          </div>
         </div>
       </div>
       <div className="flex items-center justify-center p-6">
         <Card className="w-full max-w-md p-8">
-          <div className="lg:hidden mb-6 font-display text-2xl font-bold">
-            Fyxx<span className="text-primary">.</span>
+          <div className="lg:hidden mb-6">
+            <img src={tgrLogoDark} alt="The Green Room" className="h-10 w-auto" />
           </div>
           <h2 className="text-2xl font-bold mb-1">Welcome</h2>
           <p className="text-sm text-muted-foreground mb-6">Sign in to your dashboard.</p>

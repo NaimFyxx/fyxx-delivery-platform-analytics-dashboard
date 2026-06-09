@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtJOD, fmtInt, currentMonth, platformBg, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/items")({
-  head: () => ({ meta: [{ title: "Items · Fyxx" }] }),
+  head: () => ({ meta: [{ title: "Items · TGR" }] }),
   component: Items,
 });
 
