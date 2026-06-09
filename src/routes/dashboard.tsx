@@ -26,35 +26,35 @@ export const Route = createFileRoute("/dashboard")({
   component: PublicDashboard,
 });
 
-const VAT = 0.16;
-const exVat = (v: number) => v / (1 + VAT);
+export const VAT = 0.16;
+export const exVat = (v: number) => v / (1 + VAT);
 const fmtJOD = (n: number) => `${Math.round(n).toLocaleString()} JOD`;
 const fmtPct = (n: number) => `${n.toFixed(1)}%`;
 
-type RangeKey = "this" | "last" | "custom" | "all";
-type PlatformKey = "All" | "Talabat" | "Careem";
+export type RangeKey = "this" | "last" | "custom" | "all";
+export type PlatformKey = "All" | "Talabat" | "Careem";
 
 /** Month string helpers ("YYYY-MM"). */
-const monthOfDate = (iso: string) => iso.slice(0, 7);
-const lastDayOfMonth = (m: string) => {
+export const monthOfDate = (iso: string) => iso.slice(0, 7);
+export const lastDayOfMonth = (m: string) => {
   const [y, mm] = m.split("-").map(Number);
   return new Date(Date.UTC(y, mm, 0)).toISOString().slice(0, 10);
 };
-const prevMonth = (m: string) => {
+export const prevMonth = (m: string) => {
   const [y, mm] = m.split("-").map(Number);
   const d = new Date(Date.UTC(y, mm - 2, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 };
-const monthLabel = (m: string) =>
+export const monthLabel = (m: string) =>
   new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 
-function monthsBetween(from: string, to: string): string[] {
+export function monthsBetween(from: string, to: string): string[] {
   const out: string[] = [];
   let cur = from;
   while (cur <= to) { out.push(cur); cur = nextMonth(cur); }
   return out;
 }
-function nextMonth(m: string) {
+export function nextMonth(m: string) {
   const [y, mm] = m.split("-").map(Number);
   const d = new Date(Date.UTC(y, mm, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -65,7 +65,7 @@ function nextMonth(m: string) {
  * the row with the GREATEST effective_from that is <= asOfDate.
  * Returns null if no version was effective yet.
  */
-function costAsOf(costs: DashboardData["costs"], item: string, asOfDate: string): number | null {
+export function costAsOf(costs: DashboardData["costs"], item: string, asOfDate: string): number | null {
   let best: { effective_from: string; cost: number } | null = null;
   for (const c of costs) {
     if (c.item !== item) continue;
@@ -76,7 +76,7 @@ function costAsOf(costs: DashboardData["costs"], item: string, asOfDate: string)
 }
 
 /** COGS for a (month, platform) using the cost version active during that month. */
-function cogsFor(
+export function cogsFor(
   itemSales: DashboardData["itemSales"],
   costs: DashboardData["costs"],
   month: string,
@@ -433,7 +433,7 @@ function PublicDashboard() {
 }
 
 // ---------- small UI primitives ----------
-function Header({
+export function Header({
   today, lastDailyDate, allTime,
 }: {
   today: string;
@@ -457,6 +457,20 @@ function Header({
           <h1 className="font-display text-[17px] font-semibold leading-none">The Green Room — Delivery Dashboard</h1>
           <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
         </div>
+        <nav className="ml-2 flex items-center gap-1 bg-background border border-border rounded-full p-1">
+          <Link
+            to="/dashboard"
+            className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+            activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+            inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+          >Dashboard</Link>
+          <Link
+            to="/insights"
+            className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+            activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+            inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+          >Insights</Link>
+        </nav>
       </div>
       <div className="text-right">
         <div className="flex items-center justify-end gap-1.5 text-[11px]">
@@ -485,7 +499,7 @@ function useFreshness(today: string, last: string | null): { text: string; color
   return { text: `⚠ Stale — last update ${days} days ago (${nice})`, color: "var(--destructive)" };
 }
 
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   options, value, onChange, platform = false,
 }: {
   options: { v: T; l: string }[];
@@ -523,7 +537,7 @@ function Segmented<T extends string>({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[10px] uppercase tracking-[1px] font-bold mt-6 mb-3" style={{ color: "var(--primary)" }}>
       {children}
