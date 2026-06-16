@@ -59,99 +59,6 @@ export type Database = {
         }
         Relationships: []
       }
-      monthly_adjustments: {
-        Row: {
-          amount: number
-          comments: string | null
-          created_at: string
-          date: string
-          deduction_type: string
-          id: string
-          month: string
-          order_id: string
-          platform: Database["public"]["Enums"]["platform"]
-        }
-        Insert: {
-          amount?: number
-          comments?: string | null
-          created_at?: string
-          date: string
-          deduction_type: string
-          id?: string
-          month: string
-          order_id?: string
-          platform: Database["public"]["Enums"]["platform"]
-        }
-        Update: {
-          amount?: number
-          comments?: string | null
-          created_at?: string
-          date?: string
-          deduction_type?: string
-          id?: string
-          month?: string
-          order_id?: string
-          platform?: Database["public"]["Enums"]["platform"]
-        }
-        Relationships: []
-      }
-      platform_orders: {
-        Row: {
-          commission: number
-          created_at: string
-          date: string
-          discount: number
-          gross: number
-          id: string
-          is_loyalty: boolean | null
-          net_payout: number
-          order_id: string
-          ordered_at: string | null
-          payment_fee: number
-          payment_mode: string | null
-          platform: Database["public"]["Enums"]["platform"]
-          platform_fee: number
-          status: string | null
-          updated_at: string
-        }
-        Insert: {
-          commission?: number
-          created_at?: string
-          date: string
-          discount?: number
-          gross?: number
-          id?: string
-          is_loyalty?: boolean | null
-          net_payout?: number
-          order_id: string
-          ordered_at?: string | null
-          payment_fee?: number
-          payment_mode?: string | null
-          platform: Database["public"]["Enums"]["platform"]
-          platform_fee?: number
-          status?: string | null
-          updated_at?: string
-        }
-        Update: {
-          commission?: number
-          created_at?: string
-          date?: string
-          discount?: number
-          gross?: number
-          id?: string
-          is_loyalty?: boolean | null
-          net_payout?: number
-          order_id?: string
-          ordered_at?: string | null
-          payment_fee?: number
-          payment_mode?: string | null
-          platform?: Database["public"]["Enums"]["platform"]
-          platform_fee?: number
-          status?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       import_log: {
         Row: {
           error_message: string | null
@@ -192,7 +99,6 @@ export type Database = {
           effective_from: string
           id: string
           item_name: string
-          note: string | null
         }
         Insert: {
           cost_exvat: number
@@ -200,7 +106,6 @@ export type Database = {
           effective_from: string
           id?: string
           item_name: string
-          note?: string | null
         }
         Update: {
           cost_exvat?: number
@@ -208,7 +113,42 @@ export type Database = {
           effective_from?: string
           id?: string
           item_name?: string
-          note?: string | null
+        }
+        Relationships: []
+      }
+      monthly_adjustments: {
+        Row: {
+          amount: number
+          comments: string | null
+          created_at: string
+          date: string
+          deduction_type: string
+          id: string
+          month: string
+          order_id: string
+          platform: Database["public"]["Enums"]["platform"]
+        }
+        Insert: {
+          amount?: number
+          comments?: string | null
+          created_at?: string
+          date: string
+          deduction_type: string
+          id?: string
+          month: string
+          order_id?: string
+          platform: Database["public"]["Enums"]["platform"]
+        }
+        Update: {
+          amount?: number
+          comments?: string | null
+          created_at?: string
+          date?: string
+          deduction_type?: string
+          id?: string
+          month?: string
+          order_id?: string
+          platform?: Database["public"]["Enums"]["platform"]
         }
         Relationships: []
       }
@@ -280,6 +220,63 @@ export type Database = {
           platform?: Database["public"]["Enums"]["platform"]
           revenue_jod?: number
           units?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_orders: {
+        Row: {
+          commission: number
+          created_at: string
+          date: string
+          discount: number
+          gross: number
+          id: string
+          is_loyalty: boolean | null
+          net_payout: number
+          order_id: string
+          ordered_at: string | null
+          payment_fee: number
+          payment_mode: string | null
+          platform: Database["public"]["Enums"]["platform"]
+          platform_fee: number
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          commission?: number
+          created_at?: string
+          date: string
+          discount?: number
+          gross?: number
+          id?: string
+          is_loyalty?: boolean | null
+          net_payout?: number
+          order_id: string
+          ordered_at?: string | null
+          payment_fee?: number
+          payment_mode?: string | null
+          platform: Database["public"]["Enums"]["platform"]
+          platform_fee?: number
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          commission?: number
+          created_at?: string
+          date?: string
+          discount?: number
+          gross?: number
+          id?: string
+          is_loyalty?: boolean | null
+          net_payout?: number
+          order_id?: string
+          ordered_at?: string | null
+          payment_fee?: number
+          payment_mode?: string | null
+          platform?: Database["public"]["Enums"]["platform"]
+          platform_fee?: number
+          status?: string | null
           updated_at?: string
         }
         Relationships: []
