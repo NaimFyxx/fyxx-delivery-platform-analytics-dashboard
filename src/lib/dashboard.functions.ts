@@ -15,35 +15,67 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const [daily, fin, costs, itemSales, targets, lastImport, allImports] = await Promise.all([
-    supabaseAdmin.from("daily_sales").select("date,platform,sales_jod,orders,cplus_sales_jod,cplus_orders,cplus_aov").order("date"),
-    supabaseAdmin.from("monthly_financials").select("month,platform,gross_sales,actual_payout,cogs"),
-    supabaseAdmin.from("item_costs").select("item_name,cost_exvat,effective_from").order("effective_from"),
+    supabaseAdmin
+      .from("daily_sales")
+      .select(
+        "date,platform,sales_jod,orders,cplus_sales_jod,cplus_orders,cplus_aov,pro_orders,pro_sales_jod",
+      )
+      .order("date"),
+    supabaseAdmin
+      .from("monthly_financials")
+      .select("month,platform,gross_sales,actual_payout,cogs"),
+    supabaseAdmin
+      .from("item_costs")
+      .select("item_name,cost_exvat,effective_from")
+      .order("effective_from"),
     supabaseAdmin.from("monthly_item_sales").select("month,platform,item_name,units,revenue_jod"),
     supabaseAdmin.from("targets").select("month,platform,sales_target_jod"),
-    supabaseAdmin.from("import_log").select("imported_at").order("imported_at", { ascending: false }).limit(1),
-    supabaseAdmin.from("import_log").select("platform,report_type,imported_at").eq("status", "success").order("imported_at", { ascending: false }),
+    supabaseAdmin
+      .from("import_log")
+      .select("imported_at")
+      .order("imported_at", { ascending: false })
+      .limit(1),
+    supabaseAdmin
+      .from("import_log")
+      .select("platform,report_type,imported_at")
+      .eq("status", "success")
+      .order("imported_at", { ascending: false }),
   ]);
 
   return {
     daily: (daily.data ?? []).map((r) => ({
-      date: r.date, platform: r.platform as string, sales: Number(r.sales_jod), orders: r.orders,
+      date: r.date,
+      platform: r.platform as string,
+      sales: Number(r.sales_jod),
+      orders: r.orders,
       cplusSales: Number(r.cplus_sales_jod ?? 0),
       cplusOrders: Number(r.cplus_orders ?? 0),
       cplusAov: Number(r.cplus_aov ?? 0),
+      proSales: Number(r.pro_sales_jod ?? 0),
+      proOrders: Number(r.pro_orders ?? 0),
     })),
     financials: (fin.data ?? []).map((r) => ({
-      month: r.month, platform: r.platform as string,
-      gross: Number(r.gross_sales), payout: Number(r.actual_payout), cogsManual: Number(r.cogs),
+      month: r.month,
+      platform: r.platform as string,
+      gross: Number(r.gross_sales),
+      payout: Number(r.actual_payout),
+      cogsManual: Number(r.cogs),
     })),
     costs: (costs.data ?? []).map((r) => ({
-      item: r.item_name, cost: Number(r.cost_exvat), effective_from: r.effective_from,
+      item: r.item_name,
+      cost: Number(r.cost_exvat),
+      effective_from: r.effective_from,
     })),
     itemSales: (itemSales.data ?? []).map((r) => ({
-      month: r.month, platform: r.platform as string, item: r.item_name,
-      units: r.units, revenue: Number(r.revenue_jod ?? 0),
+      month: r.month,
+      platform: r.platform as string,
+      item: r.item_name,
+      units: r.units,
+      revenue: Number(r.revenue_jod ?? 0),
     })),
     targets: (targets.data ?? []).map((r) => ({
-      month: r.month, platform: r.platform as string,
+      month: r.month,
+      platform: r.platform as string,
       salesTarget: Number(r.sales_target_jod),
     })),
     lastImportAt: lastImport.data?.[0]?.imported_at ?? null,

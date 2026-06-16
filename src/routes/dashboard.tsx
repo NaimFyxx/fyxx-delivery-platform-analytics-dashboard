@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getDashboardData, type DashboardData } from "@/lib/dashboard.functions";
+import { getDashboardData } from "@/lib/dashboard.functions";
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
 import careemLogo from "@/assets/careem-logo-full.svg";
@@ -11,6 +11,9 @@ import {
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
+import { cogsFor } from "@/lib/costs";
+// Re-exported so other routes (e.g. /insights) keep importing it from here.
+export { costAsOf, cogsFor } from "@/lib/costs";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -57,39 +60,6 @@ export function nextMonth(m: string) {
   const [y, mm] = m.split("-").map(Number);
   const d = new Date(Date.UTC(y, mm, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-/**
- * For one item, return the cost active as of asOfDate (YYYY-MM-DD):
- * the row with the GREATEST effective_from that is <= asOfDate.
- * Returns null if no version was effective yet.
- */
-export function costAsOf(costs: DashboardData["costs"], item: string, asOfDate: string): number | null {
-  let best: { effective_from: string; cost: number } | null = null;
-  for (const c of costs) {
-    if (c.item !== item) continue;
-    if (c.effective_from > asOfDate) continue;
-    if (!best || c.effective_from > best.effective_from) best = c;
-  }
-  return best ? best.cost : null;
-}
-
-/** COGS for a (month, platform) using the cost version active during that month. */
-export function cogsFor(
-  itemSales: DashboardData["itemSales"],
-  costs: DashboardData["costs"],
-  month: string,
-  platforms: string[],
-): number {
-  const asOf = lastDayOfMonth(month);
-  let total = 0;
-  for (const s of itemSales) {
-    if (s.month !== month) continue;
-    if (!platforms.includes(s.platform)) continue;
-    const c = costAsOf(costs, s.item, asOf);
-    if (c != null) total += s.units * c;
-  }
-  return total;
 }
 
 function PublicDashboard() {

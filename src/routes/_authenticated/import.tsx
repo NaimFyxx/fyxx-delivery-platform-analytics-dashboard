@@ -1,23 +1,60 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { toast } from "sonner";
-import { Loader2, Upload, CheckCircle2, AlertCircle, ExternalLink, ChevronLeft, ChevronRight, Check, Circle } from "lucide-react";
-import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
-import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 import {
-  REPORTS, reportsForPlatform, autoMap, loadMapping, saveMapping, parseCsv,
-  parseDate, dateToMonth, monthFromColumns, num,
-  type Mapping, type ReportDef, type ReportId,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import {
+  Loader2,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Circle,
+} from "lucide-react";
+import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
+import { MonthPicker } from "@/components/fyxx/date-picker";
+import {
+  REPORTS,
+  reportsForPlatform,
+  autoMap,
+  loadMapping,
+  saveMapping,
+  parseCsv,
+  validateSignature,
+  parseDate,
+  parseDateTime,
+  parseOrderItems,
+  isDelivered,
+  dateToMonth,
+  monthFromColumns,
+  num,
+  round3,
+  type Mapping,
+  type ReportDef,
+  type ReportId,
 } from "@/lib/csv-import";
 import { cn } from "@/lib/utils";
 
@@ -26,17 +63,23 @@ export const Route = createFileRoute("/_authenticated/import")({
   component: ImportPage,
 });
 
-type RowOp = { key: string; payload: Record<string, unknown>; exists: boolean };
+/** A direct upsert batch. */
+type UpsertGroup = { table: string; onConflict: string; rows: Record<string, unknown>[] };
+/** Read-back rollups run after the upserts land (keeps re-imports idempotent). */
+type Reconcile = {
+  careemDailyDates?: string[];
+  financials?: { platform: Platform; months: string[] };
+};
 type Preview = {
-  rows: RowOp[];
+  upserts: UpsertGroup[];
+  reconcile?: Reconcile;
   willAdd: number;
   willUpdate: number;
   skipped: number;
   notes: string[];
   previewCols: string[];
   previewRows: Array<Record<string, string | number>>;
-  table: ReportDef["table"];
-  onConflict: string;
+  rowFlags: boolean[]; // exists? per preview row
 };
 
 function ImportPage() {
@@ -49,7 +92,9 @@ function ImportPage() {
   const report = reportId ? REPORTS[reportId] : null;
 
   function restart() {
-    setStep(1); setPlatform(null); setReportId(null);
+    setStep(1);
+    setPlatform(null);
+    setReportId(null);
   }
 
   return (
@@ -66,7 +111,6 @@ function ImportPage() {
         platform={platform}
         reportLabel={report?.label ?? null}
         onJump={(s) => {
-          // allow jumping backward to a completed step
           if (s < step) setStep(s as 1 | 2 | 3 | 4);
         }}
       />
@@ -74,7 +118,11 @@ function ImportPage() {
       {step === 1 && (
         <Step1Platform
           value={platform}
-          onPick={(p) => { setPlatform(p); setReportId(null); setStep(2); }}
+          onPick={(p) => {
+            setPlatform(p);
+            setReportId(null);
+            setStep(2);
+          }}
         />
       )}
 
@@ -83,30 +131,24 @@ function ImportPage() {
           platform={platform}
           value={reportId}
           onBack={() => setStep(1)}
-          onPick={(id) => { setReportId(id); setStep(3); }}
+          onPick={(id) => {
+            setReportId(id);
+            setStep(3);
+          }}
         />
       )}
 
       {step >= 3 && report && platform && (
-        report.kind === "csv" ? (
-          <CsvFlow
-            key={report.id}
-            report={report} platform={platform} qc={qc}
-            step={step as 3 | 4}
-            goNext={() => setStep(4)}
-            goBack={() => setStep(step === 4 ? 3 : 2)}
-            onDone={restart}
-          />
-        ) : (
-          <CareemInvoiceFlow
-            key={report.id}
-            report={report} platform={platform} qc={qc}
-            step={step as 3 | 4}
-            goNext={() => setStep(4)}
-            goBack={() => setStep(step === 4 ? 3 : 2)}
-            onDone={restart}
-          />
-        )
+        <CsvFlow
+          key={report.id}
+          report={report}
+          platform={platform}
+          qc={qc}
+          step={step as 3 | 4}
+          goNext={() => setStep(4)}
+          goBack={() => setStep(step === 4 ? 3 : 2)}
+          onDone={restart}
+        />
       )}
     </div>
   );
@@ -115,7 +157,10 @@ function ImportPage() {
 /* ----- Wizard chrome ----- */
 
 function Stepper({
-  step, platform, reportLabel, onJump,
+  step,
+  platform,
+  reportLabel,
+  onJump,
 }: {
   step: 1 | 2 | 3 | 4;
   platform: Platform | null;
@@ -123,9 +168,9 @@ function Stepper({
   onJump: (s: number) => void;
 }) {
   const steps = [
-    { n: 1, label: "Platform",         sub: platform ?? "—" },
-    { n: 2, label: "Report",           sub: reportLabel ?? "—" },
-    { n: 3, label: "Upload",           sub: step >= 3 ? "in progress" : "—" },
+    { n: 1, label: "Platform", sub: platform ?? "—" },
+    { n: 2, label: "Report", sub: reportLabel ?? "—" },
+    { n: 3, label: "Upload", sub: step >= 3 ? "in progress" : "—" },
     { n: 4, label: "Preview & Confirm", sub: step === 4 ? "in progress" : "—" },
   ];
   return (
@@ -142,18 +187,22 @@ function Stepper({
             onClick={() => onJump(s.n)}
             className={cn(
               "text-left rounded-xl border px-3 py-2.5 transition-colors",
-              active   && "border-primary bg-primary/10",
-              done     && "border-success/40 bg-success/5 hover:bg-success/10 cursor-pointer",
+              active && "border-primary bg-primary/10",
+              done && "border-success/40 bg-success/5 hover:bg-success/10 cursor-pointer",
               !active && !done && "border-border bg-card opacity-70",
             )}
           >
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold">
-              <span className={cn(
-                "inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px]",
-                done   ? "bg-success/30 text-success" :
-                active ? "bg-primary text-primary-foreground" :
-                         "bg-muted text-muted-foreground",
-              )}>
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px]",
+                  done
+                    ? "bg-success/30 text-success"
+                    : active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                )}
+              >
                 {done ? <Check className="size-3" /> : s.n}
               </span>
               <span className={cn(active && "text-primary", done && "text-success")}>
@@ -169,7 +218,8 @@ function Stepper({
 }
 
 function Step1Platform({
-  value, onPick,
+  value,
+  onPick,
 }: {
   value: Platform | null;
   onPick: (p: Platform) => void;
@@ -177,7 +227,9 @@ function Step1Platform({
   return (
     <Card className="p-6">
       <div className="text-sm font-semibold mb-1">Step 1 — Which platform?</div>
-      <p className="text-xs text-muted-foreground mb-4">Pick the delivery platform this report came from.</p>
+      <p className="text-xs text-muted-foreground mb-4">
+        Pick the delivery platform this report came from.
+      </p>
       <div className="grid sm:grid-cols-2 gap-3">
         {PLATFORMS.map((p) => {
           const active = value === p;
@@ -193,7 +245,9 @@ function Step1Platform({
             >
               <div className="font-display text-lg font-semibold">{p}</div>
               <div className="text-xs text-muted-foreground mt-1">
-                {p === "Talabat" ? "Talabat partner portal exports" : "Careem partner portal exports + manual invoice"}
+                {p === "Talabat"
+                  ? "Order Report + Performance Report"
+                  : "Order Level, By Menu Item, Adjustments, Careem Plus"}
               </div>
             </button>
           );
@@ -204,20 +258,27 @@ function Step1Platform({
 }
 
 function Step2Report({
-  platform, value, onBack, onPick,
+  platform,
+  value,
+  onBack,
+  onPick,
 }: {
-  platform: Platform; value: ReportId | null;
-  onBack: () => void; onPick: (id: ReportId) => void;
+  platform: Platform;
+  value: ReportId | null;
+  onBack: () => void;
+  onPick: (id: ReportId) => void;
 }) {
   const reports = reportsForPlatform(platform);
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-1">
         <div className="text-sm font-semibold">Step 2 — Which report?</div>
-        <Button variant="ghost" size="sm" onClick={onBack}><ChevronLeft className="size-3.5" /> Back</Button>
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          <ChevronLeft className="size-3.5" /> Back
+        </Button>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
-        Each report writes to a different table. Pick the one you exported from {platform}.
+        Pick the report you exported from {platform}. Each slot expects one specific file.
       </p>
       <div className="grid sm:grid-cols-2 gap-3">
         {reports.map((r) => {
@@ -235,9 +296,8 @@ function Step2Report({
               <div className="font-semibold text-sm">{r.label}</div>
               <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
               <div className="text-[10.5px] mt-2">
-                <span className="text-muted-foreground">Writes to: </span>
+                <span className="text-muted-foreground">Lands in: </span>
                 <span className="font-mono">{r.table}</span>
-                <span className="text-muted-foreground"> · {r.kind === "manual" ? "manual form" : "CSV upload"}</span>
               </div>
             </button>
           );
@@ -250,15 +310,17 @@ function Step2Report({
 /* ----- Monthly completeness checklist (informational) ----- */
 
 function CompletenessPanel({
-  month, onMonthChange,
+  month,
+  onMonthChange,
 }: {
-  month: string; onMonthChange: (m: string) => void;
+  month: string;
+  onMonthChange: (m: string) => void;
 }) {
   const { data } = useQuery({
     queryKey: ["import_completeness", month],
     queryFn: async () => {
       const start = `${month}-01`;
-      const end   = `${month}-31`;
+      const end = `${month}-31`;
       const [daily, items, fin] = await Promise.all([
         supabase.from("daily_sales").select("platform,date").gte("date", start).lte("date", end),
         supabase.from("monthly_item_sales").select("platform").eq("month", month),
@@ -281,18 +343,19 @@ function CompletenessPanel({
     },
   });
 
-  const rowsByPlatform: Record<Platform, { label: string; key: "daily" | "items" | "invoice" }[]> = {
-    Talabat: [
-      { label: "Daily sales (Performance)", key: "daily" },
-      { label: "Popular Dishes (items)",    key: "items" },
-      { label: "Invoice",                   key: "invoice" },
-    ],
-    Careem: [
-      { label: "Daily sales",                       key: "daily" },
-      { label: "Gross Sales Breakdown (items)",     key: "items" },
-      { label: "Invoice (manual)",                  key: "invoice" },
-    ],
-  };
+  const rowsByPlatform: Record<Platform, { label: string; key: "daily" | "items" | "invoice" }[]> =
+    {
+      Talabat: [
+        { label: "Daily sales (Performance)", key: "daily" },
+        { label: "Items (Order Report)", key: "items" },
+        { label: "Financials (Order Report)", key: "invoice" },
+      ],
+      Careem: [
+        { label: "Daily sales (Order Level)", key: "daily" },
+        { label: "Items (By Menu Item)", key: "items" },
+        { label: "Financials (Order Level + Adj.)", key: "invoice" },
+      ],
+    };
 
   return (
     <Card className="p-5 mb-4">
@@ -300,12 +363,15 @@ function CompletenessPanel({
         <div>
           <div className="text-sm font-semibold">Monthly completeness</div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Informational only — you can always import any report. Margin / COGS calculations need items + invoice for the month.
+            Informational only — you can always import any report. Margin / COGS calculations need
+            items + financials for the month.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <Label className="text-muted-foreground text-xs">Month</Label>
-          <div className="w-44"><MonthPicker value={month} onChange={onMonthChange} /></div>
+          <div className="w-44">
+            <MonthPicker value={month} onChange={onMonthChange} />
+          </div>
         </div>
       </div>
 
@@ -321,9 +387,11 @@ function CompletenessPanel({
                   const ok = status?.[row.key] ?? false;
                   return (
                     <li key={row.key} className="flex items-center gap-2 text-[12.5px]">
-                      {ok
-                        ? <Check className="size-4 text-success" />
-                        : <Circle className="size-4 text-muted-foreground" />}
+                      {ok ? (
+                        <Check className="size-4 text-success" />
+                      ) : (
+                        <Circle className="size-4 text-muted-foreground" />
+                      )}
                       <span className={ok ? "" : "text-muted-foreground"}>{row.label}</span>
                     </li>
                   );
@@ -331,7 +399,7 @@ function CompletenessPanel({
               </ul>
               {incomplete && (
                 <div className="mt-2 text-[10.5px] text-muted-foreground italic">
-                  Margin incomplete — items / invoice not yet imported for {month}.
+                  Margin incomplete — items / financials not yet imported for {month}.
                 </div>
               )}
             </div>
@@ -346,15 +414,23 @@ function CompletenessPanel({
    CSV upload flow
    ========================================================================= */
 
-function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
-  report: ReportDef; platform: Platform;
+function CsvFlow({
+  report,
+  platform,
+  qc,
+  step,
+  goNext,
+  goBack,
+  onDone,
+}: {
+  report: ReportDef;
+  platform: Platform;
   qc: ReturnType<typeof useQueryClient>;
   step: 3 | 4;
   goNext: () => void;
   goBack: () => void;
   onDone: () => void;
 }) {
-  const [month, setMonth] = useState(currentMonth());
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);
@@ -363,11 +439,23 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   const [building, setBuilding] = useState(false);
 
   async function onFile(f: File | null) {
-    setFile(f); setHeaders([]); setRawRows([]); setMapping({}); setPreview(null);
+    setFile(f);
+    setHeaders([]);
+    setRawRows([]);
+    setMapping({});
+    setPreview(null);
     if (!f) return;
     const text = await f.text();
     const { headers, rows } = parseCsv(text);
-    setHeaders(headers); setRawRows(rows);
+    const sigError = validateSignature(headers, report);
+    if (sigError) {
+      toast.error(sigError);
+      setFile(null);
+      return;
+    }
+    setHeaders(headers);
+    setRawRows(rows);
+    if (report.positional) return; // skinny files have no column mapping
     const saved = loadMapping(report.id);
     const auto = autoMap(headers, report.id);
     const merged: Mapping = { ...auto, ...(saved ?? {}) };
@@ -378,21 +466,34 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   }
 
   const missingFields = report.fields.filter((f) => f.required && !mapping[f.key]);
-  const canPreview = !!file && headers.length > 0 && missingFields.length === 0
-    && (report.monthSource !== "ask" || /^\d{4}-\d{2}$/.test(month));
+  const canPreview =
+    !!file &&
+    headers.length > 0 &&
+    (report.positional ? headers.length >= 2 : missingFields.length === 0);
 
   async function buildPreview() {
     if (!canPreview) return;
-    setBuilding(true); setPreview(null);
+    setBuilding(true);
+    setPreview(null);
     try {
-      saveMapping(report.id, mapping);
-      let chosenMonth = month;
+      if (!report.positional) saveMapping(report.id, mapping);
+      let chosenMonth = currentMonth();
       if (report.monthSource === "from-columns" && report.monthColumns) {
-        const m = monthFromColumns(rawRows, report.monthColumns);
-        if (!m) throw new Error(`Could not read ${report.monthColumns.from}/${report.monthColumns.to} from file.`);
-        chosenMonth = m;
+        const mo = monthFromColumns(rawRows, report.monthColumns);
+        if (!mo)
+          throw new Error(
+            `Could not read ${report.monthColumns.from}/${report.monthColumns.to} from file.`,
+          );
+        chosenMonth = mo;
       }
-      const built = await buildPreviewForReport(report, platform, chosenMonth, mapping, rawRows);
+      const built = await buildPreviewForReport(
+        report,
+        platform,
+        chosenMonth,
+        mapping,
+        headers,
+        rawRows,
+      );
       setPreview(built);
     } catch (e) {
       toast.error((e as Error).message);
@@ -404,23 +505,41 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   const importMut = useMutation({
     mutationFn: async () => {
       if (!preview) return;
-      const payloads = preview.rows.map((r) => r.payload);
-      for (let i = 0; i < payloads.length; i += 500) {
-        const chunk = payloads.slice(i, i + 500);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase.from(preview.table) as any)
-          .upsert(chunk, { onConflict: preview.onConflict });
-        if (error) throw error;
+      for (const g of preview.upserts) {
+        for (let i = 0; i < g.rows.length; i += 500) {
+          const chunk = g.rows.slice(i, i + 500);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error } = await (supabase.from(g.table as any) as any).upsert(chunk, {
+            onConflict: g.onConflict,
+          });
+          if (error) throw error;
+        }
       }
+      if (preview.reconcile?.careemDailyDates?.length) {
+        await reconcileCareemDaily(preview.reconcile.careemDailyDates);
+      }
+      if (preview.reconcile?.financials?.months.length) {
+        await reconcileFinancials(
+          preview.reconcile.financials.platform,
+          preview.reconcile.financials.months,
+        );
+      }
+      const totalRows = preview.upserts.reduce((s, g) => s + g.rows.length, 0);
       await supabase.from("import_log").insert({
-        platform, report_type: report.id,
+        platform,
+        report_type: report.id,
         file_name: file?.name ?? "csv",
-        rows_imported: payloads.length, status: "success",
+        rows_imported: totalRows,
+        status: "success",
       });
     },
     onSuccess: () => {
-      toast.success(`Imported ${preview?.rows.length ?? 0} rows`);
-      setFile(null); setHeaders([]); setRawRows([]); setPreview(null);
+      const total = preview?.upserts.reduce((s, g) => s + g.rows.length, 0) ?? 0;
+      toast.success(`Imported ${total} row(s)`);
+      setFile(null);
+      setHeaders([]);
+      setRawRows([]);
+      setPreview(null);
       qc.invalidateQueries();
       onDone();
     },
@@ -438,81 +557,110 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
   return (
     <>
       {step === 3 && (
-      <>
-      <Card className="p-5 mt-4 space-y-4">
-        <div className="text-sm font-semibold">Step 3 — Upload {report.label}</div>
-        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">{report.hint}</div>
-          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-            {report.portalLabel} <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        {report.monthSource === "ask" && (
-          <Field label="Month this export covers">
-            <div className="max-w-xs"><MonthPicker value={month} onChange={setMonth} /></div>
-          </Field>
-        )}
-        <div>
-          <Label className="text-xs">CSV file</Label>
-          <div className="mt-1.5 flex items-center gap-3">
-            <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card hover:bg-accent text-sm">
-              <Upload className="size-4" />
-              {file ? "Replace file" : "Choose CSV"}
-              <input type="file" accept=".csv,text/csv" className="hidden"
-                onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
-            </label>
-            {file && <span className="text-sm text-muted-foreground">{file.name} · {rawRows.length} rows</span>}
-          </div>
-        </div>
-      </Card>
-
-      {headers.length > 0 && (
-        <Card className="p-5 mt-4">
-          <div className="text-sm font-semibold mb-3">Column mapping</div>
-          <p className="text-xs text-muted-foreground mb-4">
-            Auto-matched from headers. Saved per report so next upload is one click.
-          </p>
-          <div className="grid gap-3 md:grid-cols-2">
-            {allFields.map((f) => (
-              <Field key={f.key} label={f.label + (f.required ? " *" : " (optional)")}>
-                <Select
-                  value={mapping[f.key] ?? "__none__"}
-                  onValueChange={(v) =>
-                    setMapping((m) => {
-                      const next = { ...m };
-                      if (v === "__none__") delete next[f.key];
-                      else next[f.key] = v;
-                      return next;
-                    })
-                  }
-                >
-                  <SelectTrigger><SelectValue placeholder="— pick column —" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— none —</SelectItem>
-                    {headers.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-            ))}
-          </div>
-          {missingFields.length > 0 && (
-            <div className="mt-3 text-xs text-destructive flex items-center gap-1">
-              <AlertCircle className="size-3.5" /> Missing: {missingFields.map((f) => f.label).join(", ")}
+        <>
+          <Card className="p-5 mt-4 space-y-4">
+            <div className="text-sm font-semibold">Step 3 — Upload {report.label}</div>
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
+              <div className="text-xs text-muted-foreground">{report.hint}</div>
+              <a
+                href={report.portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                {report.portalLabel} <ExternalLink className="size-3.5" />
+              </a>
             </div>
-          )}
-        </Card>
-      )}
+            <div>
+              <Label className="text-xs">CSV file</Label>
+              <div className="mt-1.5 flex items-center gap-3">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card hover:bg-accent text-sm">
+                  <Upload className="size-4" />
+                  {file ? "Replace file" : "Choose CSV"}
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {file && (
+                  <span className="text-sm text-muted-foreground">
+                    {file.name} · {rawRows.length} rows
+                  </span>
+                )}
+              </div>
+            </div>
+          </Card>
 
-      <div className="mt-4 flex justify-between">
-        <Button variant="ghost" onClick={goBack}><ChevronLeft className="size-3.5" /> Back</Button>
-        <Button onClick={nextToPreview} disabled={!canPreview || building}
-          className="bg-gradient-primary text-primary-foreground">
-          {building && <Loader2 className="size-4 animate-spin mr-2" />}
-          Next: Preview <ChevronRight className="size-3.5" />
-        </Button>
-      </div>
-      </>
+          {!report.positional && headers.length > 0 && (
+            <Card className="p-5 mt-4">
+              <div className="text-sm font-semibold mb-3">Column mapping</div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Auto-matched from the report's known headers. Saved per report so next upload is one
+                click.
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                {allFields.map((f) => (
+                  <Field key={f.key} label={f.label + (f.required ? " *" : " (optional)")}>
+                    <Select
+                      value={mapping[f.key] ?? "__none__"}
+                      onValueChange={(v) =>
+                        setMapping((m) => {
+                          const next = { ...m };
+                          if (v === "__none__") delete next[f.key];
+                          else next[f.key] = v;
+                          return next;
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="— pick column —" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— none —</SelectItem>
+                        {headers.map((h) => (
+                          <SelectItem key={h} value={h}>
+                            {h}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                ))}
+              </div>
+              {missingFields.length > 0 && (
+                <div className="mt-3 text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="size-3.5" /> Missing:{" "}
+                  {missingFields.map((f) => f.label).join(", ")}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {report.positional && headers.length >= 2 && (
+            <Card className="p-5 mt-4 text-xs text-muted-foreground">
+              Reading <span className="font-mono">{headers[0]}</span> as the date and{" "}
+              <span className="font-mono">{headers[1]}</span> as the value (the value header is
+              ignored — you've tagged this file as{" "}
+              <span className="font-semibold">{report.label}</span>).
+            </Card>
+          )}
+
+          <div className="mt-4 flex justify-between">
+            <Button variant="ghost" onClick={goBack}>
+              <ChevronLeft className="size-3.5" /> Back
+            </Button>
+            <Button
+              onClick={nextToPreview}
+              disabled={!canPreview || building}
+              className="bg-gradient-primary text-primary-foreground"
+            >
+              {building && <Loader2 className="size-4 animate-spin mr-2" />}
+              Next: Preview <ChevronRight className="size-3.5" />
+            </Button>
+          </div>
+        </>
       )}
 
       {step === 4 && preview && (
@@ -523,14 +671,24 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
               <CheckCircle2 className="size-4 text-success" /> Preview
             </div>
             <div className="flex gap-2 text-xs">
-              <Badge variant="outline" className="bg-success/15 text-success border-success/30">Will add {preview.willAdd}</Badge>
-              <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">Will update {preview.willUpdate}</Badge>
-              {preview.skipped > 0 && <Badge variant="outline" className="text-muted-foreground">Skipped {preview.skipped}</Badge>}
+              <Badge variant="outline" className="bg-success/15 text-success border-success/30">
+                Will add {preview.willAdd}
+              </Badge>
+              <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">
+                Will update {preview.willUpdate}
+              </Badge>
+              {preview.skipped > 0 && (
+                <Badge variant="outline" className="text-muted-foreground">
+                  Skipped {preview.skipped}
+                </Badge>
+              )}
             </div>
           </div>
           {preview.notes.length > 0 && (
             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
-              {preview.notes.map((n, i) => <li key={i}>{n}</li>)}
+              {preview.notes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
             </ul>
           )}
 
@@ -538,35 +696,66 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {preview.previewCols.map((c) => <TableHead key={c}>{c}</TableHead>)}
+                  {preview.previewCols.map((c) => (
+                    <TableHead key={c}>{c}</TableHead>
+                  ))}
                   <TableHead>Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.previewRows.map((r, i) => (
+                {preview.previewRows.slice(0, 200).map((r, i) => (
                   <TableRow key={i}>
                     {preview.previewCols.map((c) => (
-                      <TableCell key={c} className="text-num">{r[c] as React.ReactNode}</TableCell>
+                      <TableCell key={c} className="text-num">
+                        {r[c] as React.ReactNode}
+                      </TableCell>
                     ))}
                     <TableCell>
-                      {preview.rows[i].exists
-                        ? <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">update</Badge>
-                        : <Badge variant="outline" className="bg-success/15 text-success border-success/30">add</Badge>}
+                      {preview.rowFlags[i] ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-primary/15 text-primary border-primary/30"
+                        >
+                          update
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="bg-success/15 text-success border-success/30"
+                        >
+                          add
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
+          {preview.previewRows.length > 200 && (
+            <div className="text-[11px] text-muted-foreground">
+              Showing first 200 of {preview.previewRows.length} parsed rows. All rows will be
+              imported.
+            </div>
+          )}
 
           <div className="flex justify-between">
-            <Button variant="ghost" onClick={() => { setPreview(null); goBack(); }}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPreview(null);
+                goBack();
+              }}
+            >
               <ChevronLeft className="size-3.5" /> Back to upload
             </Button>
-            <Button onClick={() => importMut.mutate()} disabled={importMut.isPending || preview.rows.length === 0}
-              className="bg-gradient-primary text-primary-foreground">
+            <Button
+              onClick={() => importMut.mutate()}
+              disabled={importMut.isPending || preview.upserts.every((g) => g.rows.length === 0)}
+              className="bg-gradient-primary text-primary-foreground"
+            >
               {importMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-              Confirm import ({preview.rows.length} rows)
+              Confirm import
             </Button>
           </div>
         </Card>
@@ -574,7 +763,11 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
 
       {step === 4 && !preview && (
         <Card className="p-5 mt-4 text-sm text-muted-foreground">
-          No preview built yet. <button className="underline" onClick={goBack}>Go back to upload</button>.
+          No preview built yet.{" "}
+          <button className="underline" onClick={goBack}>
+            Go back to upload
+          </button>
+          .
         </Card>
       )}
     </>
@@ -582,458 +775,607 @@ function CsvFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
 }
 
 /* =========================================================================
-   Careem invoice — manual entry (PDF source)
+   Read-back reconcile (run after upserts; keeps re-imports idempotent)
    ========================================================================= */
 
-function CareemInvoiceFlow({ report, platform, qc, step, goNext, goBack, onDone }: {
-  report: ReportDef; platform: Platform;
-  qc: ReturnType<typeof useQueryClient>;
-  step: 3 | 4;
-  goNext: () => void;
-  goBack: () => void;
-  onDone: () => void;
-}) {
-  const [month, setMonth] = useState(currentMonth());
-  const [gross, setGross] = useState("");
-  const [platformFee, setPlatformFee] = useState("");
-  const [cplusFee, setCplusFee] = useState("");
-  const [pgFee, setPgFee] = useState("");
-  const [bankFee, setBankFee] = useState("");
-  const [orders, setOrders] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [building, setBuilding] = useState(false);
-
-  const VAT = 0.16;
-  const grossN = num(gross);
-  const feeRows = [
-    { key: "pg",       label: "Payment gateway fee", value: pgFee,       set: setPgFee },
-    { key: "platform", label: "Platform fee",        value: platformFee, set: setPlatformFee },
-    { key: "cplus",    label: "CPlus fee",           value: cplusFee,    set: setCplusFee },
-    { key: "bank",     label: "Bank transfer fee",   value: bankFee,     set: setBankFee },
-  ];
-  const netTotals = feeRows.map((r) => num(r.value));
-  const totalNet = netTotals.reduce((s, n) => s + n, 0);
-  const totalVat = totalNet * VAT;
-  const grandTotal = totalNet + totalVat;
-  const payout = grossN - grandTotal;
-
-  const canPreview = /^\d{4}-\d{2}$/.test(month) && grossN > 0;
-
-  async function buildPreview() {
-    if (!canPreview) return;
-    setBuilding(true);
-    try {
-      const { data: existing } = await supabase
-        .from("monthly_financials").select("month").eq("platform", platform).eq("month", month);
-      const exists = (existing ?? []).length > 0;
-      const payload = {
-        month, platform,
-        gross_sales: grossN,
-        actual_payout: payout,
-        // Store net (excl-VAT) fees — margins use VAT-stripped values.
-        commission: totalNet,
-        orders: Math.round(num(orders)),
-      };
-      setPreview({
-        rows: [{ key: `${month}|${platform}`, exists, payload }],
-        willAdd: exists ? 0 : 1, willUpdate: exists ? 1 : 0, skipped: 0,
-        notes: [
-          `Stored commission = sum of Net Prices (excl. VAT) = ${fmtJOD(totalNet)}.`,
-          `Payout = Gross incl. VAT (${fmtJOD(grossN)}) − Grand Total incl. VAT (${fmtJOD(grandTotal)}) = ${fmtJOD(payout)}.`,
-          "COGS is preserved — manual invoice entry does not overwrite it.",
-        ],
-        previewCols: ["Month", "Gross (incl VAT)", "Fees (net)", "Fees (incl VAT)", "Payout", "Orders"],
-        previewRows: [{
-          Month: month,
-          "Gross (incl VAT)": fmtJOD(grossN),
-          "Fees (net)": fmtJOD(totalNet),
-          "Fees (incl VAT)": fmtJOD(grandTotal),
-          Payout: fmtJOD(payout), Orders: fmtInt(num(orders)),
-        }],
-        table: "monthly_financials",
-        onConflict: "month,platform",
-      });
-    } finally {
-      setBuilding(false);
+/** Recompute Careem daily_sales (sales + orders) from per-order rows for the given dates. */
+async function reconcileCareemDaily(dates: string[]) {
+  const uniq = Array.from(new Set(dates));
+  for (let i = 0; i < uniq.length; i += 200) {
+    const chunkDates = uniq.slice(i, i + 200);
+    const { data, error } = await supabase
+      .from("platform_orders")
+      .select("date,gross,status")
+      .eq("platform", "Careem")
+      .in("date", chunkDates);
+    if (error) throw error;
+    const byDate = new Map<string, { sales: number; orders: number }>();
+    for (const d of chunkDates) byDate.set(d, { sales: 0, orders: 0 });
+    for (const o of data ?? []) {
+      if (!isDelivered(o.status)) continue;
+      const cur = byDate.get(o.date) ?? { sales: 0, orders: 0 };
+      cur.sales += Number(o.gross);
+      cur.orders += 1;
+      byDate.set(o.date, cur);
     }
+    const rows = Array.from(byDate.entries()).map(([date, v]) => ({
+      date,
+      platform: "Careem",
+      sales_jod: round3(v.sales),
+      orders: v.orders,
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: upErr } = await (supabase.from("daily_sales") as any).upsert(rows, {
+      onConflict: "date,platform",
+    });
+    if (upErr) throw upErr;
   }
+}
 
-  const saveMut = useMutation({
-    mutationFn: async () => {
-      if (!preview) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase.from("monthly_financials") as any)
-        .upsert(preview.rows[0].payload, { onConflict: "month,platform" });
-      if (error) throw error;
-      await supabase.from("import_log").insert({
-        platform, report_type: report.id,
-        file_name: `careem invoice ${month}`, rows_imported: 1, status: "success",
-      });
-    },
-    onSuccess: () => {
-      toast.success(`Saved Careem invoice for ${month}`);
-      setPreview(null); setGross(""); setPlatformFee(""); setCplusFee("");
-      setPgFee(""); setBankFee(""); setOrders("");
-      qc.invalidateQueries();
-      onDone();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  async function nextToPreview() {
-    if (!canPreview) return;
-    await buildPreview();
-    goNext();
+/** Recompute monthly_financials (gross, payout, fees, orders) from per-order rows
+ *  + Careem adjustments, for the given months. COGS is never written (preserved). */
+async function reconcileFinancials(platform: Platform, months: string[]) {
+  for (const month of Array.from(new Set(months))) {
+    const start = `${month}-01`,
+      end = `${month}-31`;
+    const { data: orders, error } = await supabase
+      .from("platform_orders")
+      .select("gross,net_payout,commission,payment_fee,platform_fee,status")
+      .eq("platform", platform)
+      .gte("date", start)
+      .lte("date", end);
+    if (error) throw error;
+    let gross = 0,
+      payout = 0,
+      commission = 0,
+      orderCount = 0;
+    for (const o of orders ?? []) {
+      if (!isDelivered(o.status)) continue;
+      gross += Number(o.gross);
+      payout += Number(o.net_payout);
+      commission += Number(o.commission) + Number(o.payment_fee) + Number(o.platform_fee);
+      orderCount += 1;
+    }
+    if (platform === "Careem") {
+      const { data: adj, error: aerr } = await supabase
+        .from("monthly_adjustments")
+        .select("amount")
+        .eq("platform", "Careem")
+        .eq("month", month);
+      if (aerr) throw aerr;
+      payout -= (adj ?? []).reduce((s, a) => s + Number(a.amount), 0);
+    }
+    const payload = {
+      month,
+      platform,
+      gross_sales: round3(gross),
+      actual_payout: round3(payout),
+      commission: round3(commission),
+      orders: orderCount,
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: upErr } = await (supabase.from("monthly_financials") as any).upsert(payload, {
+      onConflict: "month,platform",
+    });
+    if (upErr) throw upErr;
   }
-
-  return (
-    <>
-      {step === 3 && (
-      <>
-      <Card className="p-5 mt-4 space-y-4">
-        <div className="text-sm font-semibold">Step 3 — Enter Careem invoice</div>
-        <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">{report.hint}</div>
-          <a href={report.portalUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-            {report.portalLabel} <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Invoice month">
-            <MonthPicker value={month} onChange={setMonth} />
-          </Field>
-          <Field label="Total Gross Amount (incl. VAT)">
-            <Input value={gross} onChange={(e) => setGross(e.target.value)} inputMode="decimal" placeholder="0.00" />
-          </Field>
-          <Field label="Orders count (optional)">
-            <Input value={orders} onChange={(e) => setOrders(e.target.value)} inputMode="numeric" placeholder="0" />
-          </Field>
-        </div>
-
-        <div className="space-y-2">
-          <div>
-            <Label className="text-sm font-semibold">Fees</Label>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Enter the Net Price (excl. VAT) for each fee — from the invoice's "Net Price" column. VAT (16%) and Total (incl. VAT) are calculated for confirmation.
-            </p>
-          </div>
-          <div className="rounded-md border border-border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fee</TableHead>
-                  <TableHead className="text-right">Net Price (excl. VAT)</TableHead>
-                  <TableHead className="text-right">VAT 16%</TableHead>
-                  <TableHead className="text-right">Total (incl. VAT)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {feeRows.map((r, i) => {
-                  const net = netTotals[i];
-                  const vat = net * VAT;
-                  return (
-                    <TableRow key={r.key}>
-                      <TableCell className="font-medium">{r.label}</TableCell>
-                      <TableCell className="text-right">
-                        <Input
-                          value={r.value}
-                          onChange={(e) => r.set(e.target.value)}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          className="text-right ml-auto max-w-[140px]"
-                        />
-                      </TableCell>
-                      <TableCell className="text-right text-num text-muted-foreground">{fmtJOD(vat)}</TableCell>
-                      <TableCell className="text-right text-num">{fmtJOD(net + vat)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-
-        <div className="rounded-md border border-border bg-muted/30 p-4 text-sm space-y-1.5">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Total Fees (Excl. VAT)</span>
-            <span className="text-num">{fmtJOD(totalNet)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Total VAT</span>
-            <span className="text-num">{fmtJOD(totalVat)}</span>
-          </div>
-          <div className="flex justify-between pt-1.5 border-t border-border">
-            <span className="font-semibold">Grand Total (Incl. VAT)</span>
-            <span className="text-num font-semibold">{fmtJOD(grandTotal)}</span>
-          </div>
-          <div className="flex justify-between pt-1.5 text-xs">
-            <span className="text-muted-foreground">Computed payout (Gross − Grand Total)</span>
-            <span className="text-num font-medium">{fmtJOD(payout)}</span>
-          </div>
-        </div>
-
-      </Card>
-      <div className="mt-4 flex justify-between">
-        <Button variant="ghost" onClick={goBack}><ChevronLeft className="size-3.5" /> Back</Button>
-        <Button onClick={nextToPreview} disabled={!canPreview || building}
-          className="bg-gradient-primary text-primary-foreground">
-          {building && <Loader2 className="size-4 animate-spin mr-2" />}
-          Next: Preview <ChevronRight className="size-3.5" />
-        </Button>
-      </div>
-      </>
-      )}
-
-      {step === 4 && preview && (
-        <Card className="p-5 mt-4 space-y-4">
-          <div className="text-sm font-semibold">Step 4 — Preview &amp; confirm</div>
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="text-sm font-semibold flex items-center gap-2">
-              <CheckCircle2 className="size-4 text-success" /> Preview
-            </div>
-            <div className="flex gap-2 text-xs">
-              <Badge variant="outline" className="bg-success/15 text-success border-success/30">Will add {preview.willAdd}</Badge>
-              <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">Will update {preview.willUpdate}</Badge>
-            </div>
-          </div>
-          <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
-            {preview.notes.map((n, i) => <li key={i}>{n}</li>)}
-          </ul>
-          <div className="overflow-x-auto border border-border rounded-md">
-            <Table>
-              <TableHeader><TableRow>
-                {preview.previewCols.map((c) => <TableHead key={c}>{c}</TableHead>)}
-                <TableHead>Action</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {preview.previewRows.map((r, i) => (
-                  <TableRow key={i}>
-                    {preview.previewCols.map((c) => (
-                      <TableCell key={c} className="text-num">{r[c] as React.ReactNode}</TableCell>
-                    ))}
-                    <TableCell>
-                      {preview.rows[i].exists
-                        ? <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">update</Badge>
-                        : <Badge variant="outline" className="bg-success/15 text-success border-success/30">add</Badge>}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="flex justify-between">
-            <Button variant="ghost" onClick={() => { setPreview(null); goBack(); }}>
-              <ChevronLeft className="size-3.5" /> Back
-            </Button>
-            <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
-              className="bg-gradient-primary text-primary-foreground">
-              {saveMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-              Confirm save
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {step === 4 && !preview && (
-        <Card className="p-5 mt-4 text-sm text-muted-foreground">
-          No preview built yet. <button className="underline" onClick={goBack}>Go back to the form</button>.
-        </Card>
-      )}
-    </>
-  );
 }
 
 /* =========================================================================
-   Preview builders (CSV)
+   Preview builders
    ========================================================================= */
 
 async function buildPreviewForReport(
-  report: ReportDef, platform: Platform, month: string, mapping: Mapping, rows: Record<string, string>[],
+  report: ReportDef,
+  platform: Platform,
+  month: string,
+  mapping: Mapping,
+  headers: string[],
+  rows: Record<string, string>[],
 ): Promise<Preview> {
   switch (report.id) {
+    case "talabat:order_report":
+      return buildTalabatOrders(platform, mapping, rows);
     case "talabat:performance":
-    case "careem:daily_sales":
-      return buildDaily(report, platform, mapping, rows);
-    case "talabat:popular_dishes":
-    case "careem:gross_breakdown":
-      return buildItems(platform, month, mapping, rows);
-    case "talabat:invoice":
-      return buildTalabatInvoice(platform, mapping, rows);
+      return buildPerformance(platform, mapping, rows);
+    case "careem:order_level":
+      return buildCareemOrders(platform, mapping, rows);
+    case "careem:menu_item":
+      return buildCareemItems(platform, month, mapping, rows);
+    case "careem:adjustments":
+      return buildAdjustments(platform, mapping, rows);
+    case "careem:plus_orders":
+    case "careem:plus_sales":
+      return buildPlus(report, platform, headers, rows);
     default:
-      throw new Error(`No CSV builder for ${report.id}`);
+      throw new Error(`No builder for ${report.id}`);
   }
 }
 
-async function buildDaily(
-  report: ReportDef, platform: Platform, m: Mapping, rows: Record<string, string>[],
+/** Look up which keys already exist, in chunks. */
+async function existingKeys(
+  table: string,
+  column: string,
+  platform: Platform,
+  keys: string[],
+  extra?: (q: ReturnType<typeof supabase.from>) => unknown,
+): Promise<Set<string>> {
+  const set = new Set<string>();
+  for (let i = 0; i < keys.length; i += 300) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = (supabase.from as any)(table)
+      .select(column)
+      .eq("platform", platform)
+      .in(column, keys.slice(i, i + 300));
+    if (extra) q = extra(q) ?? q;
+    const { data } = await q;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (data ?? []).forEach((d: any) => set.add(String(d[column])));
+  }
+  return set;
+}
+
+async function buildTalabatOrders(
+  platform: Platform,
+  m: Mapping,
+  rows: Record<string, string>[],
 ): Promise<Preview> {
-  const grouped = new Map<string, {
-    date: string; sales: number; orders: number;
-    cplus_sales: number; cplus_orders: number; cplus_aov: number;
-  }>();
+  const orderRows: Record<string, unknown>[] = [];
+  const orderIds: string[] = [];
+  const itemAgg = new Map<string, Map<string, number>>(); // month -> name -> units
+  const monthsSet = new Set<string>();
+  const previewRows: Array<Record<string, string | number>> = [];
+  let skipped = 0;
+
+  for (const r of rows) {
+    const order_id = (r[m.order_id] ?? "").trim();
+    const date = parseDate(r[m.order_dt]);
+    if (!order_id || !date) {
+      skipped++;
+      continue;
+    }
+    const month = dateToMonth(date);
+    monthsSet.add(month);
+    const gross = round3(num(r[m.gross]));
+    const net_payout = round3(num(r[m.net_payout]));
+    const commission = m.commission ? round3(Math.abs(num(r[m.commission]))) : 0;
+    const payment_fee = m.payment_fee ? round3(Math.abs(num(r[m.payment_fee]))) : 0;
+    const discount = round3(
+      (m.discount ? Math.abs(num(r[m.discount])) : 0) +
+        (m.voucher ? Math.abs(num(r[m.voucher])) : 0),
+    );
+    const is_loyalty = m.is_pro
+      ? String(r[m.is_pro] ?? "")
+          .trim()
+          .toUpperCase() === "Y"
+      : null;
+    const status = (r[m.status] ?? "").trim() || null;
+    orderRows.push({
+      platform,
+      order_id,
+      ordered_at: parseDateTime(r[m.order_dt]),
+      date,
+      status,
+      gross,
+      net_payout,
+      commission,
+      payment_fee,
+      platform_fee: 0,
+      discount,
+      is_loyalty,
+    });
+    orderIds.push(order_id);
+    if (m.items_text) {
+      const per = itemAgg.get(month) ?? new Map<string, number>();
+      for (const it of parseOrderItems(r[m.items_text]))
+        per.set(it.name, (per.get(it.name) ?? 0) + it.qty);
+      itemAgg.set(month, per);
+    }
+    previewRows.push({
+      "Order ID": order_id,
+      Date: date,
+      Gross: fmtJOD(gross),
+      Payout: fmtJOD(net_payout),
+      Pro: is_loyalty == null ? "—" : is_loyalty ? "Yes" : "No",
+      Status: status ?? "",
+    });
+  }
+
+  const existingSet = await existingKeys("platform_orders", "order_id", platform, orderIds);
+  const rowFlags = orderRows.map((o) => existingSet.has(o.order_id as string));
+  const willUpdate = rowFlags.filter(Boolean).length;
+
+  const itemRows: Record<string, unknown>[] = [];
+  for (const [month, per] of itemAgg)
+    for (const [name, units] of per)
+      itemRows.push({ month, platform, item_name: name, units: Math.round(units), revenue_jod: 0 });
+
+  const months = Array.from(monthsSet).sort();
+  const notes = [
+    `${orderRows.length} order(s) → platform_orders (idempotent by order id).`,
+    itemRows.length
+      ? `${itemRows.length} item line(s) parsed from "Order Items" → monthly_item_sales (units only — Talabat has no per-item price). Upload the full month so item totals are complete.`
+      : "",
+    `Monthly financials recomputed for ${months.join(", ")} from these orders (Delivered only).`,
+    "Daily totals for Talabat come from the Performance report, not this file.",
+    skipped ? `${skipped} row(s) skipped (no order id / date).` : "",
+  ].filter(Boolean);
+
+  return {
+    upserts: [
+      { table: "platform_orders", onConflict: "platform,order_id", rows: orderRows },
+      ...(itemRows.length
+        ? [{ table: "monthly_item_sales", onConflict: "month,platform,item_name", rows: itemRows }]
+        : []),
+    ],
+    reconcile: { financials: { platform, months } },
+    willAdd: rowFlags.length - willUpdate,
+    willUpdate,
+    skipped,
+    notes,
+    previewCols: ["Order ID", "Date", "Gross", "Payout", "Pro", "Status"],
+    previewRows,
+    rowFlags,
+  };
+}
+
+async function buildPerformance(
+  platform: Platform,
+  m: Mapping,
+  rows: Record<string, string>[],
+): Promise<Preview> {
+  const hasPro = !!(m.pro_orders || m.pro_sales);
+  const grouped = new Map<
+    string,
+    { sales: number; orders: number; pro_orders: number; pro_sales: number }
+  >();
   let skipped = 0;
   for (const r of rows) {
     const date = parseDate(r[m.date]);
-    if (!date) { skipped++; continue; }
+    if (!date) {
+      skipped++;
+      continue;
+    }
     grouped.set(date, {
-      date,
-      sales: num(r[m.sales_jod]),
-      orders: num(r[m.orders]),
-      cplus_sales: m.cplus_sales_jod ? num(r[m.cplus_sales_jod]) : 0,
-      cplus_orders: m.cplus_orders ? num(r[m.cplus_orders]) : 0,
-      cplus_aov: m.cplus_aov ? num(r[m.cplus_aov]) : 0,
+      sales: round3(num(r[m.sales_jod])),
+      orders: Math.round(num(r[m.orders])),
+      pro_orders: m.pro_orders ? Math.round(num(r[m.pro_orders])) : 0,
+      pro_sales: m.pro_sales ? round3(num(r[m.pro_sales])) : 0,
     });
   }
   const dates = Array.from(grouped.keys());
-  const { data: existing } = await supabase
-    .from("daily_sales").select("date").eq("platform", platform).in("date", dates);
-  const existingSet = new Set((existing ?? []).map((r) => r.date));
+  const existingSet = await existingKeys("daily_sales", "date", platform, dates);
 
-  const ops: RowOp[] = [];
+  const opsRows: Record<string, unknown>[] = [];
   const previewRows: Array<Record<string, string | number>> = [];
-  let willAdd = 0, willUpdate = 0;
-  const hasCplus = !!(m.cplus_sales_jod || m.cplus_orders || m.cplus_aov);
-  for (const g of Array.from(grouped.values()).sort((a, b) => a.date.localeCompare(b.date))) {
-    const exists = existingSet.has(g.date);
-    if (exists) willUpdate++; else willAdd++;
+  const rowFlags: boolean[] = [];
+  for (const [date, g] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    rowFlags.push(existingSet.has(date));
     const payload: Record<string, unknown> = {
-      date: g.date, platform,
-      sales_jod: g.sales, orders: Math.round(g.orders),
+      date,
+      platform,
+      sales_jod: g.sales,
+      orders: g.orders,
     };
-    if (hasCplus) {
-      payload.cplus_sales_jod = g.cplus_sales;
-      payload.cplus_orders = Math.round(g.cplus_orders);
-      payload.cplus_aov = g.cplus_aov;
+    if (hasPro) {
+      payload.pro_orders = g.pro_orders;
+      payload.pro_sales_jod = g.pro_sales;
     }
-    ops.push({ key: `${g.date}|${platform}`, exists, payload });
+    opsRows.push(payload);
     const row: Record<string, string | number> = {
-      Date: g.date, Sales: fmtJOD(g.sales), Orders: fmtInt(g.orders),
+      Date: date,
+      Sales: fmtJOD(g.sales),
+      Orders: fmtInt(g.orders),
     };
-    if (hasCplus) { row["C+ sales"] = fmtJOD(g.cplus_sales); row["C+ orders"] = fmtInt(g.cplus_orders); }
+    if (hasPro) {
+      row["Pro orders"] = fmtInt(g.pro_orders);
+      row["Pro sales"] = fmtJOD(g.pro_sales);
+    }
     previewRows.push(row);
   }
-  const notes: string[] = [`Platform set to ${platform}.`];
-  if (report.id === "careem:daily_sales") {
-    notes.push("Careem only lists days with orders — any day not in this file stays at zero.");
-    if (hasCplus) notes.push("Careem Plus tier columns will also be stored.");
-  } else {
-    const blank = Array.from(grouped.values()).filter((g) => g.sales === 0 && g.orders === 0).length;
-    if (blank > 0) notes.push(`${blank} no-order day(s) will be imported as 0 sales / 0 orders.`);
-  }
-  if (skipped > 0) notes.push(`${skipped} row(s) skipped (no valid date).`);
-
-  const cols = ["Date", "Sales", "Orders", ...(hasCplus ? ["C+ sales", "C+ orders"] : [])];
-  return { rows: ops, willAdd, willUpdate, skipped, notes,
-    previewCols: cols, previewRows, table: "daily_sales", onConflict: "date,platform" };
+  const willUpdate = rowFlags.filter(Boolean).length;
+  const notes = [
+    `Platform set to ${platform}.`,
+    hasPro
+      ? "Talabat Pro orders / revenue will be stored alongside the daily totals."
+      : "No Pro columns mapped — Pro tier panel stays empty for these days.",
+    skipped ? `${skipped} row(s) skipped (no valid date).` : "",
+  ].filter(Boolean);
+  return {
+    upserts: [{ table: "daily_sales", onConflict: "date,platform", rows: opsRows }],
+    willAdd: rowFlags.length - willUpdate,
+    willUpdate,
+    skipped,
+    notes,
+    previewCols: ["Date", "Sales", "Orders", ...(hasPro ? ["Pro orders", "Pro sales"] : [])],
+    previewRows,
+    rowFlags,
+  };
 }
 
-async function buildItems(
-  platform: Platform, month: string, m: Mapping, rows: Record<string, string>[],
+async function buildCareemOrders(
+  platform: Platform,
+  m: Mapping,
+  rows: Record<string, string>[],
 ): Promise<Preview> {
-  const grouped = new Map<string, { units: number; revenue: number }>();
+  const orderRows: Record<string, unknown>[] = [];
+  const orderIds: string[] = [];
+  const previewRows: Array<Record<string, string | number>> = [];
+  const datesSet = new Set<string>();
+  const monthsSet = new Set<string>();
+  let skipped = 0,
+    filtered = 0;
+
+  for (const r of rows) {
+    if (
+      m.entry_type &&
+      String(r[m.entry_type] ?? "")
+        .trim()
+        .toUpperCase() !== "FOOD_ORDER"
+    ) {
+      filtered++;
+      continue;
+    }
+    const order_id = (r[m.order_id] ?? "").trim();
+    const date = parseDate(r[m.order_dt]);
+    if (!order_id || !date) {
+      skipped++;
+      continue;
+    }
+    datesSet.add(date);
+    monthsSet.add(dateToMonth(date));
+    const gross = round3(num(r[m.gross]));
+    const net_payout = round3(num(r[m.net_payout]));
+    const platform_fee = round3(
+      (m.platform_fee ? Math.abs(num(r[m.platform_fee])) : 0) +
+        (m.platform_fee_tax ? Math.abs(num(r[m.platform_fee_tax])) : 0),
+    );
+    const payment_fee = round3(
+      (m.gateway_fee ? Math.abs(num(r[m.gateway_fee])) : 0) +
+        (m.gateway_fee_tax ? Math.abs(num(r[m.gateway_fee_tax])) : 0),
+    );
+    const discount = round3(
+      (m.discount_catalog ? Math.abs(num(r[m.discount_catalog])) : 0) +
+        (m.discount_promo ? Math.abs(num(r[m.discount_promo])) : 0),
+    );
+    const status = (r[m.status] ?? "").trim() || null;
+    orderRows.push({
+      platform,
+      order_id,
+      ordered_at: parseDateTime(r[m.order_dt]),
+      date,
+      status,
+      gross,
+      net_payout,
+      commission: 0,
+      payment_fee,
+      platform_fee,
+      discount,
+      is_loyalty: null,
+      payment_mode: m.payment_mode ? (r[m.payment_mode] ?? "").trim() || null : null,
+    });
+    orderIds.push(order_id);
+    previewRows.push({
+      "Order ID": order_id,
+      Date: date,
+      Gross: fmtJOD(gross),
+      Payout: fmtJOD(net_payout),
+      Fees: fmtJOD(platform_fee + payment_fee),
+      Status: status ?? "",
+    });
+  }
+
+  const existingSet = await existingKeys("platform_orders", "order_id", platform, orderIds);
+  const rowFlags = orderRows.map((o) => existingSet.has(o.order_id as string));
+  const willUpdate = rowFlags.filter(Boolean).length;
+  const months = Array.from(monthsSet).sort();
+  const notes = [
+    `${orderRows.length} FOOD_ORDER row(s) → platform_orders (idempotent by order id).`,
+    filtered ? `${filtered} non-FOOD_ORDER row(s) ignored.` : "",
+    "Fees stored as positive magnitudes (platform + gateway, incl. tax).",
+    `Daily totals and monthly financials recomputed for the affected dates / months (${months.join(", ")}), Delivered only.`,
+    skipped ? `${skipped} row(s) skipped (no order id / date).` : "",
+  ].filter(Boolean);
+
+  return {
+    upserts: [{ table: "platform_orders", onConflict: "platform,order_id", rows: orderRows }],
+    reconcile: { careemDailyDates: Array.from(datesSet), financials: { platform, months } },
+    willAdd: rowFlags.length - willUpdate,
+    willUpdate,
+    skipped,
+    notes,
+    previewCols: ["Order ID", "Date", "Gross", "Payout", "Fees", "Status"],
+    previewRows,
+    rowFlags,
+  };
+}
+
+async function buildCareemItems(
+  platform: Platform,
+  month: string,
+  m: Mapping,
+  rows: Record<string, string>[],
+): Promise<Preview> {
   const hasRevenue = Boolean(m.revenue_jod);
+  const grouped = new Map<string, { units: number; revenue: number }>();
   let skipped = 0;
   for (const r of rows) {
     const name = (r[m.item_name] ?? "").trim();
-    if (!name) { skipped++; continue; }
-    const u = num(r[m.units]);
-    const rev = hasRevenue ? num(r[m.revenue_jod]) : 0;
+    if (!name) {
+      skipped++;
+      continue;
+    }
     const cur = grouped.get(name) ?? { units: 0, revenue: 0 };
-    cur.units += u;
-    cur.revenue += rev;
+    cur.units += num(r[m.units]);
+    cur.revenue += hasRevenue ? num(r[m.revenue_jod]) : 0;
     grouped.set(name, cur);
   }
   const items = Array.from(grouped.keys());
-  const { data: existing } = await supabase
-    .from("monthly_item_sales").select("item_name")
-    .eq("platform", platform).eq("month", month).in("item_name", items);
-  const existingSet = new Set((existing ?? []).map((r) => r.item_name));
+  const existingSet = await existingKeys(
+    "monthly_item_sales",
+    "item_name",
+    platform,
+    items,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (q: any) => q.eq("month", month),
+  );
 
-  const ops: RowOp[] = [];
+  const opsRows: Record<string, unknown>[] = [];
   const previewRows: Array<Record<string, string | number>> = [];
-  let willAdd = 0, willUpdate = 0;
+  const rowFlags: boolean[] = [];
   const entries = Array.from(grouped.entries()).sort((a, b) =>
     hasRevenue ? b[1].revenue - a[1].revenue : b[1].units - a[1].units,
   );
   for (const [name, agg] of entries) {
-    const exists = existingSet.has(name);
-    if (exists) willUpdate++; else willAdd++;
-    ops.push({
-      key: `${month}|${platform}|${name}`, exists,
-      payload: {
-        month, platform, item_name: name,
-        units: Math.round(agg.units),
-        revenue_jod: Number(agg.revenue.toFixed(2)),
-      },
+    rowFlags.push(existingSet.has(name));
+    opsRows.push({
+      month,
+      platform,
+      item_name: name,
+      units: Math.round(agg.units),
+      revenue_jod: round3(agg.revenue),
     });
-    previewRows.push(hasRevenue
-      ? { Item: name, Units: fmtInt(agg.units), Revenue: `${fmtInt(agg.revenue)} JOD` }
-      : { Item: name, Units: fmtInt(agg.units) });
+    previewRows.push(
+      hasRevenue
+        ? { Item: name, Units: fmtInt(agg.units), Revenue: fmtJOD(agg.revenue) }
+        : { Item: name, Units: fmtInt(agg.units) },
+    );
   }
+  const willUpdate = rowFlags.filter(Boolean).length;
   const notes = [
-    `All ${items.length} item(s) tagged with month ${month} on ${platform}.`,
-    hasRevenue ? "Revenue (JOD) per item will be stored." : "No revenue column mapped — revenue will save as 0 (Insights ranks by units in that case).",
-    skipped > 0 ? `${skipped} row(s) skipped (blank name).` : "",
+    `All ${items.length} item(s) tagged with period ${month} on ${platform}.`,
+    hasRevenue
+      ? "Revenue (JOD) per item will be stored."
+      : "No revenue column mapped — revenue saves as 0 (Insights ranks by units).",
+    skipped ? `${skipped} row(s) skipped (blank name).` : "",
   ].filter(Boolean);
-  return { rows: ops, willAdd, willUpdate, skipped, notes,
-    previewCols: hasRevenue ? ["Item", "Units", "Revenue"] : ["Item", "Units"], previewRows,
-    table: "monthly_item_sales", onConflict: "month,platform,item_name" };
+  return {
+    upserts: [
+      { table: "monthly_item_sales", onConflict: "month,platform,item_name", rows: opsRows },
+    ],
+    willAdd: rowFlags.length - willUpdate,
+    willUpdate,
+    skipped,
+    notes,
+    previewCols: hasRevenue ? ["Item", "Units", "Revenue"] : ["Item", "Units"],
+    previewRows,
+    rowFlags,
+  };
 }
 
-async function buildTalabatInvoice(
-  platform: Platform, m: Mapping, rows: Record<string, string>[],
+async function buildAdjustments(
+  platform: Platform,
+  m: Mapping,
+  rows: Record<string, string>[],
 ): Promise<Preview> {
-  type Agg = { month: string; gross: number; payout: number; orders: number; commission: number; periods: number };
-  const grouped = new Map<string, Agg>();
+  const adjRows: Record<string, unknown>[] = [];
+  const previewRows: Array<Record<string, string | number>> = [];
+  const monthsSet = new Set<string>();
   let skipped = 0;
   for (const r of rows) {
-    const end = parseDate(r[m.end_date]);
-    if (!end) { skipped++; continue; }
-    const mo = dateToMonth(end);
-    const cur = grouped.get(mo) ?? { month: mo, gross: 0, payout: 0, orders: 0, commission: 0, periods: 0 };
-    cur.gross += num(r[m.gross_sales]);
-    cur.payout += num(r[m.actual_payout]);
-    cur.orders += num(r[m.orders]);
-    cur.commission += Math.abs(num(r[m.commission]));
-    cur.periods += 1;
-    grouped.set(mo, cur);
-  }
-  const months = Array.from(grouped.keys());
-  const { data: existing } = await supabase
-    .from("monthly_financials").select("month").eq("platform", platform).in("month", months);
-  const existingSet = new Set((existing ?? []).map((r) => r.month));
-
-  const ops: RowOp[] = [];
-  const previewRows: Array<Record<string, string | number>> = [];
-  let willAdd = 0, willUpdate = 0;
-  for (const a of Array.from(grouped.values()).sort((x, y) => x.month.localeCompare(y.month))) {
-    const exists = existingSet.has(a.month);
-    if (exists) willUpdate++; else willAdd++;
-    ops.push({
-      key: `${a.month}|${platform}`, exists,
-      payload: {
-        month: a.month, platform,
-        gross_sales: a.gross, actual_payout: a.payout,
-        orders: Math.round(a.orders), commission: a.commission,
-      },
+    const deduction_type = (r[m.deduction_type] ?? "").trim();
+    const date = parseDate(r[m.date]);
+    if (!deduction_type || !date) {
+      skipped++;
+      continue;
+    }
+    const month = dateToMonth(date);
+    monthsSet.add(month);
+    let order_id = (m.order_id ? (r[m.order_id] ?? "") : "").trim();
+    if (!order_id || order_id === "-") order_id = "-";
+    const amount = round3(Math.abs(num(r[m.amount])));
+    adjRows.push({
+      platform,
+      date,
+      month,
+      deduction_type,
+      order_id,
+      amount,
+      comments: m.comments ? (r[m.comments] ?? "").trim() || null : null,
     });
-    previewRows.push({
-      Month: a.month, Gross: fmtJOD(a.gross), Payout: fmtJOD(a.payout),
-      Orders: fmtInt(a.orders), Commission: fmtJOD(a.commission),
-    });
+    previewRows.push({ Date: date, Type: deduction_type, Amount: fmtJOD(amount), Order: order_id });
   }
+  const months = Array.from(monthsSet).sort();
   const notes = [
-    "Rows grouped by the month of each invoice's End date.",
-    "Commission stored as a positive number (absolute value).",
-    "COGS is preserved — invoice imports do not overwrite it.",
-    skipped > 0 ? `${skipped} row(s) skipped (no End date).` : "",
+    `${adjRows.length} deduction(s) → monthly_adjustments (stored positive; subtracted from the order-derived payout).`,
+    `Monthly financials payout recomputed for ${months.join(", ")}.`,
+    "Re-importing the same export is safe — rows dedupe on (date, type, order, amount).",
+    skipped ? `${skipped} row(s) skipped (no type / date).` : "",
   ].filter(Boolean);
-  return { rows: ops, willAdd, willUpdate, skipped, notes,
-    previewCols: ["Month", "Gross", "Payout", "Orders", "Commission"], previewRows,
-    table: "monthly_financials", onConflict: "month,platform" };
+  return {
+    upserts: [
+      {
+        table: "monthly_adjustments",
+        onConflict: "platform,date,deduction_type,order_id,amount",
+        rows: adjRows,
+      },
+    ],
+    reconcile: { financials: { platform, months } },
+    willAdd: adjRows.length,
+    willUpdate: 0,
+    skipped,
+    notes,
+    previewCols: ["Date", "Type", "Amount", "Order"],
+    previewRows,
+    rowFlags: adjRows.map(() => false),
+  };
+}
+
+async function buildPlus(
+  report: ReportDef,
+  platform: Platform,
+  headers: string[],
+  rows: Record<string, string>[],
+): Promise<Preview> {
+  const dateCol = headers[0],
+    valueCol = headers[1];
+  const isOrders = report.id === "careem:plus_orders";
+  const col = isOrders ? "cplus_orders" : "cplus_sales_jod";
+  const grouped = new Map<string, number>();
+  let skipped = 0;
+  for (const r of rows) {
+    const date = parseDate(r[dateCol]);
+    if (!date) {
+      skipped++;
+      continue;
+    }
+    grouped.set(date, num(r[valueCol]));
+  }
+  const dates = Array.from(grouped.keys());
+  const existingSet = await existingKeys("daily_sales", "date", platform, dates);
+
+  const opsRows: Record<string, unknown>[] = [];
+  const previewRows: Array<Record<string, string | number>> = [];
+  const rowFlags: boolean[] = [];
+  const label = isOrders ? "Plus orders" : "Plus sales";
+  for (const [date, v] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    rowFlags.push(existingSet.has(date));
+    opsRows.push({ date, platform, [col]: isOrders ? Math.round(v) : round3(v) });
+    previewRows.push({ Date: date, [label]: isOrders ? fmtInt(v) : fmtJOD(v) });
+  }
+  const willUpdate = rowFlags.filter(Boolean).length;
+  const notes = [
+    `Value read from the 2nd column ("${valueCol}") — its header is ignored.`,
+    `Writes Careem Plus ${isOrders ? "orders" : "sales"} into daily_sales (loyalty), without touching the overall totals.`,
+    skipped ? `${skipped} row(s) skipped (no valid date).` : "",
+  ].filter(Boolean);
+  return {
+    upserts: [{ table: "daily_sales", onConflict: "date,platform", rows: opsRows }],
+    willAdd: rowFlags.length - willUpdate,
+    willUpdate,
+    skipped,
+    notes,
+    previewCols: ["Date", label],
+    previewRows,
+    rowFlags,
+  };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      {children}
+    </div>
+  );
 }

@@ -1,17 +1,18 @@
 import Papa from "papaparse";
 import type { Platform } from "@/lib/fyxx";
 
-/** Stable id for each import flow, namespaced by platform. */
+/** Stable id for each import slot, namespaced by platform.
+ *  These map 1:1 to the confirmed partner-portal exports. */
 export type ReportId =
-  | "talabat:performance"
-  | "talabat:popular_dishes"
-  | "talabat:invoice"
-  | "careem:daily_sales"
-  | "careem:gross_breakdown"
-  | "careem:invoice";
+  | "talabat:order_report" // T1 — one row per order (money + items + Pro flag)
+  | "talabat:performance" // T2 — one row per store per day (daily totals + Pro)
+  | "careem:order_level" // C1 — one row per order (money + payout)
+  | "careem:menu_item" // C2 — one row per item per period
+  | "careem:adjustments" // C4 — monthly deductions (bank fee, Plus contribution)
+  | "careem:plus_orders" // Careem Plus skinny file — orders per day
+  | "careem:plus_sales"; // Careem Plus skinny file — sales per day
 
-export type ReportKind = "csv" | "manual";
-export type MonthSource = "none" | "ask" | "from-columns";
+export type MonthSource = "none" | "from-rows" | "from-columns";
 
 export interface FieldDef {
   key: string;
@@ -24,130 +25,269 @@ export interface ReportDef {
   id: ReportId;
   platform: Platform;
   label: string;
-  kind: ReportKind;
-  /** Where the user goes to export this report. */
+  /** Where the user goes to export this report (stable report page). */
   portalUrl: string;
   portalLabel: string;
-  table: "daily_sales" | "monthly_item_sales" | "monthly_financials";
+  /** Primary table the parsed rows are previewed against. */
+  table: "platform_orders" | "daily_sales" | "monthly_item_sales" | "monthly_adjustments";
   fields: FieldDef[];
-  /** Auto-mapped but not required (e.g. Careem Plus columns). */
   optionalFields?: FieldDef[];
+  /** Distinctive headers that must be present — used to reject mismatched files. */
+  signature: string[];
+  /** Skinny 2-column files (date + value); value is read positionally (2nd column). */
+  positional?: boolean;
   monthSource: MonthSource;
-  /** When monthSource = "from-columns", which headers to read. */
   monthColumns?: { from: string; to: string };
-  /** Hint shown above the upload box / form. */
   hint?: string;
 }
 
-const TALABAT_PORTAL = "https://restaurants.talabat.com/";
-const CAREEM_PORTAL = "https://partners.careem.com/";
+// Stable report pages (generated-file links expire, especially on Careem).
+const T_ORDERS = "https://partner-app.talabat.com/report-builder/create/ORDERS";
+const T_REPORTS = "https://partner-app.talabat.com/report-builder/create/REPORTS";
+const C_FINANCE = "https://app.careemnow.com/merchant/finances";
+const C_PERF = "https://app.careemnow.com/merchant/dashboard-analytics/business-performance";
 
 export const REPORTS: Record<ReportId, ReportDef> = {
   // ---------------- Talabat ----------------
+  "talabat:order_report": {
+    id: "talabat:order_report",
+    platform: "Talabat",
+    label: "Order Report",
+    portalUrl: T_ORDERS,
+    portalLabel: "Open Order Report builder",
+    table: "platform_orders",
+    monthSource: "from-rows",
+    signature: ["Order ID", "Payout Amount", "Order Items"],
+    hint: "One row per order — money, items and Pro flag. Lands per-order money; item sales and monthly financials are derived from it.",
+    fields: [
+      { key: "order_id", label: "Order ID", defaults: ["Order ID"], required: true },
+      {
+        key: "order_dt",
+        label: "Order received at",
+        defaults: ["Order received at", "Order Received At"],
+        required: true,
+      },
+      {
+        key: "status",
+        label: "Order status",
+        defaults: ["Order status", "Order Status"],
+        required: true,
+      },
+      { key: "gross", label: "Subtotal (gross, incl VAT)", defaults: ["Subtotal"], required: true },
+      {
+        key: "net_payout",
+        label: "Payout Amount (net)",
+        defaults: ["Payout Amount"],
+        required: true,
+      },
+      { key: "items_text", label: "Order Items", defaults: ["Order Items"], required: true },
+    ],
+    optionalFields: [
+      { key: "commission", label: "Commission", defaults: ["Commission"], required: false },
+      {
+        key: "payment_fee",
+        label: "Online Payment Fee",
+        defaults: ["Online Payment Fee"],
+        required: false,
+      },
+      {
+        key: "is_pro",
+        label: "Is Pro Order (loyalty)",
+        defaults: ["Is Pro Order"],
+        required: false,
+      },
+      { key: "discount", label: "Total Discount", defaults: ["Total Discount"], required: false },
+      { key: "voucher", label: "Total Voucher", defaults: ["Total Voucher"], required: false },
+    ],
+  },
   "talabat:performance": {
     id: "talabat:performance",
     platform: "Talabat",
-    label: "Performance report (daily sales)",
-    kind: "csv",
-    portalUrl: TALABAT_PORTAL,
-    portalLabel: "Open Talabat portal",
+    label: "Performance Report",
+    portalUrl: T_REPORTS,
+    portalLabel: "Open Performance Report builder",
     table: "daily_sales",
-    monthSource: "none",
-    hint: "Export the Performance report as CSV from the Talabat partner portal, then upload it here.",
+    monthSource: "from-rows",
+    signature: ["Date", "Gross Sales", "Orders count"],
+    hint: "One row per store per day — clean daily totals for the pace tracker. Also carries Talabat Pro orders / revenue.",
     fields: [
       { key: "date", label: "Date", defaults: ["Date"], required: true },
-      { key: "sales_jod", label: "Gross sales", defaults: ["Gross Sales", "Sales"], required: true },
-      { key: "orders", label: "Orders", defaults: ["Successful Orders", "Orders"], required: true },
-    ],
-  },
-  "talabat:popular_dishes": {
-    id: "talabat:popular_dishes",
-    platform: "Talabat",
-    label: "Popular dishes (monthly items)",
-    kind: "csv",
-    portalUrl: TALABAT_PORTAL,
-    portalLabel: "Open Talabat portal",
-    table: "monthly_item_sales",
-    monthSource: "ask",
-    hint: "Export Popular Dishes as CSV. The file has no date column, so pick which month it covers.",
-    fields: [
-      { key: "item_name", label: "Dish", defaults: ["Dish", "Item"], required: true },
-      { key: "units", label: "Units", defaults: ["Total", "Units", "Quantity"], required: true },
+      { key: "sales_jod", label: "Gross Sales", defaults: ["Gross Sales"], required: true },
+      {
+        key: "orders",
+        label: "Orders count",
+        defaults: ["Orders count", "Orders Count"],
+        required: true,
+      },
     ],
     optionalFields: [
-      { key: "revenue_jod", label: "Revenue (JOD)", defaults: ["Sales", "Sales (JOD)", "Gross Sales", "Revenue", "Total Sales"], required: false },
-    ],
-  },
-  "talabat:invoice": {
-    id: "talabat:invoice",
-    platform: "Talabat",
-    label: "Invoice report (monthly financials)",
-    kind: "csv",
-    portalUrl: TALABAT_PORTAL,
-    portalLabel: "Open Talabat portal",
-    table: "monthly_financials",
-    monthSource: "none",
-    hint: "Export the Invoice report. Billing periods are grouped by the End date column.",
-    fields: [
-      { key: "end_date", label: "End date (period)", defaults: ["End date", "End Date"], required: true },
-      { key: "gross_sales", label: "Gross sales", defaults: ["Gross Sales"], required: true },
-      { key: "actual_payout", label: "Total payout", defaults: ["Total Payout", "Payout"], required: true },
-      { key: "orders", label: "Orders count", defaults: ["Orders Count", "Orders"], required: true },
-      { key: "commission", label: "Commission charge", defaults: ["Commission Charge", "Commission"], required: true },
+      {
+        key: "pro_orders",
+        label: "Pro Orders (loyalty)",
+        defaults: ["Pro Orders"],
+        required: false,
+      },
+      {
+        key: "pro_sales",
+        label: "Pro Revenue (loyalty)",
+        defaults: ["Pro Revenue"],
+        required: false,
+      },
     ],
   },
 
   // ---------------- Careem ----------------
-  "careem:daily_sales": {
-    id: "careem:daily_sales",
+  "careem:order_level": {
+    id: "careem:order_level",
     platform: "Careem",
-    label: "Daily sales report",
-    kind: "csv",
-    portalUrl: CAREEM_PORTAL,
-    portalLabel: "Open Careem partner portal",
-    table: "daily_sales",
-    monthSource: "none",
-    hint: "Export the Daily Sales report as CSV. Careem only lists days that had orders — missing days will read as zero on the dashboard.",
+    label: "Order Level",
+    portalUrl: C_FINANCE,
+    portalLabel: "Open Finances → Order Level",
+    table: "platform_orders",
+    monthSource: "from-rows",
+    signature: ["REFERENCE_ID", "TRANSACTION_DATE", "TOTAL_PAYOUT_AMOUNT"],
+    hint: "One row per order — money + payout. Daily totals and monthly financials are derived from it. Only FOOD_ORDER rows are kept.",
     fields: [
-      { key: "date", label: "Date", defaults: ["Date"], required: true },
-      { key: "sales_jod", label: "Overall sales", defaults: ["Overall - Sales", "Overall Sales"], required: true },
-      { key: "orders", label: "Delivered orders", defaults: ["Overall - Delivered orders", "Overall Delivered orders"], required: true },
+      { key: "entry_type", label: "ENTRY_TYPE (filter)", defaults: ["ENTRY_TYPE"], required: true },
+      {
+        key: "order_id",
+        label: "REFERENCE_ID (order id)",
+        defaults: ["REFERENCE_ID"],
+        required: true,
+      },
+      {
+        key: "order_dt",
+        label: "TRANSACTION_DATE",
+        defaults: ["TRANSACTION_DATE"],
+        required: true,
+      },
+      { key: "status", label: "STATUS", defaults: ["STATUS"], required: true },
+      {
+        key: "gross",
+        label: "Gross basket (incl VAT)",
+        defaults: ["FOOD_GROSS_BASKET_AMOUNT"],
+        required: true,
+      },
+      {
+        key: "net_payout",
+        label: "Total payout (net)",
+        defaults: ["TOTAL_PAYOUT_AMOUNT"],
+        required: true,
+      },
     ],
     optionalFields: [
-      { key: "cplus_sales_jod", label: "Careem+ sales", defaults: ["Cplus users - Sales", "Cplus Sales"], required: false },
-      { key: "cplus_orders", label: "Careem+ orders", defaults: ["Cplus users - Delivered orders", "Cplus Delivered orders"], required: false },
-      { key: "cplus_aov", label: "Careem+ avg basket", defaults: ["Cplus users - Average basket value", "Cplus Average basket value"], required: false },
+      {
+        key: "platform_fee",
+        label: "Platform fee",
+        defaults: ["BILLING_PLATFORM_FEE"],
+        required: false,
+      },
+      {
+        key: "platform_fee_tax",
+        label: "Platform fee tax",
+        defaults: ["BILLING_PLATFORM_FEE_TAX"],
+        required: false,
+      },
+      {
+        key: "gateway_fee",
+        label: "Gateway fee",
+        defaults: ["BILLING_PAYMENT_GATEWAY_FEE"],
+        required: false,
+      },
+      {
+        key: "gateway_fee_tax",
+        label: "Gateway fee tax",
+        defaults: ["BILLING_PAYMENT_GATEWAY_FEE_TAX"],
+        required: false,
+      },
+      {
+        key: "discount_catalog",
+        label: "Catalog discount",
+        defaults: ["PARTNER_FUNDED_CATALOG_DISCOUNT"],
+        required: false,
+      },
+      {
+        key: "discount_promo",
+        label: "Promo discount",
+        defaults: ["PARTNER_FUNDED_PROMO_DISCOUNT"],
+        required: false,
+      },
+      { key: "payment_mode", label: "Payment mode", defaults: ["PAYMENT_MODE"], required: false },
     ],
   },
-  "careem:gross_breakdown": {
-    id: "careem:gross_breakdown",
+  "careem:menu_item": {
+    id: "careem:menu_item",
     platform: "Careem",
-    label: "Gross sales breakdown (items)",
-    kind: "csv",
-    portalUrl: CAREEM_PORTAL,
-    portalLabel: "Open Careem partner portal",
+    label: "By Menu Item",
+    portalUrl: C_PERF,
+    portalLabel: "Open Business Performance",
     table: "monthly_item_sales",
     monthSource: "from-columns",
     monthColumns: { from: "FromDate", to: "ToDate" },
-    hint: "Month is read automatically from the FromDate / ToDate columns in the file.",
+    signature: ["Name", "Orders", "FromDate"],
+    hint: "Careem item-level sales. The period is read from the FromDate / ToDate columns.",
     fields: [
       { key: "item_name", label: "Item name", defaults: ["Name"], required: true },
       { key: "units", label: "Orders (units)", defaults: ["Orders"], required: true },
     ],
     optionalFields: [
-      { key: "revenue_jod", label: "Revenue (JOD)", defaults: ["Gross Sales", "Sales", "Sales (JOD)", "Revenue", "Total"], required: false },
+      {
+        key: "revenue_jod",
+        label: "Revenue (Amount)",
+        defaults: ["Amount", "Gross Sales", "Sales", "Revenue", "Total"],
+        required: false,
+      },
     ],
   },
-  "careem:invoice": {
-    id: "careem:invoice",
+  "careem:adjustments": {
+    id: "careem:adjustments",
     platform: "Careem",
-    label: "Invoice (manual entry from PDF)",
-    kind: "manual",
-    portalUrl: CAREEM_PORTAL,
-    portalLabel: "Open Careem partner portal",
-    table: "monthly_financials",
-    monthSource: "ask",
-    hint: "Careem settles by PDF invoice — enter these figures from the monthly invoice.",
+    label: "Adjustments",
+    portalUrl: C_FINANCE,
+    portalLabel: "Open Finances → Adjustments",
+    table: "monthly_adjustments",
+    monthSource: "from-rows",
+    signature: ["Type of deduction", "Amount"],
+    hint: "Monthly deductions — bank transfer fee (+ tax) and any Careem Plus contribution. Subtracted from the order-derived payout.",
+    fields: [
+      {
+        key: "deduction_type",
+        label: "Type of deduction",
+        defaults: ["Type of deduction"],
+        required: true,
+      },
+      { key: "date", label: "Date", defaults: ["Date"], required: true },
+      { key: "amount", label: "Amount", defaults: ["Amount"], required: true },
+    ],
+    optionalFields: [
+      { key: "order_id", label: "Order ID", defaults: ["Order ID"], required: false },
+      { key: "comments", label: "Comments", defaults: ["Comments"], required: false },
+    ],
+  },
+  "careem:plus_orders": {
+    id: "careem:plus_orders",
+    platform: "Careem",
+    label: "Careem Plus — Orders",
+    portalUrl: C_PERF,
+    portalLabel: "Open Sales Performance (Plus)",
+    table: "daily_sales",
+    monthSource: "from-rows",
+    positional: true,
+    signature: [],
+    hint: "Skinny 2-column file (date + value) from Sales Performance with the Careem Plus segment selected. The value is read from the 2nd column — its header is ignored.",
+    fields: [],
+  },
+  "careem:plus_sales": {
+    id: "careem:plus_sales",
+    platform: "Careem",
+    label: "Careem Plus — Sales",
+    portalUrl: C_PERF,
+    portalLabel: "Open Sales Performance (Plus)",
+    table: "daily_sales",
+    monthSource: "from-rows",
+    positional: true,
+    signature: [],
+    hint: "Skinny 2-column file (date + value) from Sales Performance with the Careem Plus segment selected. The value is read from the 2nd column — its header is ignored.",
     fields: [],
   },
 };
@@ -160,8 +300,12 @@ export type Mapping = Record<string, string>; // targetKey -> source header
 
 const mappingKey = (id: ReportId) => `csv_map:${id}`;
 export function loadMapping(id: ReportId): Mapping | null {
-  try { const raw = localStorage.getItem(mappingKey(id)); return raw ? JSON.parse(raw) : null; }
-  catch { return null; }
+  try {
+    const raw = localStorage.getItem(mappingKey(id));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 export function saveMapping(id: ReportId, m: Mapping) {
   localStorage.setItem(mappingKey(id), JSON.stringify(m));
@@ -172,12 +316,30 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
   const clean = text.replace(/^\uFEFF/, "");
   const res = Papa.parse<Record<string, string>>(clean, {
     header: true,
-    skipEmptyLines: false,
+    skipEmptyLines: true,
     transformHeader: (h) => h.replace(/^\uFEFF/, "").trim(),
   });
   const headers = (res.meta.fields ?? []).filter(Boolean);
   const rows = (res.data ?? []).filter((r) => r && typeof r === "object");
   return { headers, rows };
+}
+
+/**
+ * Validate that an uploaded file looks like the expected report.
+ * Returns an error message naming the report, or null if it matches.
+ */
+export function validateSignature(headers: string[], report: ReportDef): string | null {
+  if (report.positional) {
+    return headers.length >= 2
+      ? null
+      : `That doesn't look like the ${report.label} export — expected a 2-column file (date + value).`;
+  }
+  const lower = headers.map((h) => h.toLowerCase().trim());
+  const missing = report.signature.filter((s) => !lower.includes(s.toLowerCase()));
+  if (missing.length) {
+    return `That doesn't look like the ${report.label} export. Missing expected column(s): ${missing.join(", ")}. Double-check you exported the right report.`;
+  }
+  return null;
 }
 
 /** Auto-match required + optional fields to headers using defaults (case-insensitive). */
@@ -189,7 +351,10 @@ export function autoMap(headers: string[], id: ReportId): Mapping {
   for (const f of all) {
     for (const candidate of f.defaults) {
       const idx = lower.indexOf(candidate.toLowerCase());
-      if (idx >= 0) { m[f.key] = headers[idx]; break; }
+      if (idx >= 0) {
+        m[f.key] = headers[idx];
+        break;
+      }
     }
   }
   return m;
@@ -200,37 +365,74 @@ export function num(v: unknown): number {
   if (v === null || v === undefined) return 0;
   const s = String(v).trim();
   if (!s) return 0;
-  const cleaned = s.replace(/[^\d.\-]/g, "");
+  const cleaned = s.replace(/[^\d.-]/g, "");
   if (!cleaned || cleaned === "-" || cleaned === ".") return 0;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Parse a date string into YYYY-MM-DD. Returns null if unparseable. */
+/** Round to JOD's 3 decimal places (fils). */
+export const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+const MONTHS: Record<string, string> = {
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  may: "05",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
+};
+
+/**
+ * Parse a date string into YYYY-MM-DD. Handles the four confirmed formats:
+ *   YYYY-MM-DD, YYYY-MM-DD HH:MM, YYYY-MM-DD HH:MM:SS.0, and DD Mon YYYY.
+ * Returns null if unparseable. Parsing is explicit (no Date()) to avoid TZ shifts.
+ */
 export function parseDate(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   if (!s) return null;
+  // YYYY-MM-DD (optionally followed by a time)
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+  // DD Mon YYYY  (e.g. 14 Jun 2026)
+  m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
   if (m) {
-    let y = Number(m[3]); if (y < 100) y += 2000;
+    const mm = MONTHS[m[2].slice(0, 3).toLowerCase()];
+    if (mm) return `${m[3]}-${mm}-${String(Number(m[1])).padStart(2, "0")}`;
+  }
+  // D/M/Y or D-M-Y
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (m) {
+    let y = Number(m[3]);
+    if (y < 100) y += 2000;
     return `${y}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[1])).padStart(2, "0")}`;
   }
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) {
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-  }
   return null;
+}
+
+/** Parse a datetime into an ISO (UTC) string for storage, or null. Informational only. */
+export function parseDateTime(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] ?? "00"}Z`;
+  const d = parseDate(s);
+  return d ? `${d}T00:00:00Z` : null;
 }
 
 export function dateToMonth(yyyymmdd: string): string {
   return yyyymmdd.slice(0, 7);
 }
 
-/** Read FromDate / ToDate columns from the first row that has them and
- *  return YYYY-MM. Returns null if neither column is parseable. */
+/** Read FromDate / ToDate columns from the first row that has them; return YYYY-MM. */
 export function monthFromColumns(
   rows: Record<string, string>[],
   cols: { from: string; to: string },
@@ -241,3 +443,28 @@ export function monthFromColumns(
   }
   return null;
 }
+
+/**
+ * Parse a Talabat "Order Items" text field, e.g.
+ *   "1 MB7 Wagyu , 1 TGR Smash , 2 Fries"
+ * The comma is the only item separator (names contain spaces, not commas).
+ * Each piece is "<qty> <name>"; a missing leading integer defaults qty to 1.
+ */
+export function parseOrderItems(text: unknown): { name: string; qty: number }[] {
+  if (text === null || text === undefined) return [];
+  return String(text)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((piece) => {
+      const m = piece.match(/^(\d+)\s+(.*)$/);
+      return m ? { qty: Number(m[1]), name: m[2].trim() } : { qty: 1, name: piece };
+    })
+    .filter((it) => it.name.length > 0);
+}
+
+/** Is this order a successful (Delivered) order? */
+export const isDelivered = (status: unknown) =>
+  String(status ?? "")
+    .trim()
+    .toLowerCase() === "delivered";
