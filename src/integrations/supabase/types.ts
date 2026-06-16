@@ -99,6 +99,7 @@ export type Database = {
           effective_from: string
           id: string
           item_name: string
+          note: string | null
         }
         Insert: {
           cost_exvat: number
@@ -106,6 +107,7 @@ export type Database = {
           effective_from: string
           id?: string
           item_name: string
+          note?: string | null
         }
         Update: {
           cost_exvat?: number
@@ -113,6 +115,7 @@ export type Database = {
           effective_from?: string
           id?: string
           item_name?: string
+          note?: string | null
         }
         Relationships: []
       }
