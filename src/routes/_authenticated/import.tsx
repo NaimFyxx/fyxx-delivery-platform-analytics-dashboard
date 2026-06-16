@@ -55,6 +55,7 @@ import {
   type Mapping,
   type ReportDef,
   type ReportId,
+  type FieldDef,
 } from "@/lib/csv-import";
 import { cn } from "@/lib/utils";
 
@@ -437,69 +438,95 @@ function CsvFlow({
   const [mapping, setMapping] = useState<Mapping>({});
   const [preview, setPreview] = useState<Preview | null>(null);
   const [building, setBuilding] = useState(false);
+  // Required fields whose expected header wasn't found — the ONLY thing the user maps by hand.
+  const [manualFields, setManualFields] = useState<FieldDef[]>([]);
 
-  async function onFile(f: File | null) {
-    setFile(f);
-    setHeaders([]);
-    setRawRows([]);
-    setMapping({});
-    setPreview(null);
-    if (!f) return;
-    const text = await f.text();
-    const { headers, rows } = parseCsv(text);
-    const sigError = validateSignature(headers, report);
-    if (sigError) {
-      toast.error(sigError);
-      setFile(null);
-      return;
-    }
-    setHeaders(headers);
-    setRawRows(rows);
-    if (report.positional) return; // skinny files have no column mapping
-    const saved = loadMapping(report.id);
-    const auto = autoMap(headers, report.id);
-    const merged: Mapping = { ...auto, ...(saved ?? {}) };
-    for (const k of Object.keys(merged)) {
-      if (!headers.includes(merged[k])) delete merged[k];
-    }
-    setMapping(merged);
-  }
-
-  const missingFields = report.fields.filter((f) => f.required && !mapping[f.key]);
-  const canPreview =
-    !!file &&
-    headers.length > 0 &&
-    (report.positional ? headers.length >= 2 : missingFields.length === 0);
-
-  async function buildPreview() {
-    if (!canPreview) return;
-    setBuilding(true);
+  /** Build the preview from explicit values (so we can run it before React state settles). */
+  async function buildPreviewWith(
+    m: Mapping,
+    hdrs: string[],
+    rows: Record<string, string>[],
+  ): Promise<boolean> {
     setPreview(null);
     try {
-      if (!report.positional) saveMapping(report.id, mapping);
+      if (!report.positional) saveMapping(report.id, m);
       let chosenMonth = currentMonth();
       if (report.monthSource === "from-columns" && report.monthColumns) {
-        const mo = monthFromColumns(rawRows, report.monthColumns);
+        const mo = monthFromColumns(rows, report.monthColumns);
         if (!mo)
           throw new Error(
             `Could not read ${report.monthColumns.from}/${report.monthColumns.to} from file.`,
           );
         chosenMonth = mo;
       }
-      const built = await buildPreviewForReport(
-        report,
-        platform,
-        chosenMonth,
-        mapping,
-        headers,
-        rawRows,
-      );
+      const built = await buildPreviewForReport(report, platform, chosenMonth, m, hdrs, rows);
       setPreview(built);
+      return true;
     } catch (e) {
       toast.error((e as Error).message);
+      return false;
+    }
+  }
+
+  async function onFile(f: File | null) {
+    setFile(f);
+    setHeaders([]);
+    setRawRows([]);
+    setMapping({});
+    setManualFields([]);
+    setPreview(null);
+    if (!f) return;
+    setBuilding(true);
+    try {
+      const text = await f.text();
+      const { headers, rows } = parseCsv(text);
+      // Header validation stays: reject a mismatched file outright.
+      const sigError = validateSignature(headers, report);
+      if (sigError) {
+        toast.error(sigError);
+        setFile(null);
+        return;
+      }
+      setHeaders(headers);
+      setRawRows(rows);
+
+      // Auto-apply the hardcoded expected-header → field mapping for this slot.
+      let merged: Mapping = {};
+      if (!report.positional) {
+        const auto = autoMap(headers, report.id); // hardcoded defaults win
+        const saved = loadMapping(report.id); // remembers any prior manual fix for a renamed header
+        merged = { ...(saved ?? {}), ...auto };
+        for (const k of Object.keys(merged)) {
+          if (!headers.includes(merged[k])) delete merged[k];
+        }
+      }
+      setMapping(merged);
+
+      // Required fields still unmatched (header missing/renamed) need a manual control.
+      // Optional fields (e.g. Pro Orders / Pro Revenue) left empty silently.
+      const needsManual = report.fields.filter((f) => f.required && !merged[f.key]);
+      setManualFields(needsManual);
+
+      const ready = report.positional ? headers.length >= 2 : needsManual.length === 0;
+      if (ready) {
+        // Everything mapped automatically — go straight to preview, nothing for the user to map.
+        const ok = await buildPreviewWith(merged, headers, rows);
+        if (ok) goNext();
+      }
     } finally {
       setBuilding(false);
     }
+  }
+
+  const readyToContinue =
+    !!file && headers.length > 0 && manualFields.every((f) => !!mapping[f.key]);
+
+  async function continueToPreview() {
+    if (!readyToContinue) return;
+    setBuilding(true);
+    const ok = await buildPreviewWith(mapping, headers, rawRows);
+    setBuilding(false);
+    if (ok) goNext();
   }
 
   const importMut = useMutation({
@@ -546,14 +573,6 @@ function CsvFlow({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const allFields = [...report.fields, ...(report.optionalFields ?? [])];
-
-  async function nextToPreview() {
-    if (!canPreview) return;
-    await buildPreview();
-    goNext();
-  }
-
   return (
     <>
       {step === 3 && (
@@ -593,16 +612,30 @@ function CsvFlow({
             </div>
           </Card>
 
-          {!report.positional && headers.length > 0 && (
-            <Card className="p-5 mt-4">
-              <div className="text-sm font-semibold mb-3">Column mapping</div>
-              <p className="text-xs text-muted-foreground mb-4">
-                Auto-matched from the report's known headers. Saved per report so next upload is one
-                click.
+          {building && (
+            <Card className="p-5 mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Reading &amp; validating {file?.name}…
+            </Card>
+          )}
+
+          {/* Auto-mapping found every required column → we've already jumped to the preview.
+              This card only appears for a required column whose expected header is missing/renamed. */}
+          {!building && manualFields.length > 0 && (
+            <Card className="p-5 mt-4 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                <AlertCircle className="size-4" />
+                {manualFields.length} expected column{manualFields.length > 1 ? "s" : ""} not found
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Everything else was matched automatically. Pick the matching column for each item
+                below, or re-export the report so the headers match.
               </p>
               <div className="grid gap-3 md:grid-cols-2">
-                {allFields.map((f) => (
-                  <Field key={f.key} label={f.label + (f.required ? " *" : " (optional)")}>
+                {manualFields.map((f) => (
+                  <Field key={f.key} label={f.label}>
+                    <div className="mb-1 text-[11px] text-destructive">
+                      Expected “{f.defaults[0]}” — not found in this file.
+                    </div>
                     <Select
                       value={mapping[f.key] ?? "__none__"}
                       onValueChange={(v) =>
@@ -629,21 +662,6 @@ function CsvFlow({
                   </Field>
                 ))}
               </div>
-              {missingFields.length > 0 && (
-                <div className="mt-3 text-xs text-destructive flex items-center gap-1">
-                  <AlertCircle className="size-3.5" /> Missing:{" "}
-                  {missingFields.map((f) => f.label).join(", ")}
-                </div>
-              )}
-            </Card>
-          )}
-
-          {report.positional && headers.length >= 2 && (
-            <Card className="p-5 mt-4 text-xs text-muted-foreground">
-              Reading <span className="font-mono">{headers[0]}</span> as the date and{" "}
-              <span className="font-mono">{headers[1]}</span> as the value (the value header is
-              ignored — you've tagged this file as{" "}
-              <span className="font-semibold">{report.label}</span>).
             </Card>
           )}
 
@@ -651,14 +669,16 @@ function CsvFlow({
             <Button variant="ghost" onClick={goBack}>
               <ChevronLeft className="size-3.5" /> Back
             </Button>
-            <Button
-              onClick={nextToPreview}
-              disabled={!canPreview || building}
-              className="bg-gradient-primary text-primary-foreground"
-            >
-              {building && <Loader2 className="size-4 animate-spin mr-2" />}
-              Next: Preview <ChevronRight className="size-3.5" />
-            </Button>
+            {file && headers.length > 0 && (
+              <Button
+                onClick={continueToPreview}
+                disabled={!readyToContinue || building}
+                className="bg-gradient-primary text-primary-foreground"
+              >
+                {building && <Loader2 className="size-4 animate-spin mr-2" />}
+                Continue to preview <ChevronRight className="size-3.5" />
+              </Button>
+            )}
           </div>
         </>
       )}
