@@ -24,8 +24,6 @@ export type Database = {
           id: string
           orders: number
           platform: Database["public"]["Enums"]["platform"]
-          pro_orders: number
-          pro_sales_jod: number
           sales_jod: number
           updated_at: string
         }
@@ -36,11 +34,9 @@ export type Database = {
           created_at?: string
           date: string
           id?: string
-          orders?: number
+          orders: number
           platform: Database["public"]["Enums"]["platform"]
-          pro_orders?: number
-          pro_sales_jod?: number
-          sales_jod?: number
+          sales_jod: number
           updated_at?: string
         }
         Update: {
@@ -52,102 +48,7 @@ export type Database = {
           id?: string
           orders?: number
           platform?: Database["public"]["Enums"]["platform"]
-          pro_orders?: number
-          pro_sales_jod?: number
           sales_jod?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      monthly_adjustments: {
-        Row: {
-          amount: number
-          comments: string | null
-          created_at: string
-          date: string
-          deduction_type: string
-          id: string
-          month: string
-          order_id: string
-          platform: Database["public"]["Enums"]["platform"]
-        }
-        Insert: {
-          amount?: number
-          comments?: string | null
-          created_at?: string
-          date: string
-          deduction_type: string
-          id?: string
-          month: string
-          order_id?: string
-          platform: Database["public"]["Enums"]["platform"]
-        }
-        Update: {
-          amount?: number
-          comments?: string | null
-          created_at?: string
-          date?: string
-          deduction_type?: string
-          id?: string
-          month?: string
-          order_id?: string
-          platform?: Database["public"]["Enums"]["platform"]
-        }
-        Relationships: []
-      }
-      platform_orders: {
-        Row: {
-          commission: number
-          created_at: string
-          date: string
-          discount: number
-          gross: number
-          id: string
-          is_loyalty: boolean | null
-          net_payout: number
-          order_id: string
-          ordered_at: string | null
-          payment_fee: number
-          payment_mode: string | null
-          platform: Database["public"]["Enums"]["platform"]
-          platform_fee: number
-          status: string | null
-          updated_at: string
-        }
-        Insert: {
-          commission?: number
-          created_at?: string
-          date: string
-          discount?: number
-          gross?: number
-          id?: string
-          is_loyalty?: boolean | null
-          net_payout?: number
-          order_id: string
-          ordered_at?: string | null
-          payment_fee?: number
-          payment_mode?: string | null
-          platform: Database["public"]["Enums"]["platform"]
-          platform_fee?: number
-          status?: string | null
-          updated_at?: string
-        }
-        Update: {
-          commission?: number
-          created_at?: string
-          date?: string
-          discount?: number
-          gross?: number
-          id?: string
-          is_loyalty?: boolean | null
-          net_payout?: number
-          order_id?: string
-          ordered_at?: string | null
-          payment_fee?: number
-          payment_mode?: string | null
-          platform?: Database["public"]["Enums"]["platform"]
-          platform_fee?: number
-          status?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -192,7 +93,6 @@ export type Database = {
           effective_from: string
           id: string
           item_name: string
-          note: string | null
         }
         Insert: {
           cost_exvat: number
@@ -200,7 +100,6 @@ export type Database = {
           effective_from: string
           id?: string
           item_name: string
-          note?: string | null
         }
         Update: {
           cost_exvat?: number
@@ -208,7 +107,6 @@ export type Database = {
           effective_from?: string
           id?: string
           item_name?: string
-          note?: string | null
         }
         Relationships: []
       }
