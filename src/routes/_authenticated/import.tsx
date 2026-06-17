@@ -84,12 +84,76 @@ type Preview = {
   rowFlags: boolean[]; // exists? per preview row
 };
 
+/** What has actually been imported for a month — based on the MEANINGFUL signal per slot,
+ *  not mere row existence (Plus files write daily_sales rows with sales=0; Adjustments writes a
+ *  financials row with gross=0 — neither should count as "Daily sales" / "Financials" imported). */
+type ImportStatus = {
+  slot: Partial<Record<ReportId, boolean>>;
+  platform: Record<Platform, { daily: boolean; items: boolean; financials: boolean }>;
+};
+function useImportStatus(month: string) {
+  return useQuery({
+    queryKey: ["import_status", month],
+    queryFn: async (): Promise<ImportStatus> => {
+      const start = `${month}-01`;
+      const end = `${month}-31`;
+      const [orders, daily, items, fin, adj] = await Promise.all([
+        supabase.from("platform_orders").select("platform").gte("date", start).lte("date", end),
+        supabase
+          .from("daily_sales")
+          .select("platform,sales_jod,cplus_orders,cplus_sales_jod")
+          .gte("date", start)
+          .lte("date", end),
+        supabase.from("monthly_item_sales").select("platform").eq("month", month),
+        supabase.from("monthly_financials").select("platform,gross_sales").eq("month", month),
+        supabase.from("monthly_adjustments").select("platform").eq("month", month),
+      ]);
+      const od = orders.data ?? [],
+        dl = daily.data ?? [],
+        it = items.data ?? [],
+        fn = fin.data ?? [],
+        aj = adj.data ?? [];
+      const orderRows = (p: Platform) => od.some((r) => r.platform === p);
+      const dailyReal = (p: Platform) => dl.some((r) => r.platform === p && Number(r.sales_jod) > 0);
+      const itemsHas = (p: Platform) => it.some((r) => r.platform === p);
+      const finReal = (p: Platform) => fn.some((r) => r.platform === p && Number(r.gross_sales) > 0);
+      const adjHas = (p: Platform) => aj.some((r) => r.platform === p);
+      const cplusO = dl.some((r) => r.platform === "Careem" && Number(r.cplus_orders) > 0);
+      const cplusS = dl.some((r) => r.platform === "Careem" && Number(r.cplus_sales_jod) > 0);
+      return {
+        slot: {
+          "talabat:order_report": orderRows("Talabat"),
+          "talabat:performance": dailyReal("Talabat"),
+          "careem:order_level": orderRows("Careem"),
+          "careem:menu_item": itemsHas("Careem"),
+          "careem:adjustments": adjHas("Careem"),
+          "careem:plus_orders": cplusO,
+          "careem:plus_sales": cplusS,
+        },
+        platform: {
+          Talabat: {
+            daily: dailyReal("Talabat"),
+            items: itemsHas("Talabat"),
+            financials: finReal("Talabat"),
+          },
+          Careem: {
+            daily: dailyReal("Careem"),
+            items: itemsHas("Careem"),
+            financials: finReal("Careem"),
+          },
+        },
+      };
+    },
+  });
+}
+
 function ImportPage() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [reportId, setReportId] = useState<ReportId | null>(null);
   const [checklistMonth, setChecklistMonth] = useState(currentMonth());
+  const { data: importStatus } = useImportStatus(checklistMonth);
 
   const report = reportId ? REPORTS[reportId] : null;
 
@@ -106,7 +170,11 @@ function ImportPage() {
         description="Four quick steps: pick a platform, pick a report, upload, then confirm."
       />
 
-      <CompletenessPanel month={checklistMonth} onMonthChange={setChecklistMonth} />
+      <CompletenessPanel
+        month={checklistMonth}
+        onMonthChange={setChecklistMonth}
+        status={importStatus}
+      />
 
       <Stepper
         step={step}
@@ -132,6 +200,8 @@ function ImportPage() {
         <Step2Report
           platform={platform}
           value={reportId}
+          status={importStatus}
+          month={checklistMonth}
           onBack={() => setStep(1)}
           onPick={(id) => {
             setReportId(id);
@@ -262,11 +332,15 @@ function Step1Platform({
 function Step2Report({
   platform,
   value,
+  status,
+  month,
   onBack,
   onPick,
 }: {
   platform: Platform;
   value: ReportId | null;
+  status: ImportStatus | undefined;
+  month: string;
   onBack: () => void;
   onPick: (id: ReportId) => void;
 }) {
@@ -280,11 +354,13 @@ function Step2Report({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
-        Pick the report you exported from {platform}. Each slot expects one specific file.
+        Pick the report you exported from {platform}. A green badge means that slot already has data
+        for {month}.
       </p>
       <div className="grid sm:grid-cols-2 gap-3">
         {reports.map((r) => {
           const active = value === r.id;
+          const imported = status?.slot?.[r.id] ?? false;
           return (
             <button
               key={r.id}
@@ -295,7 +371,21 @@ function Step2Report({
                 active ? "border-primary bg-primary/10" : "border-border bg-card",
               )}
             >
-              <div className="font-semibold text-sm">{r.label}</div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-semibold text-sm">{r.label}</div>
+                {imported ? (
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 bg-success/15 text-success border-success/30 text-[10px]"
+                  >
+                    <Check className="size-3 mr-1" /> Imported
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="shrink-0 text-muted-foreground text-[10px]">
+                    Not yet
+                  </Badge>
+                )}
+              </div>
               <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
               <div className="text-[10.5px] mt-2">
                 <span className="text-muted-foreground">Lands in: </span>
@@ -314,50 +404,29 @@ function Step2Report({
 function CompletenessPanel({
   month,
   onMonthChange,
+  status,
 }: {
   month: string;
   onMonthChange: (m: string) => void;
+  status: ImportStatus | undefined;
 }) {
-  const { data } = useQuery({
-    queryKey: ["import_completeness", month],
-    queryFn: async () => {
-      const start = `${month}-01`;
-      const end = `${month}-31`;
-      const [daily, items, fin] = await Promise.all([
-        supabase.from("daily_sales").select("platform,date").gte("date", start).lte("date", end),
-        supabase.from("monthly_item_sales").select("platform").eq("month", month),
-        supabase.from("monthly_financials").select("platform").eq("month", month),
-      ]);
-      const has = (rows: { platform: string }[] | null, p: Platform) =>
-        !!rows?.some((r) => r.platform === p);
-      return {
-        Talabat: {
-          daily: has(daily.data ?? [], "Talabat"),
-          items: has(items.data ?? [], "Talabat"),
-          invoice: has(fin.data ?? [], "Talabat"),
-        },
-        Careem: {
-          daily: has(daily.data ?? [], "Careem"),
-          items: has(items.data ?? [], "Careem"),
-          invoice: has(fin.data ?? [], "Careem"),
-        },
-      };
-    },
-  });
+  const data = status?.platform;
 
-  const rowsByPlatform: Record<Platform, { label: string; key: "daily" | "items" | "invoice" }[]> =
-    {
-      Talabat: [
-        { label: "Daily sales (Performance)", key: "daily" },
-        { label: "Items (Order Report)", key: "items" },
-        { label: "Financials (Order Report)", key: "invoice" },
-      ],
-      Careem: [
-        { label: "Daily sales (Order Level)", key: "daily" },
-        { label: "Items (By Menu Item)", key: "items" },
-        { label: "Financials (Order Level + Adj.)", key: "invoice" },
-      ],
-    };
+  const rowsByPlatform: Record<
+    Platform,
+    { label: string; key: "daily" | "items" | "financials" }[]
+  > = {
+    Talabat: [
+      { label: "Daily sales (Performance)", key: "daily" },
+      { label: "Items (Order Report)", key: "items" },
+      { label: "Financials (Order Report)", key: "financials" },
+    ],
+    Careem: [
+      { label: "Daily sales (Order Level)", key: "daily" },
+      { label: "Items (By Menu Item)", key: "items" },
+      { label: "Financials (Order Level)", key: "financials" },
+    ],
+  };
 
   return (
     <Card className="p-5 mb-4">
@@ -379,14 +448,14 @@ function CompletenessPanel({
 
       <div className="grid md:grid-cols-2 gap-3">
         {PLATFORMS.map((p) => {
-          const status = data?.[p];
-          const incomplete = status && (!status.items || !status.invoice);
+          const ps = data?.[p];
+          const incomplete = ps && (!ps.items || !ps.financials);
           return (
             <div key={p} className="rounded-xl border border-border bg-background/40 p-4">
               <div className="font-display font-semibold mb-2">{p}</div>
               <ul className="space-y-1.5">
                 {rowsByPlatform[p].map((row) => {
-                  const ok = status?.[row.key] ?? false;
+                  const ok = ps?.[row.key] ?? false;
                   return (
                     <li key={row.key} className="flex items-center gap-2 text-[12.5px]">
                       {ok ? (

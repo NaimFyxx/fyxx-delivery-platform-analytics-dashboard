@@ -253,7 +253,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     // (CATEGORY / TRANSACTION_DATE / TOTAL_AMOUNT / REFERENCE_ID). The friendly
     // on-screen labels are accepted too as a fallback. "A|B" = either header satisfies it.
     signature: ["CATEGORY|Type of deduction", "TOTAL_AMOUNT|Amount"],
-    hint: "Native finance export — fee deductions (Careem Plus contribution + tax, bank transfer fee + tax). ON_DEMAND_PAYOUT / CLAWBACK rows are filtered out. Subtracted from the order-derived payout.",
+    hint: "Native finance export — fee deductions (Careem Plus contribution + tax, bank transfer fee + tax, customer-complaint clawbacks). Carry-over / cashout (positive) lines are excluded. Subtracted from the order-derived payout.",
     fields: [
       {
         key: "deduction_type",
