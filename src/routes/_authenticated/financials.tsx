@@ -64,7 +64,8 @@ function Financials() {
               <TableHead>Month</TableHead>
               <TableHead>Platform</TableHead>
               <TableHead className="text-right">Gross (incl. VAT)</TableHead>
-              <TableHead className="text-right">Net (ex-VAT)</TableHead>
+              <TableHead className="text-right">Discount</TableHead>
+              <TableHead className="text-right">Net sales</TableHead>
               <TableHead className="text-right">Actual payout</TableHead>
               <TableHead className="text-right">Platform fee %</TableHead>
               <TableHead className="text-right">COGS</TableHead>
@@ -75,7 +76,7 @@ function Financials() {
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-12">
+                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-12">
                   No monthly financials yet. Import an Order Report / Order Level, or add some on
                   the Data entry page.
                 </TableCell>
@@ -84,6 +85,9 @@ function Financials() {
             {rows.map((r) => {
               const gross = Number(r.gross_sales);
               const payout = Number(r.actual_payout);
+              // Partner-funded discount + recognised sales bridge (menu gross − discount).
+              const discount = Number(r.discount ?? 0);
+              const netSales = gross - discount;
               // COGS the Overview way: live from item sales × versioned costs (ex-VAT).
               const cogs = cogsFor(data?.itemSales ?? [], data?.costs ?? [], r.month, [r.platform]);
               const net = exVat(gross);
@@ -102,8 +106,9 @@ function Financials() {
                   </TableCell>
                   <TableCell className="text-right text-num">{fmtJOD(gross)}</TableCell>
                   <TableCell className="text-right text-num text-muted-foreground">
-                    {fmtJOD(net)}
+                    {fmtJOD(discount)}
                   </TableCell>
+                  <TableCell className="text-right text-num">{fmtJOD(netSales)}</TableCell>
                   <TableCell className="text-right text-num">{fmtJOD(payout)}</TableCell>
                   <TableCell className="text-right text-num">{fmtPct(fee)}</TableCell>
                   <TableCell className="text-right text-num text-muted-foreground">

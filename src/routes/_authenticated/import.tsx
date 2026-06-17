@@ -841,7 +841,7 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
       end = `${month}-31`;
     const { data: orders, error } = await supabase
       .from("platform_orders")
-      .select("gross,net_payout,commission,payment_fee,platform_fee,status")
+      .select("gross,net_payout,commission,payment_fee,platform_fee,discount,status")
       .eq("platform", platform)
       .gte("date", start)
       .lte("date", end);
@@ -849,12 +849,18 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
     let gross = 0,
       payout = 0,
       commission = 0,
+      discount = 0,
       orderCount = 0;
     for (const o of orders ?? []) {
       if (!isDelivered(o.status)) continue;
       gross += Number(o.gross);
       payout += Number(o.net_payout);
+      // NB: this is TOTAL platform fees INCL VAT (commission+VAT + payment handling+VAT +
+      // platform/gateway fees) — NOT the ex-VAT 20% commission rate. Never divide by GMV.
       commission += Number(o.commission) + Number(o.payment_fee) + Number(o.platform_fee);
+      // Partner-funded discount (Talabat Voucher Cost To Restaurant / Careem catalog+promo) —
+      // the menu-value → net-sales bridge. Already net of VAT handling; surfaced, not used in margin.
+      discount += Number(o.discount);
       orderCount += 1;
     }
     if (platform === "Careem") {
@@ -872,6 +878,7 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
       gross_sales: round3(gross),
       actual_payout: round3(payout),
       commission: round3(commission),
+      discount: round3(discount),
       orders: orderCount,
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1284,12 +1291,23 @@ async function buildCareemItems(
   };
 }
 
-// Careem Adjustments CATEGORY values that are NOT payout-reducing fees, so we drop them.
-// ON_DEMAND_PAYOUT = cashout of earned money already counted, not a cost → exclude.
-// CLAWBACK is INCLUDED (a real loss): cross-checking the May export, the clawed-back order
-// still appears as a full positive Delivered order in Order Level, so the clawback is an
-// extra deduction not already reflected — counting it avoids overstating net.
-const ADJ_EXCLUDED = new Set(["ON_DEMAND_PAYOUT"]);
+// Careem Adjustments CATEGORY values that are NOT payout-reducing fees, so we drop them:
+//  - ON_DEMAND_PAYOUT = a cashout of money already earned/counted, not a cost.
+//  - Carry-over / brought-forward / rollover = the prior cycle's below-threshold payout rolling
+//    forward — a POSITIVE cashflow line; summing it as income/cost double-counts.
+// CLAWBACK (the customer-complaint deduction) is NOT here — it's a real loss and stays in: the
+// clawed-back order still appears as a full positive Delivered order in Order Level, so the
+// clawback is an extra deduction not already reflected.
+// Belt-and-suspenders: buildAdjustments also drops any row with a POSITIVE raw amount, since every
+// genuine deduction is negative in the export — this catches carry-over whatever its exact token.
+const ADJ_EXCLUDED = new Set([
+  "ON_DEMAND_PAYOUT",
+  "CARRY_OVER",
+  "CARRYOVER",
+  "BROUGHT_FORWARD",
+  "ROLLOVER",
+  "PREVIOUS_CYCLE",
+]);
 
 async function buildAdjustments(
   platform: Platform,
@@ -1308,10 +1326,11 @@ async function buildAdjustments(
       skipped++;
       continue;
     }
-    // CATEGORY filter: keep real fee deductions; drop cashouts and (by current decision) clawbacks.
-    //   ON_DEMAND_PAYOUT = a cashout of money already earned, not a cost → exclude.
-    //   CLAWBACK = refund/reversal → excluded for now (flip ADJ_EXCLUDED to treat as a loss).
-    if (ADJ_EXCLUDED.has(deduction_type.trim().toUpperCase())) {
+    // Keep only genuine payout-reducing deductions. Read the RAW signed amount: deductions are
+    // negative in the export. Drop denylisted categories (cashout) AND any positive line
+    // (carry-over / cashflow), which would otherwise be abs()'d into a bogus deduction.
+    const rawAmount = num(r[m.amount]);
+    if (ADJ_EXCLUDED.has(deduction_type.trim().toUpperCase()) || rawAmount > 0) {
       filtered++;
       continue;
     }
@@ -1319,7 +1338,7 @@ async function buildAdjustments(
     monthsSet.add(month);
     let order_id = (m.order_id ? (r[m.order_id] ?? "") : "").trim();
     if (!order_id || order_id === "-") order_id = "-";
-    const amount = round3(Math.abs(num(r[m.amount])));
+    const amount = round3(Math.abs(rawAmount));
     adjRows.push({
       platform,
       date,
@@ -1335,7 +1354,7 @@ async function buildAdjustments(
   const notes = [
     `${adjRows.length} deduction(s) → monthly_adjustments (stored positive; subtracted from the order-derived payout).`,
     filtered
-      ? `${filtered} row(s) excluded by category (${Array.from(ADJ_EXCLUDED).join(" / ")}).`
+      ? `${filtered} row(s) excluded as cashout / carry-over (ON_DEMAND_PAYOUT, rollover, or any positive cashflow line).`
       : "",
     `Monthly financials payout recomputed for ${months.join(", ")}.`,
     "Re-importing the same export is safe — rows dedupe on (date, type, order, amount).",
