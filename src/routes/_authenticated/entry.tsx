@@ -14,6 +14,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform } from "@/lib/fyxx";
+import { cogsFor } from "@/lib/costs";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 
 export const Route = createFileRoute("/_authenticated/entry")({
@@ -145,10 +146,35 @@ function FinancialsForm() {
   );
   const filtered = applyListFilter(rows, filter, (r) => r.month);
 
+  // COGS is derived live (item sales × versioned costs) — the same path as the
+  // Financials page / Overview — not the stored monthly_financials.cogs column.
+  const { data: cogsData } = useQuery({
+    queryKey: ["entry_financials_cogs"],
+    queryFn: async () => {
+      const [items, costs] = await Promise.all([
+        supabase.from("monthly_item_sales").select("month,platform,item_name,units"),
+        supabase.from("item_costs").select("item_name,cost_exvat,effective_from"),
+      ]);
+      return {
+        itemSales: (items.data ?? []).map((r) => ({
+          month: r.month,
+          platform: r.platform as string,
+          item: r.item_name,
+          units: r.units,
+        })),
+        costs: (costs.data ?? []).map((r) => ({
+          item: r.item_name,
+          cost: Number(r.cost_exvat),
+          effective_from: r.effective_from,
+        })),
+      };
+    },
+  });
+
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("monthly_financials").upsert(
-        { month, platform, gross_sales: Number(gross), actual_payout: Number(payout), cogs: Number(cogs) },
+        { month, platform, gross_sales: Number(gross), actual_payout: Number(payout), cogs: Number(cogs) || 0 },
         { onConflict: "month,platform" },
       );
       if (error) throw error;
@@ -175,7 +201,7 @@ function FinancialsForm() {
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Gross sales"><Input type="number" step="0.001" value={gross} onChange={(e) => setGross(e.target.value)} required /></Field>
           <Field label="Actual payout"><Input type="number" step="0.001" value={payout} onChange={(e) => setPayout(e.target.value)} required /></Field>
-          <Field label="COGS (ex-VAT)"><Input type="number" step="0.001" value={cogs} onChange={(e) => setCogs(e.target.value)} required /></Field>
+          <Field label="COGS override (optional)"><Input type="number" step="0.001" value={cogs} onChange={(e) => setCogs(e.target.value)} placeholder="auto" /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
@@ -188,7 +214,7 @@ function FinancialsForm() {
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           fmtJOD(Number(r.gross_sales)),
           fmtJOD(Number(r.actual_payout)),
-          fmtJOD(Number(r.cogs)),
+          fmtJOD(cogsFor(cogsData?.itemSales ?? [], cogsData?.costs ?? [], r.month, [r.platform])),
           <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
         ])}
       />
