@@ -57,14 +57,20 @@ function DailySalesForm() {
   const [orders, setOrders] = useState("");
   const invalidate = useInvalidateAll();
 
+  const filter = useListFilter();
   const { data: rows = [] } = useQuery({
     queryKey: ["entry_daily"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("daily_sales").select("*").order("date", { ascending: false }).limit(20);
+      const { data, error } = await supabase.from("daily_sales").select("*").order("date", { ascending: false }).limit(1000);
       if (error) throw error;
       return data ?? [];
     },
   });
+  const months = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.date.slice(0, 7)))).sort().reverse(),
+    [rows],
+  );
+  const filtered = applyListFilter(rows, filter, (r) => r.date.slice(0, 7));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -100,9 +106,10 @@ function DailySalesForm() {
         </form>
       </Card>
       <RecentTable
-        title="Last 20 entries"
+        title="Entries"
+        right={<ListFilterBar f={filter} months={months} />}
         headers={["Date", "Platform", "Sales", "Orders", ""]}
-        rows={rows.map((r) => [
+        rows={filtered.map((r) => [
           r.date,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           fmtJOD(Number(r.sales_jod)),
@@ -123,14 +130,20 @@ function FinancialsForm() {
   const [cogs, setCogs] = useState("");
   const invalidate = useInvalidateAll();
 
+  const filter = useListFilter();
   const { data: rows = [] } = useQuery({
     queryKey: ["entry_financials"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("monthly_financials").select("*").order("month", { ascending: false }).limit(20);
+      const { data, error } = await supabase.from("monthly_financials").select("*").order("month", { ascending: false }).limit(1000);
       if (error) throw error;
       return data ?? [];
     },
   });
+  const months = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.month))).sort().reverse(),
+    [rows],
+  );
+  const filtered = applyListFilter(rows, filter, (r) => r.month);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -167,9 +180,10 @@ function FinancialsForm() {
         </form>
       </Card>
       <RecentTable
-        title="Recent financials"
+        title="Financials"
+        right={<ListFilterBar f={filter} months={months} />}
         headers={["Month", "Platform", "Gross", "Payout", "COGS", ""]}
-        rows={rows.map((r) => [
+        rows={filtered.map((r) => [
           r.month,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           fmtJOD(Number(r.gross_sales)),
@@ -190,10 +204,11 @@ function ItemCostsForm() {
   const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
   const invalidate = useInvalidateAll();
 
+  const [q, setQ] = useState("");
   const { data: rows = [] } = useQuery({
     queryKey: ["entry_costs"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("item_costs").select("*").order("effective_from", { ascending: false }).limit(40);
+      const { data, error } = await supabase.from("item_costs").select("*").order("effective_from", { ascending: false }).limit(1000);
       if (error) throw error;
       return data ?? [];
     },
@@ -273,8 +288,18 @@ function ItemCostsForm() {
       </Card>
       <RecentTable
         title="Cost history"
+        right={
+          <Input
+            placeholder="Search items…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-8 w-48 text-xs"
+          />
+        }
         headers={["Item", "Cost (ex-VAT)", "Effective from", "Status", ""]}
-        rows={rows.map((r) => {
+        rows={rows
+          .filter((r) => !q || r.item_name.toLowerCase().includes(q.toLowerCase()))
+          .map((r) => {
           const isCurrent = currentIds.has(r.id);
           const isFuture = r.effective_from > today;
           return [
@@ -304,14 +329,20 @@ function ItemSalesForm() {
   const [units, setUnits] = useState("");
   const invalidate = useInvalidateAll();
 
+  const filter = useListFilter();
   const { data: rows = [] } = useQuery({
     queryKey: ["entry_item_sales"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("monthly_item_sales").select("*").order("month", { ascending: false }).limit(30);
+      const { data, error } = await supabase.from("monthly_item_sales").select("*").order("month", { ascending: false }).limit(2000);
       if (error) throw error;
       return data ?? [];
     },
   });
+  const months = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.month))).sort().reverse(),
+    [rows],
+  );
+  const filtered = applyListFilter(rows, filter, (r) => r.month);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -347,9 +378,10 @@ function ItemSalesForm() {
         </form>
       </Card>
       <RecentTable
-        title="Recent item sales"
+        title="Item sales"
+        right={<ListFilterBar f={filter} months={months} />}
         headers={["Month", "Platform", "Item", "Units", ""]}
-        rows={rows.map((r) => [
+        rows={filtered.map((r) => [
           r.month,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           r.item_name,
@@ -368,14 +400,20 @@ function TargetsForm() {
   const [salesT, setSalesT] = useState("");
   const invalidate = useInvalidateAll();
 
+  const filter = useListFilter();
   const { data: rows = [] } = useQuery({
     queryKey: ["entry_targets"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("targets").select("*").order("month", { ascending: false }).limit(20);
+      const { data, error } = await supabase.from("targets").select("*").order("month", { ascending: false }).limit(1000);
       if (error) throw error;
       return data ?? [];
     },
   });
+  const months = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.month))).sort().reverse(),
+    [rows],
+  );
+  const filtered = applyListFilter(rows, filter, (r) => r.month);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -411,8 +449,9 @@ function TargetsForm() {
       </Card>
       <RecentTable
         title="Targets"
+        right={<ListFilterBar f={filter} months={months} />}
         headers={["Month", "Platform", "Sales target", ""]}
-        rows={rows.map((r) => [
+        rows={filtered.map((r) => [
           r.month,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           fmtJOD(Number(r.sales_target_jod)),
@@ -451,10 +490,79 @@ function DeleteBtn({ onClick }: { onClick: () => void }) {
     </Button>
   );
 }
-function RecentTable({ title, headers, rows }: { title: string; headers: string[]; rows: React.ReactNode[][] }) {
+/** Client-side list filter (platform + month) for the "browse" tables below each form. */
+type ListFilter = {
+  platform: "all" | Platform;
+  setPlatform: (v: "all" | Platform) => void;
+  month: string;
+  setMonth: (v: string) => void;
+};
+function useListFilter(): ListFilter {
+  const [platform, setPlatform] = useState<"all" | Platform>("all");
+  const [month, setMonth] = useState("all");
+  return { platform, setPlatform, month, setMonth };
+}
+function applyListFilter<T extends { platform?: string }>(
+  rows: T[],
+  f: ListFilter,
+  monthOf: (r: T) => string,
+): T[] {
+  return rows.filter(
+    (r) =>
+      (f.platform === "all" || r.platform === f.platform) &&
+      (f.month === "all" || monthOf(r) === f.month),
+  );
+}
+function ListFilterBar({ f, months }: { f: ListFilter; months: string[] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={f.platform} onValueChange={(v) => f.setPlatform(v as "all" | Platform)}>
+        <SelectTrigger className="h-8 w-36 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All platforms</SelectItem>
+          {PLATFORMS.map((p) => (
+            <SelectItem key={p} value={p}>
+              {p}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={f.month} onValueChange={f.setMonth}>
+        <SelectTrigger className="h-8 w-32 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All months</SelectItem>
+          {months.map((m) => (
+            <SelectItem key={m} value={m}>
+              {m}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function RecentTable({
+  title,
+  headers,
+  rows,
+  right,
+}: {
+  title: string;
+  headers: string[];
+  rows: React.ReactNode[][];
+  right?: React.ReactNode;
+}) {
   return (
     <Card className="p-0 overflow-hidden">
-      <div className="px-5 py-3 border-b border-border text-sm font-semibold">{title}</div>
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+        <span className="text-sm font-semibold">{title}</span>
+        {right}
+      </div>
       <Table>
         <TableHeader>
           <TableRow>{headers.map((h, i) => <TableHead key={i} className={i >= headers.length - 2 ? "text-right" : ""}>{h}</TableHead>)}</TableRow>
