@@ -1285,9 +1285,11 @@ async function buildCareemItems(
 }
 
 // Careem Adjustments CATEGORY values that are NOT payout-reducing fees, so we drop them.
-// ON_DEMAND_PAYOUT = cashout of earned money (not a cost). CLAWBACK = refund/reversal,
-// excluded by current decision — remove it from this set to treat clawbacks as a real loss.
-const ADJ_EXCLUDED = new Set(["ON_DEMAND_PAYOUT", "CLAWBACK"]);
+// ON_DEMAND_PAYOUT = cashout of earned money already counted, not a cost → exclude.
+// CLAWBACK is INCLUDED (a real loss): cross-checking the May export, the clawed-back order
+// still appears as a full positive Delivered order in Order Level, so the clawback is an
+// extra deduction not already reflected — counting it avoids overstating net.
+const ADJ_EXCLUDED = new Set(["ON_DEMAND_PAYOUT"]);
 
 async function buildAdjustments(
   platform: Platform,
