@@ -108,15 +108,17 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalLabel: "Open Performance Report builder",
     table: "daily_sales",
     monthSource: "from-rows",
-    signature: ["Date", "Gross Sales", "Orders count"],
+    signature: ["Date", "Gross Sales", "Successful Orders"],
     hint: "One row per store per day — clean daily totals for the pace tracker. Also carries Talabat Pro orders / revenue.",
     fields: [
       { key: "date", label: "Date", defaults: ["Date"], required: true },
       { key: "sales_jod", label: "Gross Sales", defaults: ["Gross Sales"], required: true },
       {
+        // Delivered-orders count = the AOV denominator. "Successful Orders" excludes
+        // cancellations; "Orders count" can include them — so prefer Successful Orders.
         key: "orders",
-        label: "Orders count",
-        defaults: ["Orders count", "Orders Count"],
+        label: "Successful (delivered) orders",
+        defaults: ["Successful Orders", "Orders count", "Orders Count"],
         required: true,
       },
     ],
@@ -247,21 +249,39 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalLabel: "Open Finances → Adjustments",
     table: "monthly_adjustments",
     monthSource: "from-rows",
-    signature: ["Type of deduction", "Amount"],
-    hint: "Monthly deductions — bank transfer fee (+ tax) and any Careem Plus contribution. Subtracted from the order-derived payout.",
+    // Native Careem export uses the same column convention as Order Level
+    // (CATEGORY / TRANSACTION_DATE / TOTAL_AMOUNT / REFERENCE_ID). The friendly
+    // on-screen labels are accepted too as a fallback. "A|B" = either header satisfies it.
+    signature: ["CATEGORY|Type of deduction", "TOTAL_AMOUNT|Amount"],
+    hint: "Native finance export — fee deductions (Careem Plus contribution + tax, bank transfer fee + tax). ON_DEMAND_PAYOUT / CLAWBACK rows are filtered out. Subtracted from the order-derived payout.",
     fields: [
       {
         key: "deduction_type",
-        label: "Type of deduction",
-        defaults: ["Type of deduction"],
+        label: "Deduction category",
+        defaults: ["CATEGORY", "Type of deduction"],
         required: true,
       },
-      { key: "date", label: "Date", defaults: ["Date"], required: true },
-      { key: "amount", label: "Amount", defaults: ["Amount"], required: true },
+      {
+        key: "date",
+        label: "Transaction date",
+        defaults: ["TRANSACTION_DATE", "Date"],
+        required: true,
+      },
+      { key: "amount", label: "Amount", defaults: ["TOTAL_AMOUNT", "Amount"], required: true },
     ],
     optionalFields: [
-      { key: "order_id", label: "Order ID", defaults: ["Order ID"], required: false },
-      { key: "comments", label: "Comments", defaults: ["Comments"], required: false },
+      {
+        key: "order_id",
+        label: "Order id",
+        defaults: ["REFERENCE_ID", "Order ID"],
+        required: false,
+      },
+      {
+        key: "comments",
+        label: "Comments",
+        defaults: ["DESCRIPTION", "Description", "Comments", "Comment"],
+        required: false,
+      },
     ],
   },
   "careem:plus_orders": {
@@ -335,9 +355,13 @@ export function validateSignature(headers: string[], report: ReportDef): string 
       : `That doesn't look like the ${report.label} export — expected a 2-column file (date + value).`;
   }
   const lower = headers.map((h) => h.toLowerCase().trim());
-  const missing = report.signature.filter((s) => !lower.includes(s.toLowerCase()));
+  // A signature entry may list alternatives as "A|B" — satisfied if ANY alternative is present.
+  const missing = report.signature.filter(
+    (s) => !s.split("|").some((alt) => lower.includes(alt.toLowerCase().trim())),
+  );
   if (missing.length) {
-    return `That doesn't look like the ${report.label} export. Missing expected column(s): ${missing.join(", ")}. Double-check you exported the right report.`;
+    const names = missing.map((s) => s.split("|").join(" / ")).join(", ");
+    return `That doesn't look like the ${report.label} export. Missing expected column(s): ${names}. Double-check you exported the right report.`;
   }
   return null;
 }

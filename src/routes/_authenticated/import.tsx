@@ -624,7 +624,8 @@ function CsvFlow({
             <Card className="p-5 mt-4 space-y-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
                 <AlertCircle className="size-4" />
-                {manualFields.length} expected column{manualFields.length > 1 ? "s" : ""} not found
+                {report.platform} ▸ {report.label}: {manualFields.length} expected column
+                {manualFields.length > 1 ? "s" : ""} not found
               </div>
               <p className="text-xs text-muted-foreground">
                 Everything else was matched automatically. Pick the matching column for each item
@@ -1283,6 +1284,11 @@ async function buildCareemItems(
   };
 }
 
+// Careem Adjustments CATEGORY values that are NOT payout-reducing fees, so we drop them.
+// ON_DEMAND_PAYOUT = cashout of earned money (not a cost). CLAWBACK = refund/reversal,
+// excluded by current decision — remove it from this set to treat clawbacks as a real loss.
+const ADJ_EXCLUDED = new Set(["ON_DEMAND_PAYOUT", "CLAWBACK"]);
+
 async function buildAdjustments(
   platform: Platform,
   m: Mapping,
@@ -1292,11 +1298,19 @@ async function buildAdjustments(
   const previewRows: Array<Record<string, string | number>> = [];
   const monthsSet = new Set<string>();
   let skipped = 0;
+  let filtered = 0;
   for (const r of rows) {
     const deduction_type = (r[m.deduction_type] ?? "").trim();
     const date = parseDate(r[m.date]);
     if (!deduction_type || !date) {
       skipped++;
+      continue;
+    }
+    // CATEGORY filter: keep real fee deductions; drop cashouts and (by current decision) clawbacks.
+    //   ON_DEMAND_PAYOUT = a cashout of money already earned, not a cost → exclude.
+    //   CLAWBACK = refund/reversal → excluded for now (flip ADJ_EXCLUDED to treat as a loss).
+    if (ADJ_EXCLUDED.has(deduction_type.trim().toUpperCase())) {
+      filtered++;
       continue;
     }
     const month = dateToMonth(date);
@@ -1318,6 +1332,9 @@ async function buildAdjustments(
   const months = Array.from(monthsSet).sort();
   const notes = [
     `${adjRows.length} deduction(s) → monthly_adjustments (stored positive; subtracted from the order-derived payout).`,
+    filtered
+      ? `${filtered} row(s) excluded by category (${Array.from(ADJ_EXCLUDED).join(" / ")}).`
+      : "",
     `Monthly financials payout recomputed for ${months.join(", ")}.`,
     "Re-importing the same export is safe — rows dedupe on (date, type, order, amount).",
     skipped ? `${skipped} row(s) skipped (no type / date).` : "",
