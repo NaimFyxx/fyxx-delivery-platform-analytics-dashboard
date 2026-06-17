@@ -48,6 +48,7 @@ import {
   parseDateTime,
   parseOrderItems,
   isDelivered,
+  isChargedCancelled,
   dateToMonth,
   monthFromColumns,
   num,
@@ -846,22 +847,36 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
       .gte("date", start)
       .lte("date", end);
     if (error) throw error;
+    const isTalabat = platform === "Talabat";
     let gross = 0,
       payout = 0,
       commission = 0,
       discount = 0,
       orderCount = 0;
     for (const o of orders ?? []) {
-      if (!isDelivered(o.status)) continue;
-      gross += Number(o.gross);
-      payout += Number(o.net_payout);
-      // NB: this is TOTAL platform fees INCL VAT (commission+VAT + payment handling+VAT +
-      // platform/gateway fees) — NOT the ex-VAT 20% commission rate. Never divide by GMV.
-      commission += Number(o.commission) + Number(o.payment_fee) + Number(o.platform_fee);
-      // Partner-funded discount (Talabat Voucher Cost To Restaurant / Careem catalog+promo) —
-      // the menu-value → net-sales bridge. Already net of VAT handling; surfaced, not used in margin.
-      discount += Number(o.discount);
-      orderCount += 1;
+      const delivered = isDelivered(o.status);
+      // Talabat's report contains ONLY Successful + Charged Cancelled by spec, so payout/fees span
+      // ALL stored orders (Charged Cancelled carries commission with a negative payout). Careem =
+      // delivered only. NB: commission is TOTAL platform fees INCL VAT (not the ex-VAT 20% rate) —
+      // never divide by GMV.
+      if (delivered || isTalabat) {
+        payout += Number(o.net_payout);
+        commission += Number(o.commission) + Number(o.payment_fee) + Number(o.platform_fee);
+      }
+      // Revenue side — Successful only (Charged Cancelled has no revenue / no discount).
+      // discount = the menu-value → net-sales bridge (Talabat Voucher / Careem catalog+promo).
+      if (delivered) {
+        gross += Number(o.gross);
+        discount += Number(o.discount);
+        orderCount += 1;
+      }
+      // Surface any Talabat status that isn't Successful or Charged Cancelled, rather than let it
+      // silently enter the payout total.
+      if (isTalabat && !delivered && !isChargedCancelled(o.status)) {
+        console.warn(
+          `[import] Talabat order with unexpected status "${o.status}" entered the ${month} payout total (expected Delivered or Charged Cancelled).`,
+        );
+      }
     }
     if (platform === "Careem") {
       const { data: adj, error: aerr } = await supabase

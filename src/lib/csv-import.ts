@@ -521,3 +521,13 @@ export const isDelivered = (status: unknown) =>
   String(status ?? "")
     .trim()
     .toLowerCase() === "delivered";
+
+/** Talabat "Charged Cancelled" — carries commission with no revenue (negative payout).
+ *  Loose match so "Charged-Cancelled" / "CHARGED_CANCELLED" etc. are recognised. Used only to
+ *  decide whether an unexpected status should be warned about — not to gate payout. */
+export const isChargedCancelled = (status: unknown) =>
+  String(status ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .includes("charged cancel");
