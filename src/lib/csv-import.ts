@@ -471,18 +471,47 @@ export function monthFromColumns(
 /**
  * Parse a Talabat "Order Items" text field, e.g.
  *   "1 MB7 Wagyu , 1 TGR Smash , 2 Fries"
- * The comma is the only item separator (names contain spaces, not commas).
- * Each piece is "<qty> <name>"; a missing leading integer defaults qty to 1.
+ * Each item is "<qty> <name>", comma-separated. Two real-world wrinkles are handled:
+ *   1. Some item names contain commas ("Nuts, Olives & Pickles") or parenthetical
+ *      extras with commas ("(Extra cheese, Extra walnuts)"). A comma only starts a new
+ *      item when the next fragment begins with a "<qty> " token; otherwise it's a
+ *      continuation of the current name, so we merge it back.
+ *   2. Modifier decorations ("[1 With cheese]", "(Extra Kaak)") are stripped so order
+ *      variants collapse to the base dish name (matches the cost table cleanly).
  */
 export function parseOrderItems(text: unknown): { name: string; qty: number }[] {
   if (text === null || text === undefined) return [];
-  return String(text)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
+  // Split on TOP-LEVEL commas only — ignore commas inside "[...]" / "(...)" modifier groups
+  // (e.g. "[1 With cheese, 1 Extra cheese]"), which carry their own qty prefixes.
+  const frags: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of String(text)) {
+    if (ch === "[" || ch === "(") depth++;
+    else if (ch === "]" || ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      frags.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  frags.push(cur);
+  // Re-join name-internal commas: a fragment that doesn't start with "<digits> " is a
+  // continuation of the previous item, not a new item (e.g. "Nuts, Olives & Pickles").
+  const pieces: string[] = [];
+  for (const frag of frags.map((s) => s.trim()).filter(Boolean)) {
+    if (pieces.length === 0 || /^\d+\s/.test(frag)) pieces.push(frag);
+    else pieces[pieces.length - 1] += ", " + frag;
+  }
+  return pieces
     .map((piece) => {
       const m = piece.match(/^(\d+)\s+(.*)$/);
-      return m ? { qty: Number(m[1]), name: m[2].trim() } : { qty: 1, name: piece };
+      const qty = m ? Number(m[1]) : 1;
+      const name = (m ? m[2] : piece)
+        .replace(/\s*\[[^\]]*\]/g, "") // [1 With cheese]
+        .replace(/\s*\([^)]*\)/g, "") // (Extra cheese, Extra walnuts)
+        .replace(/\s+/g, " ")
+        .trim();
+      return { name, qty };
     })
     .filter((it) => it.name.length > 0);
 }
