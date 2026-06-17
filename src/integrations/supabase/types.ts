@@ -161,6 +161,7 @@ export type Database = {
           cogs: number
           commission: number
           created_at: string
+          discount: number
           gross_sales: number
           id: string
           month: string
@@ -173,6 +174,7 @@ export type Database = {
           cogs?: number
           commission?: number
           created_at?: string
+          discount?: number
           gross_sales: number
           id?: string
           month: string
@@ -185,6 +187,7 @@ export type Database = {
           cogs?: number
           commission?: number
           created_at?: string
+          discount?: number
           gross_sales?: number
           id?: string
           month?: string
