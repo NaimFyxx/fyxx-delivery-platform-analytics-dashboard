@@ -362,36 +362,48 @@ function Step2Report({
           const active = value === r.id;
           const imported = status?.slot?.[r.id] ?? false;
           return (
-            <button
+            <div
               key={r.id}
-              type="button"
-              onClick={() => onPick(r.id)}
               className={cn(
-                "rounded-xl border p-4 text-left transition-colors hover:border-primary",
-                active ? "border-primary bg-primary/10" : "border-border bg-card",
+                "rounded-xl border p-4 transition-colors",
+                active ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary",
               )}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="font-semibold text-sm">{r.label}</div>
-                {imported ? (
-                  <Badge
-                    variant="outline"
-                    className="shrink-0 bg-success/15 text-success border-success/30 text-[10px]"
-                  >
-                    <Check className="size-3 mr-1" /> Imported
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="shrink-0 text-muted-foreground text-[10px]">
-                    Not yet
-                  </Badge>
-                )}
+              <button type="button" onClick={() => onPick(r.id)} className="block w-full text-left">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold text-sm">{r.label}</div>
+                  {imported ? (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 bg-success/15 text-success border-success/30 text-[10px]"
+                    >
+                      <Check className="size-3 mr-1" /> Imported
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="shrink-0 text-muted-foreground text-[10px]">
+                      Not yet
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
+              </button>
+              <div className="flex items-center justify-between gap-2 mt-2 text-[10.5px]">
+                <span>
+                  <span className="text-muted-foreground">Lands in: </span>
+                  <span className="font-mono">{r.table}</span>
+                </span>
+                {/* Deep-link to where this report lives in the partner portal (registry source). */}
+                <a
+                  href={r.portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  {r.portalLabel} <ExternalLink className="size-3" />
+                </a>
               </div>
-              <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
-              <div className="text-[10.5px] mt-2">
-                <span className="text-muted-foreground">Lands in: </span>
-                <span className="font-mono">{r.table}</span>
-              </div>
-            </button>
+            </div>
           );
         })}
       </div>
