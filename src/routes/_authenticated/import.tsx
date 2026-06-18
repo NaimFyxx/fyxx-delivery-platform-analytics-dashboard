@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -346,7 +352,8 @@ function Step2Report({
 }) {
   const reports = reportsForPlatform(platform);
   return (
-    <Card className="p-6">
+    <TooltipProvider delayDuration={200}>
+      <Card className="p-6">
       <div className="flex items-center justify-between mb-1">
         <div className="text-sm font-semibold">Step 2 — Which report?</div>
         <Button variant="ghost" size="sm" onClick={onBack}>
@@ -392,22 +399,31 @@ function Step2Report({
                   <span className="text-muted-foreground">Lands in: </span>
                   <span className="font-mono">{r.table}</span>
                 </span>
-                {/* Deep-link to where this report lives in the partner portal (registry source). */}
-                <a
-                  href={r.portalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
-                >
-                  {r.portalLabel} <ExternalLink className="size-3" />
-                </a>
+                {/* Deep-link to where this report lives in the partner portal (registry source);
+                    hover shows the exact click-path inside the portal. */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={r.portalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
+                    >
+                      {r.portalLabel} <ExternalLink className="size-3" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                    {r.portalSteps}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           );
         })}
       </div>
-    </Card>
+      </Card>
+    </TooltipProvider>
   );
 }
 

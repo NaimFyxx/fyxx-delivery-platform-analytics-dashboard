@@ -28,6 +28,8 @@ export interface ReportDef {
   /** Where the user goes to export this report (stable report page). */
   portalUrl: string;
   portalLabel: string;
+  /** Human click-path inside the portal (shown as a hover tooltip on the link). */
+  portalSteps: string;
   /** Primary table the parsed rows are previewed against. */
   table: "platform_orders" | "daily_sales" | "monthly_item_sales" | "monthly_adjustments";
   fields: FieldDef[];
@@ -55,6 +57,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "Order Report",
     portalUrl: T_ORDERS,
     portalLabel: "Open Order Report builder",
+    portalSteps:
+      "Reports → Create a new report → Orders → set date range → Create → download CSV from History",
     table: "platform_orders",
     monthSource: "from-rows",
     signature: ["Order ID", "Payout Amount", "Order Items"],
@@ -106,6 +110,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "Performance Report",
     portalUrl: T_REPORTS,
     portalLabel: "Open Performance Report builder",
+    portalSteps:
+      "Reports → Create a new report → Performance → set date range → Create → download CSV from History",
     table: "daily_sales",
     monthSource: "from-rows",
     signature: ["Date", "Gross Sales", "Successful Orders"],
@@ -145,6 +151,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "Order Level",
     portalUrl: C_FINANCE,
     portalLabel: "Open Finances → Order Level",
+    portalSteps:
+      "Finances → Order Level tab → set date range → Export → New Export → download from Export History",
     table: "platform_orders",
     monthSource: "from-rows",
     signature: ["REFERENCE_ID", "TRANSACTION_DATE", "TOTAL_PAYOUT_AMOUNT"],
@@ -223,6 +231,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "By Menu Item",
     portalUrl: C_PERF,
     portalLabel: "Open Business Performance",
+    portalSteps:
+      "Analytics & reports → Sales Performance → Download Report (Daily, 'By menu item' metric)",
     table: "monthly_item_sales",
     monthSource: "from-columns",
     monthColumns: { from: "FromDate", to: "ToDate" },
@@ -247,6 +257,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "Adjustments",
     portalUrl: C_FINANCE,
     portalLabel: "Open Finances → Adjustments",
+    portalSteps:
+      "Finances → Adjustments tab → set date range → Export → download from Export History",
     table: "monthly_adjustments",
     monthSource: "from-rows",
     // Native Careem export uses the same column convention as Order Level
@@ -290,6 +302,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "Careem Plus — Orders",
     portalUrl: C_PERF,
     portalLabel: "Open Sales Performance (Plus)",
+    portalSteps:
+      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → Orders",
     table: "daily_sales",
     monthSource: "from-rows",
     positional: true,
@@ -303,6 +317,8 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     label: "Careem Plus — Sales",
     portalUrl: C_PERF,
     portalLabel: "Open Sales Performance (Plus)",
+    portalSteps:
+      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → Sales toggle",
     table: "daily_sales",
     monthSource: "from-rows",
     positional: true,
