@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
@@ -12,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { fmtJOD, fmtPct, exVat, platformBg, type Platform } from "@/lib/fyxx";
 import { cogsFor } from "@/lib/costs";
 
@@ -49,7 +51,9 @@ function Financials() {
     },
   });
 
-  const rows = data?.financials ?? [];
+  const [platformFilter, setPlatformFilter] = useState<"All" | Platform>("All");
+  const allRows = data?.financials ?? [];
+  const rows = platformFilter === "All" ? allRows : allRows.filter((r) => r.platform === platformFilter);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -57,6 +61,19 @@ function Financials() {
         title="Monthly financials"
         description="Gross sales, actual payouts and COGS per platform. COGS and net margin are ex-VAT (matching the Overview)."
       />
+      <div className="flex gap-1.5 mb-4">
+        {(["All", "Talabat", "Careem"] as const).map((p) => (
+          <Button
+            key={p}
+            size="sm"
+            variant={platformFilter === p ? "default" : "outline"}
+            onClick={() => setPlatformFilter(p)}
+            className="text-xs h-7 px-3"
+          >
+            {p}
+          </Button>
+        ))}
+      </div>
       <Card className="p-0 overflow-hidden">
         <Table>
           <TableHeader>
