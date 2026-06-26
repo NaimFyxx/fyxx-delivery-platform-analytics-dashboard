@@ -164,17 +164,23 @@ function PublicDashboard() {
   const kpis = computeKpis(totals);
   const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
 
+  // Margin % with a near-zero denominator guard and outlier clamp.
+  // Returns null so Recharts gaps the line rather than spiking off-scale.
+  function pct(numer: number, denom: number): number | null {
+    if (denom < 1) return null; // < 1 JOD is too noisy to divide
+    const v = (numer / denom) * 100;
+    return v < -500 || v > 500 ? null : v;
+  }
+
   // Monthly margin series — always uses monthAggs so it matches the KPI headline exactly.
   const marginTrend = useMemo(
     () =>
-      monthAggs.map((a) => {
-        const k = computeKpis(a);
-        return {
-          label: monthLabel(a.month),
-          net: a.payout > 0 ? Number(k.netMargin.toFixed(1)) : null,
-          prod: a.gross > 0 ? Number(k.prodMargin.toFixed(1)) : null,
-        };
-      }),
+      monthAggs.map((a) => ({
+        label: monthLabel(a.month),
+        net: pct(exVat(a.payout) - a.cogs, exVat(a.payout)),
+        prod: pct(exVat(a.gross) - a.cogs, exVat(a.gross)),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [monthAggs],
   );
 
@@ -248,8 +254,8 @@ function PublicDashboard() {
         const gross = v.Talabat + v.Careem;
         const payout = gross * payoutRatio;
         const cogs = exVat(gross) * costRatio;
-        const prod = gross > 0 ? ((exVat(gross) - cogs) / exVat(gross)) * 100 : null;
-        const net = payout > 0 ? ((exVat(payout) - cogs) / exVat(payout)) * 100 : null;
+        const prod = pct(exVat(gross) - cogs, exVat(gross));
+        const net = pct(exVat(payout) - cogs, exVat(payout));
         arr.push({
           label: `${monthLabel(m).split(" ")[0]} ${d}`,
           Talabat: v.Talabat, Careem: v.Careem,
@@ -267,8 +273,8 @@ function PublicDashboard() {
       const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
         data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
       const agg = monthAggs.find((a) => a.month === m)!;
-      const prod = agg.gross > 0 ? ((exVat(agg.gross) - agg.cogs) / exVat(agg.gross)) * 100 : null;
-      const net = agg.payout > 0 ? ((exVat(agg.payout) - agg.cogs) / exVat(agg.payout)) * 100 : null;
+      const prod = pct(exVat(agg.gross) - agg.cogs, exVat(agg.gross));
+      const net = pct(exVat(agg.payout) - agg.cogs, exVat(agg.payout));
       const profit = exVat(agg.payout) - agg.cogs;
       return {
         label: monthLabel(m),
@@ -368,7 +374,7 @@ function PublicDashboard() {
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false}
-                       tickFormatter={(v) => `${v}%`} domain={[0, 55]} />
+                       tickFormatter={(v) => `${v}%`} domain={[0, 100]} allowDataOverflow />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)}%`} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <ReferenceLine y={45} stroke="var(--muted-foreground)" strokeDasharray="6 4" label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }} />
