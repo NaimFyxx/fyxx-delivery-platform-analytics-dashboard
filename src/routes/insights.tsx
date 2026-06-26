@@ -259,6 +259,7 @@ function InsightsPage() {
             title="Careem+ vs Regular"
             sub="Share of sales, orders & AOV for Careem subscribers"
             asOf={freshness.daily}
+            bg="linear-gradient(135deg, #0a3d2b, #0f5c3e)"
           >
             {!careemTiers ? (
               <Empty text="No Careem data in this range." />
@@ -272,6 +273,7 @@ function InsightsPage() {
             title="Talabat Pro"
             sub="Pro subscriber share for Talabat orders"
             asOf={freshness.daily}
+            bg="linear-gradient(135deg, #5c1f00, #8a2f00)"
           >
             {!talabatTiers ? (
               <Empty text="No Talabat data in this range." />
@@ -529,23 +531,25 @@ function TierCard({
   sub,
   asOf,
   children,
+  bg,
 }: {
   title: string;
   sub?: string;
   asOf: string | null;
   children: React.ReactNode;
+  bg?: string;
 }) {
   return (
     <div
-      className="rounded-2xl border border-border p-4"
-      style={{ background: "linear-gradient(135deg, #0b2222, #0f2c2c)" }}
+      className="rounded-2xl border border-white/10 p-4"
+      style={{ background: bg ?? "linear-gradient(135deg, #0b2222, #0f2c2c)" }}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h3 className="font-display text-[15px] font-semibold">{title}</h3>
-          {sub && <div className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
+          <h3 className="font-display text-[15px] font-semibold text-white">{title}</h3>
+          {sub && <div className="text-[10.5px] text-white/60 mt-0.5">{sub}</div>}
         </div>
-        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+        <span className="text-[10px] text-white/50 whitespace-nowrap">
           Data as of {asOf ?? "—"}
         </span>
       </div>
@@ -639,7 +643,7 @@ function TierBody({ t, subLabel, colorVar }: { t: Tiers; subLabel: string; color
         colorVar={colorVar}
       />
       <div className="grid grid-cols-3 gap-2 pt-2">
-        <MiniStat label={`${subLabel} AOV`} value={t.subAov.toFixed(2)} unit="JOD" tone="green" />
+        <MiniStat label={`${subLabel} AOV`} value={t.subAov.toFixed(2)} unit="JOD" accentColor={colorVar} />
         <MiniStat label="Regular AOV" value={t.regAov.toFixed(2)} unit="JOD" />
         <MiniStat label="Overall AOV" value={t.overallAov.toFixed(2)} unit="JOD" />
       </div>
@@ -666,16 +670,16 @@ function ShareRow({
   return (
     <div>
       <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="text-muted-foreground">{label}</span>
+        <span className="text-white/60">{label}</span>
         <span className="text-num">
           <span className="font-semibold" style={{ color: colorVar }}>
             {Math.round(sub).toLocaleString()}
           </span>
-          <span className="text-muted-foreground">
+          <span className="text-white/50">
             {" "}
             / {Math.round(sub + other).toLocaleString()} {unit}
           </span>
-          <span className="ml-2 font-semibold" style={{ color: "var(--primary)" }}>
+          <span className="ml-2 font-semibold text-white">
             ({pct.toFixed(1)}%)
           </span>
         </span>
@@ -698,23 +702,23 @@ function MiniStat({
   label,
   value,
   unit,
-  tone,
+  accentColor,
 }: {
   label: string;
   value: string;
   unit: string;
-  tone?: "green";
+  accentColor?: string;
 }) {
   return (
-    <div className="bg-background/40 border border-border rounded-lg p-2.5">
-      <div className="text-[9.5px] uppercase tracking-wide text-muted-foreground font-semibold">
+    <div className="bg-background/40 border border-white/10 rounded-lg p-2.5">
+      <div className="text-[9.5px] uppercase tracking-wide text-white/60 font-semibold">
         {label}
       </div>
       <div
-        className="font-display text-[18px] font-semibold mt-0.5"
-        style={{ color: tone === "green" ? "var(--careem)" : undefined }}
+        className="font-display text-[18px] font-semibold mt-0.5 text-white"
+        style={{ color: accentColor }}
       >
-        {value} <span className="text-[10px] text-muted-foreground">{unit}</span>
+        {value} <span className="text-[10px] text-white/50">{unit}</span>
       </div>
     </div>
   );
