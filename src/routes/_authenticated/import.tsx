@@ -101,6 +101,12 @@ type Preview = {
   notes: string[];
   previewCols: string[];
   previewRows: Array<Record<string, string | number>>;
+  /** Hard block — shown as an error; Confirm button disabled. */
+  blockReason?: string;
+  /** Date range string shown in the preview: "YYYY-MM-DD → YYYY-MM-DD". */
+  coverRange?: string;
+  /** If set, a checkbox with this label must be ticked before Confirm is enabled. */
+  requireConfirm?: string;
   rowFlags: boolean[]; // exists? per preview row
 };
 
@@ -559,6 +565,7 @@ function CsvFlow({
   const [mapping, setMapping] = useState<Mapping>({});
   const [preview, setPreview] = useState<Preview | null>(null);
   const [building, setBuilding] = useState(false);
+  const [confirmChecked, setConfirmChecked] = useState(false);
   // Required fields whose expected header wasn't found — the ONLY thing the user maps by hand.
   const [manualFields, setManualFields] = useState<FieldDef[]>([]);
 
@@ -582,6 +589,7 @@ function CsvFlow({
       }
       const built = await buildPreviewForReport(report, platform, chosenMonth, m, hdrs, rows);
       setPreview(built);
+      setConfirmChecked(false);
       return true;
     } catch (e) {
       toast.error((e as Error).message);
@@ -837,6 +845,17 @@ function CsvFlow({
               )}
             </div>
           </div>
+          {preview.coverRange && (
+            <div className="text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2">
+              Covers <span className="font-mono font-medium text-foreground">{preview.coverRange}</span>
+            </div>
+          )}
+          {preview.blockReason && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
+              <AlertCircle className="size-4 shrink-0 mt-0.5" />
+              <span>{preview.blockReason}</span>
+            </div>
+          )}
           {preview.notes.length > 0 && (
             <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
               {preview.notes.map((n, i) => (
@@ -892,6 +911,17 @@ function CsvFlow({
             </div>
           )}
 
+          {preview.requireConfirm && (
+            <label className="flex items-start gap-2.5 cursor-pointer select-none rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-primary"
+                checked={confirmChecked}
+                onChange={(e) => setConfirmChecked(e.target.checked)}
+              />
+              <span>{preview.requireConfirm}</span>
+            </label>
+          )}
           <div className="flex justify-between">
             <Button
               variant="ghost"
@@ -904,7 +934,12 @@ function CsvFlow({
             </Button>
             <Button
               onClick={() => importMut.mutate()}
-              disabled={importMut.isPending || preview.upserts.every((g) => g.rows.length === 0)}
+              disabled={
+                importMut.isPending ||
+                preview.upserts.every((g) => g.rows.length === 0) ||
+                !!preview.blockReason ||
+                (!!preview.requireConfirm && !confirmChecked)
+              }
               className="bg-gradient-primary text-primary-foreground"
             >
               {importMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
@@ -1369,6 +1404,22 @@ async function buildCareemItems(
   m: Mapping,
   rows: Record<string, string>[],
 ): Promise<Preview> {
+  // Read FromDate / ToDate from the first row that has them (these are explicit CSV columns,
+  // not a heuristic — a month can legitimately start with no sales on the 1st).
+  const fromDateRaw = rows.find((r) => r["FromDate"])?.["FromDate"] ?? null;
+  const toDateRaw = rows.find((r) => r["ToDate"])?.["ToDate"] ?? null;
+  const fromDateParsed = fromDateRaw ? parseDate(fromDateRaw) : null;
+  const toDateParsed = toDateRaw ? parseDate(toDateRaw) : null;
+  const coverRange =
+    fromDateParsed && toDateParsed ? `${fromDateParsed} → ${toDateParsed}` : undefined;
+
+  // Block if the file doesn't start on the 1st of the month — item sales replace the whole
+  // month on import, so a partial-week file would silently discard the rest.
+  let blockReason: string | undefined;
+  if (fromDateParsed && !fromDateParsed.endsWith("-01")) {
+    blockReason = `Partial-month export — this file starts ${fromDateParsed}, not the 1st of ${month}. Item sales replace the whole month, so re-export with the date range starting on the 1st.`;
+  }
+
   const hasRevenue = Boolean(m.revenue_jod);
   const grouped = new Map<string, { units: number; revenue: number }>();
   let skipped = 0;
@@ -1433,6 +1484,8 @@ async function buildCareemItems(
     previewCols: hasRevenue ? ["Item", "Units", "Revenue"] : ["Item", "Units"],
     previewRows,
     rowFlags,
+    blockReason,
+    coverRange,
   };
 }
 
@@ -1495,13 +1548,16 @@ async function buildAdjustments(
     previewRows.push({ Date: date, Type: deduction_type, Amount: fmtJOD(amount), Order: order_id });
   }
   const months = Array.from(monthsSet).sort();
+  const allDates = adjRows.map((r) => r.date as string).sort();
+  const coverRange =
+    allDates.length > 0 ? `${allDates[0]} → ${allDates[allDates.length - 1]}` : undefined;
   const notes = [
     `${adjRows.length} adjustment row(s) → monthly_adjustments (signed: fees negative, credits positive).`,
     filtered
       ? `${filtered} row(s) excluded as cashout / carry-over (ON_DEMAND_PAYOUT or rollover categories).`
       : "",
     `Monthly financials payout recomputed for ${months.join(", ")}.`,
-    "Re-importing the same export is safe — rows dedupe on (date, type, order, amount).",
+    `This import replaces ALL existing adjustments for ${months.join(", ")}.`,
     skipped ? `${skipped} row(s) skipped (no type / date).` : "",
   ].filter(Boolean);
   return {
@@ -1521,6 +1577,8 @@ async function buildAdjustments(
     previewCols: ["Date", "Type", "Amount", "Order"],
     previewRows,
     rowFlags: adjRows.map(() => false),
+    coverRange,
+    requireConfirm: `I confirm this file covers the full month of ${months.join(" / ")} — existing adjustments will be replaced.`,
   };
 }
 
