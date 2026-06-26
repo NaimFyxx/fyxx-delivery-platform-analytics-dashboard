@@ -47,6 +47,7 @@ export interface ReportDef {
 // Stable report pages (generated-file links expire, especially on Careem).
 const T_ORDERS = "https://partner-app.talabat.com/report-builder/create/ORDERS";
 const T_REPORTS = "https://partner-app.talabat.com/report-builder/create/REPORTS";
+const T_PERFORMANCE = "https://partner-app.talabat.com/performance";
 const C_FINANCE = "https://app.careemnow.com/merchant/finances";
 const C_PERF = "https://app.careemnow.com/merchant/dashboard-analytics/business-performance";
 
@@ -149,10 +150,10 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     id: "talabat:menu_item",
     platform: "Talabat",
     label: "Sales by Menu Item",
-    portalUrl: T_REPORTS,
-    portalLabel: "Open Report Builder",
+    portalUrl: T_PERFORMANCE,
+    portalLabel: "Open Performance",
     portalSteps:
-      "Reports → Create a new report → Sales by Menu Item → set date range (full calendar month, 1st–last day) → Create → download CSV from History",
+      "Performance → set the date range to a full calendar month (1st–last day) → scroll to the 'Sales by Menu Item' card → click the download icon (top-right of that card). The file downloads as popularDishes_<dates>.csv with columns Dish / Total / Sales.",
     table: "monthly_item_sales",
     monthSource: "from-rows",
     signature: ["Dish", "Total", "Sales"],
