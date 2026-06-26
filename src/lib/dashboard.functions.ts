@@ -14,7 +14,7 @@ import { createServerFn } from "@tanstack/react-start";
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [daily, fin, costs, itemSales, targets, lastImport, allImports] = await Promise.all([
+  const [daily, fin, costs, itemSales, targets, lastImport, allImports, custData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -40,6 +40,10 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       .select("platform,report_type,imported_at")
       .eq("status", "success")
       .order("imported_at", { ascending: false }),
+    supabaseAdmin
+      .from("monthly_customers")
+      .select("month,platform,basis,new,returning,reactivated,overall")
+      .order("month"),
   ]);
 
   return {
@@ -83,6 +87,15 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       platform: r.platform as string,
       reportType: r.report_type as string,
       importedAt: r.imported_at as string,
+    })),
+    customers: (custData.data ?? []).map((r) => ({
+      month: r.month,
+      platform: r.platform as string,
+      basis: r.basis as string,
+      new: Number(r.new),
+      returning: Number(r.returning),
+      reactivated: Number(r.reactivated),
+      overall: Number(r.overall),
     })),
   };
 });

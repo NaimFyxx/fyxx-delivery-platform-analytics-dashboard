@@ -118,14 +118,14 @@ type Preview = {
  *  financials row with gross=0 — neither should count as "Daily sales" / "Financials" imported). */
 type ImportStatus = {
   slot: Partial<Record<ReportId, boolean>>;
-  platform: Record<Platform, { daily: boolean; items: boolean; financials: boolean }>;
+  platform: Record<Platform, { daily: boolean; items: boolean; financials: boolean; customers: boolean }>;
 };
 function useImportStatus(month: string) {
   return useQuery({
     queryKey: ["import_status", month],
     queryFn: async (): Promise<ImportStatus> => {
       const { start, next } = monthRange(month);
-      const [orders, daily, items, fin, adj] = await Promise.all([
+      const [orders, daily, items, fin, adj, cust] = await Promise.all([
         supabase.from("platform_orders").select("platform").gte("date", start).lt("date", next),
         supabase
           .from("daily_sales")
@@ -135,12 +135,15 @@ function useImportStatus(month: string) {
         supabase.from("monthly_item_sales").select("platform,revenue_jod").eq("month", month),
         supabase.from("monthly_financials").select("platform,gross_sales").eq("month", month),
         supabase.from("monthly_adjustments").select("platform").eq("month", month),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from as any)("monthly_customers").select("platform,new,returning").eq("month", month),
       ]);
       const od = orders.data ?? [],
         dl = daily.data ?? [],
         it = items.data ?? [],
         fn = fin.data ?? [],
-        aj = adj.data ?? [];
+        aj = adj.data ?? [],
+        cu = (cust.data ?? []) as Array<{ platform: string; new: number; returning: number }>;
       const orderRows = (p: Platform) => od.some((r) => r.platform === p);
       const dailyReal = (p: Platform) => dl.some((r) => r.platform === p && Number(r.sales_jod) > 0);
       const itemsReal = (p: Platform) => it.some((r) => r.platform === p && Number(r.revenue_jod) > 0);
@@ -148,27 +151,33 @@ function useImportStatus(month: string) {
       const adjHas = (p: Platform) => aj.some((r) => r.platform === p);
       const cplusO = dl.some((r) => r.platform === "Careem" && Number(r.cplus_orders) > 0);
       const cplusS = dl.some((r) => r.platform === "Careem" && Number(r.cplus_sales_jod) > 0);
+      const custReal = (p: Platform) =>
+        cu.some((r) => r.platform === p && (Number(r.new) > 0 || Number(r.returning) > 0));
       return {
         slot: {
           "talabat:order_report": orderRows("Talabat"),
           "talabat:performance": dailyReal("Talabat"),
           "talabat:menu_item": itemsReal("Talabat"),
+          "talabat:customers": custReal("Talabat"),
           "careem:order_level": orderRows("Careem"),
           "careem:menu_item": itemsReal("Careem"),
           "careem:adjustments": adjHas("Careem"),
           "careem:plus_orders": cplusO,
           "careem:plus_sales": cplusS,
+          "careem:customers": custReal("Careem"),
         },
         platform: {
           Talabat: {
             daily: dailyReal("Talabat"),
             items: itemsReal("Talabat"),
             financials: finReal("Talabat"),
+            customers: custReal("Talabat"),
           },
           Careem: {
             daily: dailyReal("Careem"),
             items: itemsReal("Careem"),
             financials: finReal("Careem"),
+            customers: custReal("Careem"),
           },
         },
       };
@@ -476,17 +485,19 @@ function CompletenessPanel({
 
   const rowsByPlatform: Record<
     Platform,
-    { label: string; key: "daily" | "items" | "financials" }[]
+    { label: string; key: "daily" | "items" | "financials" | "customers" }[]
   > = {
     Talabat: [
       { label: "Daily sales (Performance)", key: "daily" },
       { label: "Items (Sales by Menu Item)", key: "items" },
       { label: "Financials (Order Report)", key: "financials" },
+      { label: "Customers (Sales, Customers & Ops)", key: "customers" },
     ],
     Careem: [
       { label: "Daily sales (Order Level)", key: "daily" },
       { label: "Items (By Menu Item)", key: "items" },
       { label: "Financials (Order Level)", key: "financials" },
+      { label: "Customers (New / Retained / Reactivated)", key: "customers" },
     ],
   };
 
@@ -1140,6 +1151,10 @@ async function buildPreviewForReport(
     case "careem:plus_orders":
     case "careem:plus_sales":
       return buildPlus(report, platform, headers, rows);
+    case "careem:customers":
+      return buildCareemCustomers(platform, month, mapping, rows);
+    case "talabat:customers":
+      return buildTalabatCustomers(platform, month, mapping, rows);
     default:
       throw new Error(`No builder for ${report.id}`);
   }
@@ -1731,6 +1746,146 @@ async function buildPlus(
     rowFlags,
     warnings,
     coverRange,
+  };
+}
+
+/** Careem "New, retained, reactivated Customers" — daily rows → one monthly_customers row per month. */
+async function buildCareemCustomers(
+  platform: Platform,
+  month: string,
+  m: Mapping,
+  rows: Record<string, string>[],
+): Promise<Preview> {
+  // Group by detected month (file may span multiple months — aggregate each separately).
+  const grouped = new Map<string, { newCount: number; reactivated: number; retained: number }>();
+  let skipped = 0;
+  for (const r of rows) {
+    const date = parseDate(r[m.date]);
+    if (!date) { skipped++; continue; }
+    const mo = dateToMonth(date);
+    const cur = grouped.get(mo) ?? { newCount: 0, reactivated: 0, retained: 0 };
+    cur.newCount += num(r[m.new_users]);
+    cur.reactivated += num(r[m.reactivated]);
+    cur.retained += num(r[m.retained]);
+    grouped.set(mo, cur);
+  }
+  if (!grouped.size) {
+    // No valid dates — use panel month with zero counts so the preview is shown
+    grouped.set(month, { newCount: 0, reactivated: 0, retained: 0 });
+  }
+
+  const months = Array.from(grouped.keys()).sort();
+  const opsRows: Record<string, unknown>[] = [];
+  const previewRows: Array<Record<string, string | number>> = [];
+  for (const [mo, g] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    const returning = g.reactivated + g.retained;
+    const overall = g.newCount + returning;
+    opsRows.push({
+      month: mo,
+      platform,
+      basis: "customers",
+      new: Math.round(g.newCount),
+      reactivated: Math.round(g.reactivated),
+      returning: Math.round(returning),
+      overall: Math.round(overall),
+    });
+    const repeatRate = overall > 0 ? (returning / overall) * 100 : 0;
+    previewRows.push({
+      Month: mo,
+      New: fmtInt(g.newCount),
+      Reactivated: fmtInt(g.reactivated),
+      Retained: fmtInt(g.retained),
+      "Returning (total)": fmtInt(returning),
+      "Repeat rate": `${repeatRate.toFixed(1)}%`,
+    });
+  }
+
+  const willUpdate = 0; // always replace
+  return {
+    upserts: [{
+      table: "monthly_customers",
+      onConflict: "month,platform",
+      rows: opsRows,
+      replace: { column: "month", values: months, match: { platform } },
+    }],
+    willAdd: opsRows.length,
+    willUpdate,
+    skipped,
+    notes: [
+      `${opsRows.length} month(s) of Careem customer data (basis = customers). Retained + Reactivated → returning.`,
+      `This import replaces all existing Careem customer rows for ${months.join(", ")}.`,
+      skipped ? `${skipped} row(s) skipped (no valid date).` : "",
+    ].filter(Boolean),
+    previewCols: ["Month", "New", "Reactivated", "Retained", "Returning (total)", "Repeat rate"],
+    previewRows,
+    rowFlags: opsRows.map(() => false),
+  };
+}
+
+/** Talabat "Sales, Customers & Operations" — daily rows → one monthly_customers row per month.
+ *  Only reads Date + orders from new/returning customers (ignores all other columns). */
+async function buildTalabatCustomers(
+  platform: Platform,
+  month: string,
+  m: Mapping,
+  rows: Record<string, string>[],
+): Promise<Preview> {
+  const grouped = new Map<string, { newOrders: number; returningOrders: number }>();
+  let skipped = 0;
+  for (const r of rows) {
+    const date = parseDate(r[m.date]);
+    if (!date) { skipped++; continue; }
+    const mo = dateToMonth(date);
+    const cur = grouped.get(mo) ?? { newOrders: 0, returningOrders: 0 };
+    cur.newOrders += num(r[m.new_orders]);
+    cur.returningOrders += num(r[m.returning_orders]);
+    grouped.set(mo, cur);
+  }
+  if (!grouped.size) {
+    grouped.set(month, { newOrders: 0, returningOrders: 0 });
+  }
+
+  const months = Array.from(grouped.keys()).sort();
+  const opsRows: Record<string, unknown>[] = [];
+  const previewRows: Array<Record<string, string | number>> = [];
+  for (const [mo, g] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    const overall = g.newOrders + g.returningOrders;
+    opsRows.push({
+      month: mo,
+      platform,
+      basis: "orders",
+      new: Math.round(g.newOrders),
+      reactivated: 0,
+      returning: Math.round(g.returningOrders),
+      overall: Math.round(overall),
+    });
+    const repeatRate = overall > 0 ? (g.returningOrders / overall) * 100 : 0;
+    previewRows.push({
+      Month: mo,
+      "New orders": fmtInt(g.newOrders),
+      "Returning orders": fmtInt(g.returningOrders),
+      "Repeat rate": `${repeatRate.toFixed(1)}%`,
+    });
+  }
+
+  return {
+    upserts: [{
+      table: "monthly_customers",
+      onConflict: "month,platform",
+      rows: opsRows,
+      replace: { column: "month", values: months, match: { platform } },
+    }],
+    willAdd: opsRows.length,
+    willUpdate: 0,
+    skipped,
+    notes: [
+      `${opsRows.length} month(s) of Talabat customer data (basis = orders — not comparable to Careem's customer counts).`,
+      `This import replaces all existing Talabat customer rows for ${months.join(", ")}.`,
+      skipped ? `${skipped} row(s) skipped (no valid date).` : "",
+    ].filter(Boolean),
+    previewCols: ["Month", "New orders", "Returning orders", "Repeat rate"],
+    previewRows,
+    rowFlags: opsRows.map(() => false),
   };
 }
 
