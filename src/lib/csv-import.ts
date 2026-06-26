@@ -6,6 +6,7 @@ import type { Platform } from "@/lib/fyxx";
 export type ReportId =
   | "talabat:order_report" // T1 — one row per order (money + items + Pro flag)
   | "talabat:performance" // T2 — one row per store per day (daily totals + Pro)
+  | "talabat:menu_item"   // T3 — one row per item (Dish / Total / Sales)
   | "careem:order_level" // C1 — one row per order (money + payout)
   | "careem:menu_item" // C2 — one row per item per period
   | "careem:adjustments" // C4 — monthly deductions (bank fee, Plus contribution)
@@ -142,6 +143,26 @@ export const REPORTS: Record<ReportId, ReportDef> = {
         required: false,
       },
     ],
+  },
+
+  "talabat:menu_item": {
+    id: "talabat:menu_item",
+    platform: "Talabat",
+    label: "Sales by Menu Item",
+    portalUrl: T_REPORTS,
+    portalLabel: "Open Report Builder",
+    portalSteps:
+      "Reports → Create a new report → Sales by Menu Item → set date range (full calendar month, 1st–last day) → Create → download CSV from History",
+    table: "monthly_item_sales",
+    monthSource: "from-rows",
+    signature: ["Dish", "Total", "Sales"],
+    hint: "Per-item revenue and unit counts for the month. Replaces the whole month's Talabat item rows on import — always export a full calendar month.",
+    fields: [
+      { key: "item_name", label: "Dish (item name)", defaults: ["Dish"], required: true },
+      { key: "units", label: "Total (units sold)", defaults: ["Total"], required: true },
+      { key: "revenue_jod", label: "Sales (JOD revenue)", defaults: ["Sales"], required: true },
+    ],
+    optionalFields: [],
   },
 
   // ---------------- Careem ----------------

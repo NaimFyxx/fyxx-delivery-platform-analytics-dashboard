@@ -52,7 +52,6 @@ import {
   validateSignature,
   parseDate,
   parseDateTime,
-  parseOrderItems,
   isDelivered,
   isChargedCancelled,
   dateToMonth,
@@ -153,6 +152,7 @@ function useImportStatus(month: string) {
         slot: {
           "talabat:order_report": orderRows("Talabat"),
           "talabat:performance": dailyReal("Talabat"),
+          "talabat:menu_item": itemsHas("Talabat"),
           "careem:order_level": orderRows("Careem"),
           "careem:menu_item": itemsHas("Careem"),
           "careem:adjustments": adjHas("Careem"),
@@ -480,7 +480,7 @@ function CompletenessPanel({
   > = {
     Talabat: [
       { label: "Daily sales (Performance)", key: "daily" },
-      { label: "Items (Order Report)", key: "items" },
+      { label: "Items (Sales by Menu Item)", key: "items" },
       { label: "Financials (Order Report)", key: "financials" },
     ],
     Careem: [
@@ -1129,6 +1129,8 @@ async function buildPreviewForReport(
       return buildTalabatOrders(platform, mapping, rows);
     case "talabat:performance":
       return buildPerformance(platform, mapping, rows);
+    case "talabat:menu_item":
+      return buildTalabatItems(platform, month, mapping, rows);
     case "careem:order_level":
       return buildCareemOrders(platform, mapping, rows);
     case "careem:menu_item":
@@ -1173,7 +1175,6 @@ async function buildTalabatOrders(
 ): Promise<Preview> {
   const orderRows: Record<string, unknown>[] = [];
   const orderIds: string[] = [];
-  const itemAgg = new Map<string, Map<string, number>>(); // month -> name -> units
   const monthsSet = new Set<string>();
   const previewRows: Array<Record<string, string | number>> = [];
   let skipped = 0;
@@ -1216,12 +1217,6 @@ async function buildTalabatOrders(
       is_loyalty,
     });
     orderIds.push(order_id);
-    if (m.items_text) {
-      const per = itemAgg.get(month) ?? new Map<string, number>();
-      for (const it of parseOrderItems(r[m.items_text]))
-        per.set(it.name, (per.get(it.name) ?? 0) + it.qty);
-      itemAgg.set(month, per);
-    }
     previewRows.push({
       "Order ID": order_id,
       Date: date,
@@ -1236,28 +1231,18 @@ async function buildTalabatOrders(
   const rowFlags = orderRows.map((o) => existingSet.has(o.order_id as string));
   const willUpdate = rowFlags.filter(Boolean).length;
 
-  const itemRows: Record<string, unknown>[] = [];
-  for (const [month, per] of itemAgg)
-    for (const [name, units] of per)
-      itemRows.push({ month, platform, item_name: name, units: Math.round(units), revenue_jod: 0 });
-
   const months = Array.from(monthsSet).sort();
   const notes = [
     `${orderRows.length} order(s) → platform_orders (idempotent by order id).`,
-    itemRows.length
-      ? `${itemRows.length} item line(s) parsed from "Order Items" → monthly_item_sales (units only — Talabat has no per-item price). Upload the full month so item totals are complete.`
-      : "",
     `Monthly financials recomputed for ${months.join(", ")} from these orders (Delivered only).`,
     "Daily totals for Talabat come from the Performance report, not this file.",
+    "Item revenue: upload the 'Sales by Menu Item' report to populate per-item margins correctly.",
     skipped ? `${skipped} row(s) skipped (no order id / date).` : "",
   ].filter(Boolean);
 
   return {
     upserts: [
       { table: "platform_orders", onConflict: "platform,order_id", rows: orderRows },
-      ...(itemRows.length
-        ? [{ table: "monthly_item_sales", onConflict: "month,platform,item_name", rows: itemRows }]
-        : []),
     ],
     reconcile: { financials: { platform, months } },
     willAdd: rowFlags.length - willUpdate,
@@ -1436,6 +1421,67 @@ async function buildCareemOrders(
     skipped,
     notes,
     previewCols: ["Order ID", "Date", "Gross", "Payout", "Fees", "Status"],
+    previewRows,
+    rowFlags,
+  };
+}
+
+async function buildTalabatItems(
+  platform: Platform,
+  month: string,
+  m: Mapping,
+  rows: Record<string, string>[],
+): Promise<Preview> {
+  // Talabat "Sales by Menu Item" has no date columns — the user picks the month via the panel.
+  // Full-month replace semantics: delete-then-insert the whole month's Talabat item rows.
+  const grouped = new Map<string, { units: number; revenue: number }>();
+  let skipped = 0;
+  for (const r of rows) {
+    const name = (r[m.item_name] ?? "").trim();
+    if (!name) { skipped++; continue; }
+    const cur = grouped.get(name) ?? { units: 0, revenue: 0 };
+    cur.units += num(r[m.units]);
+    cur.revenue += num(r[m.revenue_jod]);
+    grouped.set(name, cur);
+  }
+
+  const items = Array.from(grouped.keys());
+  const existingSet = await existingKeys(
+    "monthly_item_sales",
+    "item_name",
+    platform,
+    items,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (q: any) => q.eq("month", month),
+  );
+
+  const opsRows: Record<string, unknown>[] = [];
+  const previewRows: Array<Record<string, string | number>> = [];
+  const rowFlags: boolean[] = [];
+  const entries = Array.from(grouped.entries()).sort((a, b) => b[1].revenue - a[1].revenue);
+  for (const [name, agg] of entries) {
+    rowFlags.push(existingSet.has(name));
+    opsRows.push({ month, platform, item_name: name, units: Math.round(agg.units), revenue_jod: round3(agg.revenue) });
+    previewRows.push({ Item: name, Units: fmtInt(agg.units), Revenue: fmtJOD(agg.revenue) });
+  }
+
+  const willUpdate = rowFlags.filter(Boolean).length;
+  return {
+    upserts: [{
+      table: "monthly_item_sales",
+      onConflict: "month,platform,item_name",
+      rows: opsRows,
+      replace: { column: "month", values: [month], match: { platform } },
+    }],
+    willAdd: rowFlags.length - willUpdate,
+    willUpdate,
+    skipped,
+    notes: [
+      `${items.length} item(s) for ${month} on Talabat — revenue included.`,
+      `This import replaces all existing Talabat item rows for ${month}.`,
+      skipped ? `${skipped} row(s) skipped (blank name).` : "",
+    ].filter(Boolean),
+    previewCols: ["Item", "Units", "Revenue"],
     previewRows,
     rowFlags,
   };
