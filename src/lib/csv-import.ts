@@ -303,12 +303,12 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalUrl: C_PERF,
     portalLabel: "Open Sales Performance (Plus)",
     portalSteps:
-      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → Orders",
+      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → set the chart to ORDERS → Export. (Same screen as Plus — Sales — just the other toggle.)",
     table: "daily_sales",
     monthSource: "from-rows",
     positional: true,
     signature: [],
-    hint: "Skinny 2-column file (date + value) from Sales Performance with the Careem Plus segment selected. The value is read from the 2nd column — its header is ignored.",
+    hint: "Daily Careem Plus order counts. Same portal screen as Plus — Sales — flip the chart toggle to ORDERS before exporting. Skinny 2-column file; value is read from the 2nd column.",
     fields: [],
   },
   "careem:plus_sales": {
@@ -318,12 +318,12 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalUrl: C_PERF,
     portalLabel: "Open Sales Performance (Plus)",
     portalSteps:
-      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → Sales toggle",
+      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → set the chart to SALES → Export. (Same screen as Plus — Orders — just the other toggle.)",
     table: "daily_sales",
     monthSource: "from-rows",
     positional: true,
     signature: [],
-    hint: "Skinny 2-column file (date + value) from Sales Performance with the Careem Plus segment selected. The value is read from the 2nd column — its header is ignored.",
+    hint: "Daily Careem Plus sales (JOD). Same portal screen as Plus — Orders — flip the chart toggle to SALES before exporting. Skinny 2-column file; value is read from the 2nd column.",
     fields: [],
   },
 };
