@@ -71,6 +71,14 @@ export const Route = createFileRoute("/_authenticated/import")({
   component: ImportPage,
 });
 
+/** Returns the first and exclusive-next-month date strings for a "YYYY-MM" month. */
+function monthRange(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  const start = `${month}-01`;
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  return { start, next };
+}
+
 /** A direct upsert batch. */
 type UpsertGroup = {
   table: string;
@@ -107,15 +115,14 @@ function useImportStatus(month: string) {
   return useQuery({
     queryKey: ["import_status", month],
     queryFn: async (): Promise<ImportStatus> => {
-      const start = `${month}-01`;
-      const end = `${month}-31`;
+      const { start, next } = monthRange(month);
       const [orders, daily, items, fin, adj] = await Promise.all([
-        supabase.from("platform_orders").select("platform").gte("date", start).lte("date", end),
+        supabase.from("platform_orders").select("platform").gte("date", start).lt("date", next),
         supabase
           .from("daily_sales")
           .select("platform,sales_jod,cplus_orders,cplus_sales_jod")
           .gte("date", start)
-          .lte("date", end),
+          .lt("date", next),
         supabase.from("monthly_item_sales").select("platform").eq("month", month),
         supabase.from("monthly_financials").select("platform,gross_sales").eq("month", month),
         supabase.from("monthly_adjustments").select("platform").eq("month", month),
@@ -952,14 +959,13 @@ async function reconcileCareemDaily(dates: string[]) {
  *  + Careem adjustments, for the given months. COGS is never written (preserved). */
 async function reconcileFinancials(platform: Platform, months: string[]) {
   for (const month of Array.from(new Set(months))) {
-    const start = `${month}-01`,
-      end = `${month}-31`;
+    const { start, next } = monthRange(month);
     const { data: orders, error } = await supabase
       .from("platform_orders")
       .select("gross,net_payout,commission,payment_fee,platform_fee,discount,status")
       .eq("platform", platform)
       .gte("date", start)
-      .lte("date", end);
+      .lt("date", next);
     if (error) throw error;
     const isTalabat = platform === "Talabat";
     let gross = 0,
