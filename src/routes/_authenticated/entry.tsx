@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform } from "@/lib/fyxx";
@@ -27,18 +27,20 @@ function Entry() {
     <div className="p-6 max-w-5xl mx-auto">
       <PageHeader title="Data entry" description="Add or update sales, financials, item costs and targets. Existing rows for the same key are overwritten — item costs are append-only and versioned." />
       <Tabs defaultValue="daily">
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full">
           <TabsTrigger value="daily">Daily sales</TabsTrigger>
           <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="costs">Item costs</TabsTrigger>
           <TabsTrigger value="items">Item sales</TabsTrigger>
           <TabsTrigger value="targets">Targets</TabsTrigger>
+          <TabsTrigger value="clear" className="text-destructive data-[state=active]:text-destructive">Clear month</TabsTrigger>
         </TabsList>
         <TabsContent value="daily"><DailySalesForm /></TabsContent>
         <TabsContent value="financials"><FinancialsForm /></TabsContent>
         <TabsContent value="costs"><ItemCostsForm /></TabsContent>
         <TabsContent value="items"><ItemSalesForm /></TabsContent>
         <TabsContent value="targets"><TargetsForm /></TabsContent>
+        <TabsContent value="clear"><ClearMonthForm /></TabsContent>
       </Tabs>
     </div>
   );
@@ -602,6 +604,118 @@ function RecentTable({
           ))}
         </TableBody>
       </Table>
+    </Card>
+  );
+}
+
+/* ---------- Clear month ---------- */
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtMonth(m: string) {
+  const [y, mo] = m.split("-");
+  return `${MONTH_NAMES[Number(mo) - 1]} ${y}`;
+}
+
+function ClearMonthForm() {
+  const [month, setMonth] = useState(currentMonth());
+  const [platform, setPlatform] = useState<Platform | "All">("All");
+  const [phase, setPhase] = useState<"idle" | "confirm">("idle");
+  const invalidate = useInvalidateAll();
+
+  const label = `${fmtMonth(month)}${platform === "All" ? "" : ` · ${platform}`}`;
+
+  const clearMut = useMutation({
+    mutationFn: async () => {
+      const [y, mo] = month.split("-").map(Number);
+      const start = `${month}-01`;
+      const next = mo === 12
+        ? `${y + 1}-01-01`
+        : `${y}-${String(mo + 1).padStart(2, "0")}-01`;
+
+      const tables: Array<{ table: string; dateCol: string; dateIsMonth: boolean }> = [
+        { table: "daily_sales",        dateCol: "date",       dateIsMonth: false },
+        { table: "platform_orders",    dateCol: "order_date", dateIsMonth: false },
+        { table: "monthly_item_sales", dateCol: "month",      dateIsMonth: true  },
+        { table: "monthly_financials", dateCol: "month",      dateIsMonth: true  },
+        { table: "monthly_adjustments",dateCol: "month",      dateIsMonth: true  },
+      ];
+
+      for (const { table, dateCol, dateIsMonth } of tables) {
+        let q = supabase.from(table as any).delete();
+        if (dateIsMonth) {
+          q = (q as any).eq(dateCol, month);
+        } else {
+          q = (q as any).gte(dateCol, start).lt(dateCol, next);
+        }
+        if (platform !== "All") q = (q as any).eq("platform", platform);
+        const { error } = await q;
+        if (error) throw new Error(`${table}: ${error.message}`);
+      }
+    },
+    onSuccess: () => {
+      toast.success(`Cleared ${label}`);
+      setPhase("idle");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Card className="p-6 mt-4 max-w-lg">
+      <div className="flex items-start gap-3 mb-5 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3">
+        <AlertTriangle className="size-5 text-destructive shrink-0 mt-0.5" />
+        <p className="text-sm text-destructive">
+          Deletes <strong>all imported rows</strong> for the chosen month and platform from
+          daily_sales, platform_orders, monthly_item_sales, monthly_financials, and monthly_adjustments.
+          This cannot be undone — the data must be re-imported.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Month</Label>
+          <MonthPicker value={month} onChange={(v) => { setMonth(v); setPhase("idle"); }} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Platform</Label>
+          <Select value={platform} onValueChange={(v) => { setPlatform(v as typeof platform); setPhase("idle"); }}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All platforms</SelectItem>
+              {PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {phase === "idle" && (
+          <Button variant="destructive" className="w-full" onClick={() => setPhase("confirm")}>
+            <Trash2 className="size-4 mr-2" />
+            Clear {label}…
+          </Button>
+        )}
+
+        {phase === "confirm" && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 space-y-3">
+            <p className="text-sm font-medium text-destructive">
+              Are you sure? This will permanently delete all data for <strong>{label}</strong>.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={clearMut.isPending}
+                onClick={() => clearMut.mutate()}
+              >
+                {clearMut.isPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Trash2 className="size-4 mr-2" />}
+                Yes, clear {label}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setPhase("idle")}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
