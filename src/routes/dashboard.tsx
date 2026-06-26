@@ -510,10 +510,10 @@ export function Header({
           <span style={{ color: fresh.color }}>{fresh.text}</span>
         </div>
         <div className="flex items-center justify-end gap-2 mt-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a]" style={{ color: "var(--careem)" }}>
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a] text-white/90">
             All-time sales: {Math.round(allTime.sales).toLocaleString()} JOD
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a]" style={{ color: "var(--primary)" }}>
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a] text-white/90">
             Orders: {allTime.orders.toLocaleString()}
           </span>
         </div>
