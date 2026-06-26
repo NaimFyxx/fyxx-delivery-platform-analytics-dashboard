@@ -982,7 +982,7 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
         .eq("platform", "Careem")
         .eq("month", month);
       if (aerr) throw aerr;
-      payout -= (adj ?? []).reduce((s, a) => s + Number(a.amount), 0);
+      payout += (adj ?? []).reduce((s, a) => s + Number(a.amount), 0);
     }
     const payload = {
       month,
@@ -1410,8 +1410,8 @@ async function buildCareemItems(
 // CLAWBACK (the customer-complaint deduction) is NOT here — it's a real loss and stays in: the
 // clawed-back order still appears as a full positive Delivered order in Order Level, so the
 // clawback is an extra deduction not already reflected.
-// Belt-and-suspenders: buildAdjustments also drops any row with a POSITIVE raw amount, since every
-// genuine deduction is negative in the export — this catches carry-over whatever its exact token.
+// Credits (e.g. COMPENSATIONS) are positive in the export and are real income — do NOT drop them.
+// Only drop rows whose category is a pure cashflow item (carry-over, cashout), not genuine P&L.
 const ADJ_EXCLUDED = new Set([
   "ON_DEMAND_PAYOUT",
   "CARRY_OVER",
@@ -1438,11 +1438,10 @@ async function buildAdjustments(
       skipped++;
       continue;
     }
-    // Keep only genuine payout-reducing deductions. Read the RAW signed amount: deductions are
-    // negative in the export. Drop denylisted categories (cashout) AND any positive line
-    // (carry-over / cashflow), which would otherwise be abs()'d into a bogus deduction.
+    // Store the signed amount from the export: fees are negative, credits (COMPENSATIONS etc.) are
+    // positive. Drop only denylisted cashflow categories (carry-over, cashout).
     const rawAmount = num(r[m.amount]);
-    if (ADJ_EXCLUDED.has(deduction_type.trim().toUpperCase()) || rawAmount > 0) {
+    if (ADJ_EXCLUDED.has(deduction_type.trim().toUpperCase())) {
       filtered++;
       continue;
     }
@@ -1450,7 +1449,7 @@ async function buildAdjustments(
     monthsSet.add(month);
     let order_id = (m.order_id ? (r[m.order_id] ?? "") : "").trim();
     if (!order_id || order_id === "-") order_id = "-";
-    const amount = round3(Math.abs(rawAmount));
+    const amount = round3(rawAmount);
     adjRows.push({
       platform,
       date,
