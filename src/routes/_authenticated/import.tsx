@@ -585,7 +585,7 @@ function CsvFlow({
     setPreview(null);
     try {
       if (!report.positional) saveMapping(report.id, m);
-      let chosenMonth = currentMonth();
+      let chosenMonth: string | null = null;
       if (report.monthSource === "from-columns" && report.monthColumns) {
         const mo = monthFromColumns(rows, report.monthColumns);
         if (!mo)
@@ -593,14 +593,32 @@ function CsvFlow({
             `Could not read ${report.monthColumns.from}/${report.monthColumns.to} from file.`,
           );
         chosenMonth = mo;
+      } else {
+        // Derive the file's dominant month from row dates (most frequent YYYY-MM).
+        // Try mapped date keys first, then the first column (for positional Plus reports).
+        const candidates = [m["order_dt"], m["date"], hdrs[0]].filter(Boolean) as string[];
+        const counts = new Map<string, number>();
+        for (const r of rows) {
+          for (const col of candidates) {
+            const parsed = parseDate(r[col] ?? "");
+            if (parsed) {
+              const mo = parsed.slice(0, 7);
+              counts.set(mo, (counts.get(mo) ?? 0) + 1);
+              break; // one date per row is enough
+            }
+          }
+        }
+        chosenMonth = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
       }
-      const built = await buildPreviewForReport(report, platform, chosenMonth, m, hdrs, rows);
-      built.fileMonth = chosenMonth;
-      // Warn if the file's dates don't match the completeness-panel month the user is targeting.
-      if (chosenMonth !== checklistMonth) {
-        const fmtMonth = (m: string) => {
-          const [y, mo] = m.split("-");
-          return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(mo)-1]} ${y}`;
+      const built = await buildPreviewForReport(
+        report, platform, chosenMonth ?? currentMonth(), m, hdrs, rows,
+      );
+      built.fileMonth = chosenMonth ?? undefined;
+      // Only warn when we actually know the file's month AND it differs from the panel.
+      if (chosenMonth && chosenMonth !== checklistMonth) {
+        const fmtMonth = (mo: string) => {
+          const [y, n] = mo.split("-");
+          return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(n)-1]} ${y}`;
         };
         built.warnings = [
           ...(built.warnings ?? []),
