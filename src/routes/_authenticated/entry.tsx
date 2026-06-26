@@ -638,6 +638,7 @@ function ClearMonthForm() {
         { table: "monthly_item_sales", dateCol: "month",      dateIsMonth: true  },
         { table: "monthly_financials", dateCol: "month",      dateIsMonth: true  },
         { table: "monthly_adjustments",dateCol: "month",      dateIsMonth: true  },
+        { table: "monthly_customers",  dateCol: "month",      dateIsMonth: true  },
       ];
 
       for (const { table, dateCol, dateIsMonth } of tables) {
@@ -666,7 +667,8 @@ function ClearMonthForm() {
         <AlertTriangle className="size-5 text-destructive shrink-0 mt-0.5" />
         <p className="text-sm text-destructive">
           Deletes <strong>all imported rows</strong> for the chosen month and platform from
-          daily_sales, platform_orders, monthly_item_sales, monthly_financials, and monthly_adjustments.
+          daily_sales, platform_orders, monthly_item_sales, monthly_financials, monthly_adjustments,
+          and monthly_customers.
           This cannot be undone — the data must be re-imported.
         </p>
       </div>

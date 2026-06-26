@@ -7,6 +7,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -165,6 +168,49 @@ function InsightsPage() {
     [data, rangeMonths],
   );
 
+  // --- New vs Returning customer data ---
+  const customerRows = useMemo(() => {
+    if (!data) return [];
+    return data.customers.filter((r) => {
+      if (!rangeMonths.includes(r.month)) return false;
+      if (platform !== "All" && r.platform !== platform) return false;
+      return true;
+    });
+  }, [data, rangeMonths, platform]);
+
+  // Per-platform chart series (all months in range).
+  const makeCustomerSeries = (p: string) => {
+    if (!data) return [];
+    const pRows = data.customers.filter((r) => r.platform === p && rangeMonths.includes(r.month));
+    return pRows
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((r) => ({
+        label: monthLabel(r.month),
+        new: r.new,
+        returning: r.returning,
+        reactivated: r.reactivated,
+        retained: Math.max(0, r.returning - r.reactivated),
+        repeatRate: r.overall > 0 ? (r.returning / r.overall) * 100 : null,
+        basis: r.basis,
+      }));
+  };
+
+  // Aggregate KPI tiles for the selected period + platform filter.
+  const customerKpi = useMemo(() => {
+    if (!customerRows.length) return null;
+    const totalNew = customerRows.reduce((s, r) => s + r.new, 0);
+    const totalReturning = customerRows.reduce((s, r) => s + r.returning, 0);
+    const totalOverall = customerRows.reduce((s, r) => s + r.overall, 0);
+    return {
+      pctNew: totalOverall > 0 ? (totalNew / totalOverall) * 100 : null,
+      pctReturning: totalOverall > 0 ? (totalReturning / totalOverall) * 100 : null,
+      totalNew,
+      totalReturning,
+      // Mixed units when "All" — label accordingly
+      hasMultipleBases: platform === "All" && new Set(customerRows.map((r) => r.basis)).size > 1,
+    };
+  }, [customerRows, platform]);
+
   // --- Freshness lookups from import_log ---
   const freshness = useMemo(() => {
     const find = (predicate: (i: { platform: string; reportType: string }) => boolean) => {
@@ -285,6 +331,58 @@ function InsightsPage() {
             )}
           </TierCard>
         </div>
+
+        {/* NEW VS RETURNING */}
+        <SectionLabel>New vs Returning</SectionLabel>
+        {customerKpi && (
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-card border border-border rounded-2xl p-4">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">% Returning (repeat rate)</div>
+              <div className="font-display text-3xl font-semibold">
+                {customerKpi.pctReturning != null ? `${customerKpi.pctReturning.toFixed(1)}%` : "—"}
+              </div>
+              <div className="text-[10.5px] text-muted-foreground mt-1">
+                {Math.round(customerKpi.totalReturning).toLocaleString()} returning /{" "}
+                {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
+                {customerKpi.hasMultipleBases && (
+                  <span className="block mt-0.5 text-amber-600 dark:text-amber-400">
+                    Careem = customers · Talabat = orders — KPI shown for informational comparison only.
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-4">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">% New</div>
+              <div className="font-display text-3xl font-semibold">
+                {customerKpi.pctNew != null ? `${customerKpi.pctNew.toFixed(1)}%` : "—"}
+              </div>
+              <div className="text-[10.5px] text-muted-foreground mt-1">
+                {Math.round(customerKpi.totalNew).toLocaleString()} new /{" "}
+                {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
+              </div>
+            </div>
+          </div>
+        )}
+        {platform === "All" ? (
+          <div className="grid lg:grid-cols-2 gap-3.5 mb-2">
+            <CustomerPanel platform="Careem" series={makeCustomerSeries("Careem")} freshness={freshness.daily} />
+            <CustomerPanel platform="Talabat" series={makeCustomerSeries("Talabat")} freshness={freshness.daily} />
+          </div>
+        ) : (
+          <div className="mb-2">
+            <CustomerPanel platform={platform} series={makeCustomerSeries(platform)} freshness={freshness.daily} />
+          </div>
+        )}
+        {!customerKpi && !data.customers.length && (
+          <div className="bg-card border border-border rounded-2xl p-4 mb-2">
+            <Empty text="No customer data imported yet. Import the Careem 'New, Retained & Reactivated Customers' report and the Talabat 'Sales, Customers & Operations' report." />
+          </div>
+        )}
+        {!customerKpi && !!data.customers.length && (
+          <div className="bg-card border border-border rounded-2xl p-4 mb-2">
+            <Empty text="No customer data for this range / platform. Try All-Time or change the platform filter." />
+          </div>
+        )}
 
         {/* TOP PRODUCTS */}
         <SectionLabel>Top Products — Ranked by Units Sold</SectionLabel>
@@ -724,6 +822,128 @@ function MiniStat({
         style={{ color: accentColor }}
       >
         {value} <span className="text-[10px] text-white/50">{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+type CustomerSeriesRow = {
+  label: string;
+  new: number;
+  returning: number;
+  reactivated: number;
+  retained: number;
+  repeatRate: number | null;
+  basis: string;
+};
+
+function CustomerPanel({
+  platform,
+  series,
+  freshness,
+}: {
+  platform: string;
+  series: CustomerSeriesRow[];
+  freshness: string | null;
+}) {
+  if (!series.length) {
+    return (
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <div className="font-display text-[15px] font-semibold mb-1">{platform}</div>
+        <Empty text={`No ${platform} customer data in this range.`} />
+      </div>
+    );
+  }
+
+  const basis = series[0].basis; // "customers" | "orders"
+  const isCareem = platform === "Careem";
+  // For Careem, split Returning into Retained + Reactivated when reactivated > 0
+  const showSplit = isCareem && series.some((r) => r.reactivated > 0);
+  const yLabel = basis === "customers" ? "Customers" : "Orders";
+  const platformColor = platform === "Careem" ? "var(--careem)" : "var(--talabat)";
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 className="font-display text-[15px] font-semibold">{platform}</h3>
+          <div className="text-[10.5px] text-muted-foreground mt-0.5">
+            Basis: <span className="font-medium">{yLabel}</span> · New vs Returning per month
+          </div>
+        </div>
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+          Data as of {freshness ?? "—"}
+        </span>
+      </div>
+
+      <div className="h-[220px]">
+        <ResponsiveContainer>
+          <ComposedChart data={series} margin={{ top: 4, right: 40, left: 0, bottom: 4 }}>
+            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              stroke="var(--muted-foreground)"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              yAxisId="left"
+              stroke="var(--muted-foreground)"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              width={40}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              stroke="var(--muted-foreground)"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => `${v}%`}
+              domain={[0, 100]}
+              allowDataOverflow
+              width={36}
+            />
+            <Tooltip
+              contentStyle={{
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+              formatter={(v: number, name: string) => {
+                if (name === "Repeat rate %") return [`${Number(v).toFixed(1)}%`, name];
+                return [Math.round(v).toLocaleString(), name];
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
+              iconSize={8}
+            />
+            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="rgba(99,179,237,0.85)" radius={[0, 0, 0, 0]} />
+            {showSplit ? (
+              <>
+                <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="rgba(104,211,145,0.75)" />
+                <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill={platformColor} radius={[3, 3, 0, 0]} />
+              </>
+            ) : (
+              <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill={platformColor} radius={[3, 3, 0, 0]} />
+            )}
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="repeatRate"
+              name="Repeat rate %"
+              stroke="#f5b400"
+              strokeWidth={2}
+              dot={{ fill: "#f5b400", r: 3 }}
+              connectNulls={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

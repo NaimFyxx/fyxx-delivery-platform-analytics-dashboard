@@ -11,7 +11,9 @@ export type ReportId =
   | "careem:menu_item" // C2 — one row per item per period
   | "careem:adjustments" // C4 — monthly deductions (bank fee, Plus contribution)
   | "careem:plus_orders" // Careem Plus skinny file — orders per day
-  | "careem:plus_sales"; // Careem Plus skinny file — sales per day
+  | "careem:plus_sales" // Careem Plus skinny file — sales per day
+  | "careem:customers" // Careem new / retained / reactivated customer counts (daily → monthly)
+  | "talabat:customers"; // Talabat orders from new / returning customers (daily → monthly)
 
 export type MonthSource = "none" | "from-rows" | "from-columns";
 
@@ -32,7 +34,7 @@ export interface ReportDef {
   /** Human click-path inside the portal (shown as a hover tooltip on the link). */
   portalSteps: string;
   /** Primary table the parsed rows are previewed against. */
-  table: "platform_orders" | "daily_sales" | "monthly_item_sales" | "monthly_adjustments";
+  table: "platform_orders" | "daily_sales" | "monthly_item_sales" | "monthly_adjustments" | "monthly_customers";
   fields: FieldDef[];
   optionalFields?: FieldDef[];
   /** Distinctive headers that must be present — used to reject mismatched files. */
@@ -347,6 +349,47 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     signature: [],
     hint: "Daily Careem Plus sales (JOD). Same screen as Plus — Orders — just the other toggle.",
     fields: [],
+  },
+
+  "careem:customers": {
+    id: "careem:customers",
+    platform: "Careem",
+    label: "New, Retained & Reactivated Customers",
+    portalUrl: C_PERF,
+    portalLabel: "Open Business Performance",
+    portalSteps:
+      "Analytics & reports → Business Performance → Customer Type → set date range to a full calendar month → Export. The file is titled 'New, retained, reactivated Customers' with columns: Date, Number of customers - New users, Number of customers - Reactivated users, Number of customers - Retained users.",
+    table: "monthly_customers",
+    monthSource: "from-rows",
+    signature: ["Number of customers - New users", "Number of customers - Retained users"],
+    hint: "Daily new / retained / reactivated customer counts. Aggregated to monthly totals on import. Basis = customers.",
+    fields: [
+      { key: "date", label: "Date", defaults: ["Date"], required: true },
+      { key: "new_users", label: "New users", defaults: ["Number of customers - New users"], required: true },
+      { key: "retained", label: "Retained users", defaults: ["Number of customers - Retained users"], required: true },
+      { key: "reactivated", label: "Reactivated users", defaults: ["Number of customers - Reactivated users"], required: true },
+    ],
+    optionalFields: [],
+  },
+
+  "talabat:customers": {
+    id: "talabat:customers",
+    platform: "Talabat",
+    label: "Sales, Customers & Operations",
+    portalUrl: T_REPORTS,
+    portalLabel: "Open Report builder",
+    portalSteps:
+      "Reports → Create a new report → Customers & Operations → set date range to a full calendar month → Create → download CSV from History. Look for columns: Orders from new customers, Orders from returning customers (the file contains many more columns — those two are all we need).",
+    table: "monthly_customers",
+    monthSource: "from-rows",
+    signature: ["Orders from new customers", "Orders from returning customers"],
+    hint: "Daily orders from new vs returning customers. Basis = orders (not customers — units differ from Careem). Aggregated to monthly totals on import.",
+    fields: [
+      { key: "date", label: "Date", defaults: ["Date"], required: true },
+      { key: "new_orders", label: "Orders from new customers", defaults: ["Orders from new customers"], required: true },
+      { key: "returning_orders", label: "Orders from returning customers", defaults: ["Orders from returning customers"], required: true },
+    ],
+    optionalFields: [],
   },
 };
 
