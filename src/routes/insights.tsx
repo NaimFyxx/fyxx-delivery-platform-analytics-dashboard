@@ -26,6 +26,7 @@ import {
   monthLabel,
   monthsBetween,
   costAsOf,
+  exVat,
   type RangeKey,
   type PlatformKey,
 } from "./dashboard";
@@ -44,7 +45,7 @@ export const Route = createFileRoute("/insights")({
   component: InsightsPage,
 });
 
-type SortKey = "item" | "units" | "revenue" | "cogs" | "cost" | "margin";
+type SortKey = "item" | "units" | "revenue" | "avgPrice" | "cogs" | "cost" | "margin" | "netMargin";
 
 function InsightsPage() {
   const fetchData = useServerFn(getDashboardData);
@@ -96,7 +97,7 @@ function InsightsPage() {
     if (!data) return [];
     const map = new Map<
       string,
-      { item: string; units: number; revenue: number; cogs: number; lastCost: number | null }
+      { item: string; units: number; revenue: number; cogs: number; lastCost: number | null; netPayout: number; netProfit: number }
     >();
     for (const s of data.itemSales) {
       if (!rangeMonths.includes(s.month)) continue;
@@ -109,12 +110,25 @@ function InsightsPage() {
         revenue: 0,
         cogs: 0,
         lastCost: null,
+        netPayout: 0,
+        netProfit: 0,
       };
       row.units += s.units;
-      row.revenue += s.revenue ?? 0;
+      const itemRevenue = s.revenue ?? 0;
+      row.revenue += itemRevenue;
+      const itemCogs = c != null ? s.units * c : 0;
       if (c != null) {
-        row.cogs += s.units * c;
+        row.cogs += itemCogs;
         row.lastCost = c;
+      }
+      // Allocate this month-platform's payout to the item by revenue share (Zeid's formula).
+      // itemPayout = (itemRevenue / monthGross) × monthPayout — scales with order value.
+      // Guard: skip if monthGross ≤ 0 or item has no revenue (avoids nonsense allocations).
+      const finRow = data.financials.find((f) => f.month === s.month && f.platform === s.platform);
+      if (finRow && finRow.gross > 0 && itemRevenue > 0) {
+        const itemPayout = (itemRevenue / finRow.gross) * finRow.payout;
+        row.netPayout += exVat(itemPayout);
+        row.netProfit += exVat(itemPayout) - itemCogs;
       }
       map.set(s.item, row);
     }
@@ -122,14 +136,18 @@ function InsightsPage() {
       ...r,
       margin:
         r.revenue > 0 ? ((r.revenue / (1 + 0.16) - r.cogs) / (r.revenue / (1 + 0.16))) * 100 : 0,
+      netMargin: r.netPayout > 0 ? (r.netProfit / r.netPayout) * 100 : null,
+      avgPrice: r.units > 0 ? r.revenue / r.units : null,
     }));
     rows.sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortBy === "item") return a.item.localeCompare(b.item) * dir;
       if (sortBy === "units") return (a.units - b.units) * dir;
       if (sortBy === "revenue") return (a.revenue - b.revenue) * dir;
+      if (sortBy === "avgPrice") return ((a.avgPrice ?? 0) - (b.avgPrice ?? 0)) * dir;
       if (sortBy === "cogs") return (a.cogs - b.cogs) * dir;
       if (sortBy === "margin") return (a.margin - b.margin) * dir;
+      if (sortBy === "netMargin") return ((a.netMargin ?? -Infinity) - (b.netMargin ?? -Infinity)) * dir;
       return ((a.lastCost ?? 0) - (b.lastCost ?? 0)) * dir;
     });
     return rows;
@@ -201,15 +219,20 @@ function InsightsPage() {
     const totalNew = customerRows.reduce((s, r) => s + r.new, 0);
     const totalReturning = customerRows.reduce((s, r) => s + r.returning, 0);
     const totalOverall = customerRows.reduce((s, r) => s + r.overall, 0);
+    const daysInRange = rangeMonths.reduce((s, m) => {
+      const [y, mo] = m.split("-").map(Number);
+      return s + new Date(y, mo, 0).getDate();
+    }, 0);
     return {
       pctNew: totalOverall > 0 ? (totalNew / totalOverall) * 100 : null,
       pctReturning: totalOverall > 0 ? (totalReturning / totalOverall) * 100 : null,
       totalNew,
       totalReturning,
-      // Mixed units when "All" — label accordingly
+      avgNewPerDay: daysInRange > 0 ? totalNew / daysInRange : null,
+      avgReturningPerDay: daysInRange > 0 ? totalReturning / daysInRange : null,
       hasMultipleBases: platform === "All" && new Set(customerRows.map((r) => r.basis)).size > 1,
     };
-  }, [customerRows, platform]);
+  }, [customerRows, platform, rangeMonths]);
 
   // --- Freshness lookups from import_log ---
   const freshness = useMemo(() => {
@@ -350,6 +373,9 @@ function InsightsPage() {
                   </span>
                 )}
               </div>
+              {customerKpi.avgReturningPerDay != null && (
+                <div className="text-[9.5px] text-muted-foreground mt-0.5">avg {customerKpi.avgReturningPerDay.toFixed(1)}/day</div>
+              )}
             </div>
             <div className="bg-card border border-border rounded-2xl p-4">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">% New</div>
@@ -360,6 +386,9 @@ function InsightsPage() {
                 {Math.round(customerKpi.totalNew).toLocaleString()} new /{" "}
                 {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
               </div>
+              {customerKpi.avgNewPerDay != null && (
+                <div className="text-[9.5px] text-muted-foreground mt-0.5">avg {customerKpi.avgNewPerDay.toFixed(1)}/day</div>
+              )}
             </div>
           </div>
         )}
@@ -450,7 +479,7 @@ function InsightsPage() {
         <SectionLabel>Sales by Item</SectionLabel>
         <Panel
           title="Per-item breakdown"
-          sub="Units, revenue (JOD), COGS (units × cost version active that month), and product margin. Tap a column to sort."
+          sub="Units, revenue, avg price, COGS, product margin (menu price), and Zeid's net margin (allocated payout). Tap a column to sort."
           asOf={freshness.items}
         >
           {items.length === 0 ? (
@@ -460,49 +489,25 @@ function InsightsPage() {
               <table className="w-full text-[12px]">
                 <thead className="bg-background/40 text-muted-foreground sticky top-0">
                   <tr>
-                    <ThSort
-                      label="Item"
-                      col="item"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)}
-                      align="left"
-                    />
-                    <ThSort
-                      label="Units"
-                      col="units"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)}
-                    />
-                    <ThSort
-                      label="Revenue (JOD)"
-                      col="revenue"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)}
-                    />
-                    <ThSort
-                      label="Cost / unit (exVAT)"
-                      col="cost"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)}
-                    />
-                    <ThSort
-                      label="COGS (JOD)"
-                      col="cogs"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)}
-                    />
-                    <ThSort
-                      label="Margin %"
-                      col="margin"
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)}
-                    />
+                    <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" />
+                    <ThSort label="Units" col="units" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Revenue (JOD)" col="revenue" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Avg price/unit" col="avgPrice" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Cost/unit (exVAT)" col="cost" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="COGS (JOD)" col="cogs" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Product margin %" col="margin" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
+                      <button
+                        onClick={() => toggleSort("netMargin", sortBy, sortDir, setSortBy, setSortDir)}
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        title="Zeid's net margin: ex-VAT payout − COGS, over ex-VAT payout. Platform fees are per order, so each month's payout is allocated to items by revenue share."
+                      >
+                        Net margin %
+                        <span className="text-[9px]" style={{ color: sortBy === "netMargin" ? "var(--primary)" : "transparent" }}>
+                          {sortDir === "asc" ? "▲" : "▼"}
+                        </span>
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -514,23 +519,19 @@ function InsightsPage() {
                         {r.revenue > 0 ? Math.round(r.revenue).toLocaleString() : "—"}
                       </td>
                       <td className="px-3 py-2 text-right text-num text-muted-foreground">
+                        {r.avgPrice != null ? r.avgPrice.toFixed(2) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-num text-muted-foreground">
                         {r.lastCost != null ? r.lastCost.toFixed(2) : "—"}
                       </td>
                       <td className="px-3 py-2 text-right text-num">
                         {r.cogs > 0 ? Math.round(r.cogs).toLocaleString() : "—"}
                       </td>
-                      <td
-                        className="px-3 py-2 text-right text-num"
-                        style={{
-                          color:
-                            r.revenue > 0 && r.cogs > 0
-                              ? r.margin >= 45
-                                ? "var(--careem)"
-                                : "#f5b400"
-                              : "var(--muted-foreground)",
-                        }}
-                      >
+                      <td className="px-3 py-2 text-right text-num" style={{ color: r.revenue > 0 && r.cogs > 0 ? r.margin >= 45 ? "var(--careem)" : "#f5b400" : "var(--muted-foreground)" }}>
                         {r.revenue > 0 && r.cogs > 0 ? `${r.margin.toFixed(1)}%` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.netMargin != null ? r.netMargin >= 30 ? "var(--careem)" : r.netMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
+                        {r.netMargin != null ? `${r.netMargin.toFixed(1)}%` : "—"}
                       </td>
                     </tr>
                   ))}
