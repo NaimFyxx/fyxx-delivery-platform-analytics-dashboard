@@ -64,6 +64,7 @@ export interface MonthPickerProps {
 }
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MIN_MONTH = "2025-10";
 
 export function MonthPicker({ value, onChange, placeholder = "Pick a month", className, disabled }: MonthPickerProps) {
   const [open, setOpen] = React.useState(false);
@@ -72,6 +73,11 @@ export function MonthPicker({ value, onChange, placeholder = "Pick a month", cla
   const [year, setYear] = React.useState<number>(valid ? vy : new Date().getFullYear());
 
   React.useEffect(() => { if (valid) setYear(vy); }, [value, valid, vy]);
+
+  const now = new Date();
+  const maxMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [minY] = MIN_MONTH.split("-").map(Number);
+  const [maxY] = maxMonth.split("-").map(Number);
 
   const label = valid
     ? `${MONTH_NAMES[vm - 1]} ${vy}`
@@ -92,16 +98,18 @@ export function MonthPicker({ value, onChange, placeholder = "Pick a month", cla
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3 pointer-events-auto" align="start">
         <div className="flex items-center justify-between mb-3">
-          <Button type="button" size="icon" variant="ghost" onClick={() => setYear((y) => y - 1)}>
+          <Button type="button" size="icon" variant="ghost" disabled={year <= minY} onClick={() => setYear((y) => y - 1)}>
             <ChevronLeft className="size-4" />
           </Button>
           <div className="text-sm font-semibold">{year}</div>
-          <Button type="button" size="icon" variant="ghost" onClick={() => setYear((y) => y + 1)}>
+          <Button type="button" size="icon" variant="ghost" disabled={year >= maxY} onClick={() => setYear((y) => y + 1)}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
           {MONTH_NAMES.map((name, i) => {
+            const monthStr = `${year}-${String(i + 1).padStart(2, "0")}`;
+            const outOfRange = monthStr < MIN_MONTH || monthStr > maxMonth;
             const selected = valid && vy === year && vm === i + 1;
             return (
               <Button
@@ -109,9 +117,10 @@ export function MonthPicker({ value, onChange, placeholder = "Pick a month", cla
                 type="button"
                 size="sm"
                 variant={selected ? "default" : "ghost"}
+                disabled={outOfRange}
                 className={cn("h-8 text-xs", selected && "bg-primary text-primary-foreground")}
                 onClick={() => {
-                  onChange(`${year}-${String(i + 1).padStart(2, "0")}`);
+                  onChange(monthStr);
                   setOpen(false);
                 }}
               >
