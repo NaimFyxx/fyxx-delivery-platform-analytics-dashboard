@@ -132,7 +132,7 @@ function useImportStatus(month: string) {
           .select("platform,sales_jod,cplus_orders,cplus_sales_jod")
           .gte("date", start)
           .lt("date", next),
-        supabase.from("monthly_item_sales").select("platform").eq("month", month),
+        supabase.from("monthly_item_sales").select("platform,revenue_jod").eq("month", month),
         supabase.from("monthly_financials").select("platform,gross_sales").eq("month", month),
         supabase.from("monthly_adjustments").select("platform").eq("month", month),
       ]);
@@ -143,7 +143,7 @@ function useImportStatus(month: string) {
         aj = adj.data ?? [];
       const orderRows = (p: Platform) => od.some((r) => r.platform === p);
       const dailyReal = (p: Platform) => dl.some((r) => r.platform === p && Number(r.sales_jod) > 0);
-      const itemsHas = (p: Platform) => it.some((r) => r.platform === p);
+      const itemsReal = (p: Platform) => it.some((r) => r.platform === p && Number(r.revenue_jod) > 0);
       const finReal = (p: Platform) => fn.some((r) => r.platform === p && Number(r.gross_sales) > 0);
       const adjHas = (p: Platform) => aj.some((r) => r.platform === p);
       const cplusO = dl.some((r) => r.platform === "Careem" && Number(r.cplus_orders) > 0);
@@ -152,9 +152,9 @@ function useImportStatus(month: string) {
         slot: {
           "talabat:order_report": orderRows("Talabat"),
           "talabat:performance": dailyReal("Talabat"),
-          "talabat:menu_item": itemsHas("Talabat"),
+          "talabat:menu_item": itemsReal("Talabat"),
           "careem:order_level": orderRows("Careem"),
-          "careem:menu_item": itemsHas("Careem"),
+          "careem:menu_item": itemsReal("Careem"),
           "careem:adjustments": adjHas("Careem"),
           "careem:plus_orders": cplusO,
           "careem:plus_sales": cplusS,
@@ -162,12 +162,12 @@ function useImportStatus(month: string) {
         platform: {
           Talabat: {
             daily: dailyReal("Talabat"),
-            items: itemsHas("Talabat"),
+            items: itemsReal("Talabat"),
             financials: finReal("Talabat"),
           },
           Careem: {
             daily: dailyReal("Careem"),
-            items: itemsHas("Careem"),
+            items: itemsReal("Careem"),
             financials: finReal("Careem"),
           },
         },
