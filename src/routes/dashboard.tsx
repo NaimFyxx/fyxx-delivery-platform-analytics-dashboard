@@ -171,8 +171,8 @@ function PublicDashboard() {
         const k = computeKpis(a);
         return {
           label: monthLabel(a.month),
-          net: Number(k.netMargin.toFixed(1)),
-          prod: Number(k.prodMargin.toFixed(1)),
+          net: a.payout > 0 ? Number(k.netMargin.toFixed(1)) : null,
+          prod: a.gross > 0 ? Number(k.prodMargin.toFixed(1)) : null,
         };
       }),
     [monthAggs],
@@ -248,13 +248,13 @@ function PublicDashboard() {
         const gross = v.Talabat + v.Careem;
         const payout = gross * payoutRatio;
         const cogs = exVat(gross) * costRatio;
-        const prod = gross ? ((exVat(gross) - cogs) / exVat(gross)) * 100 : 0;
-        const net = payout ? ((exVat(payout) - cogs) / exVat(payout)) * 100 : 0;
+        const prod = gross > 0 ? ((exVat(gross) - cogs) / exVat(gross)) * 100 : null;
+        const net = payout > 0 ? ((exVat(payout) - cogs) / exVat(payout)) * 100 : null;
         arr.push({
           label: `${monthLabel(m).split(" ")[0]} ${d}`,
           Talabat: v.Talabat, Careem: v.Careem,
           gross, prod, net, profit: exVat(payout) - cogs,
-          drag: prod - net, target: 45,
+          drag: prod != null && net != null ? prod - net : null, target: 45,
         });
       }
       return arr;
@@ -267,14 +267,15 @@ function PublicDashboard() {
       const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
         data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
       const agg = monthAggs.find((a) => a.month === m)!;
-      const prod = agg.gross ? ((exVat(agg.gross) - agg.cogs) / exVat(agg.gross)) * 100 : 0;
-      const net = agg.payout ? ((exVat(agg.payout) - agg.cogs) / exVat(agg.payout)) * 100 : 0;
+      const prod = agg.gross > 0 ? ((exVat(agg.gross) - agg.cogs) / exVat(agg.gross)) * 100 : null;
+      const net = agg.payout > 0 ? ((exVat(agg.payout) - agg.cogs) / exVat(agg.payout)) * 100 : null;
       const profit = exVat(agg.payout) - agg.cogs;
       return {
         label: monthLabel(m),
         Talabat: platforms.includes("Talabat") ? talabat : 0,
         Careem: platforms.includes("Careem") ? careem : 0,
-        gross: agg.gross, prod, net, profit, drag: prod - net, target: 45,
+        gross: agg.gross, prod, net, profit,
+        drag: prod != null && net != null ? prod - net : null, target: 45,
       };
     });
   }, [data, rangeIsSingleMonth, rangeMonths, monthAggs, platforms, currentMonth, today]);
