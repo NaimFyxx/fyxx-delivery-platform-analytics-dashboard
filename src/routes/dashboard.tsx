@@ -164,6 +164,20 @@ function PublicDashboard() {
   const kpis = computeKpis(totals);
   const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
 
+  // Monthly margin series — always uses monthAggs so it matches the KPI headline exactly.
+  const marginTrend = useMemo(
+    () =>
+      monthAggs.map((a) => {
+        const k = computeKpis(a);
+        return {
+          label: monthLabel(a.month),
+          net: Number(k.netMargin.toFixed(1)),
+          prod: Number(k.prodMargin.toFixed(1)),
+        };
+      }),
+    [monthAggs],
+  );
+
   // --- Pace tracker: always current month, ignores range filter ---
   // Always shows the current month, but respects the platform filter
   // (single platform → only that row). Mirrors the GM tracking sheet:
@@ -363,6 +377,57 @@ function PublicDashboard() {
             </ResponsiveContainer>
           </ChartCard>
         </div>
+
+        {marginTrend.length >= 2 && (
+          <>
+            <SectionLabel>Margin Trend · Monthly</SectionLabel>
+            <ChartCard
+              title="Net Margin over Time"
+              sub="Monthly net margin (after platform cut) vs product margin — always from monthly totals, matching the KPI cards above"
+            >
+              <ResponsiveContainer>
+                <LineChart data={marginTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                  <CartesianGrid stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                  <YAxis
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                    domain={[0, 55]}
+                  />
+                  <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)}%`} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLine
+                    y={45}
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="6 4"
+                    label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="prod"
+                    name="Product margin %"
+                    stroke="var(--primary)"
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: "var(--primary)" }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="net"
+                    name="Net margin after commission %"
+                    stroke="var(--careem)"
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: "var(--careem)" }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </>
+        )}
 
         <SectionLabel>Profitability Detail</SectionLabel>
         <div className="grid lg:grid-cols-2 gap-3.5">
