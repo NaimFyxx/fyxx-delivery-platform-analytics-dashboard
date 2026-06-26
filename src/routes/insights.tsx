@@ -861,7 +861,6 @@ function CustomerPanel({
   // For Careem, split Returning into Retained + Reactivated when reactivated > 0
   const showSplit = isCareem && series.some((r) => r.reactivated > 0);
   const yLabel = basis === "customers" ? "Customers" : "Orders";
-  const platformColor = platform === "Careem" ? "var(--careem)" : "var(--talabat)";
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
@@ -924,14 +923,14 @@ function CustomerPanel({
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconSize={8}
             />
-            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="rgba(99,179,237,0.85)" radius={[0, 0, 0, 0]} />
+            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="#C8B89B" radius={[0, 0, 0, 0]} />
             {showSplit ? (
               <>
-                <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="rgba(104,211,145,0.75)" />
-                <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill={platformColor} radius={[3, 3, 0, 0]} />
+                <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="rgba(46,110,102,0.45)" />
+                <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />
               </>
             ) : (
-              <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill={platformColor} radius={[3, 3, 0, 0]} />
+              <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />
             )}
             <Line
               yAxisId="right"
