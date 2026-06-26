@@ -107,6 +107,10 @@ type Preview = {
   coverRange?: string;
   /** If set, a checkbox with this label must be ticked before Confirm is enabled. */
   requireConfirm?: string;
+  /** The month this file's data belongs to (YYYY-MM), so we can warn on mismatch. */
+  fileMonth?: string;
+  /** Non-blocking warnings (shown prominently but don't disable Confirm). */
+  warnings?: string[];
   rowFlags: boolean[]; // exists? per preview row
 };
 
@@ -242,6 +246,7 @@ function ImportPage() {
           platform={platform}
           qc={qc}
           step={step as 3 | 4}
+          checklistMonth={checklistMonth}
           goNext={() => setStep(4)}
           goBack={() => setStep(step === 4 ? 3 : 2)}
           onDone={restart}
@@ -547,6 +552,7 @@ function CsvFlow({
   platform,
   qc,
   step,
+  checklistMonth,
   goNext,
   goBack,
   onDone,
@@ -555,6 +561,7 @@ function CsvFlow({
   platform: Platform;
   qc: ReturnType<typeof useQueryClient>;
   step: 3 | 4;
+  checklistMonth: string;
   goNext: () => void;
   goBack: () => void;
   onDone: () => void;
@@ -588,6 +595,18 @@ function CsvFlow({
         chosenMonth = mo;
       }
       const built = await buildPreviewForReport(report, platform, chosenMonth, m, hdrs, rows);
+      built.fileMonth = chosenMonth;
+      // Warn if the file's dates don't match the completeness-panel month the user is targeting.
+      if (chosenMonth !== checklistMonth) {
+        const fmtMonth = (m: string) => {
+          const [y, mo] = m.split("-");
+          return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(mo)-1]} ${y}`;
+        };
+        built.warnings = [
+          ...(built.warnings ?? []),
+          `This file's dates are ${fmtMonth(chosenMonth)}, but the completeness panel is set to ${fmtMonth(checklistMonth)}. Double-check you exported the right date range.`,
+        ];
+      }
       setPreview(built);
       setConfirmChecked(false);
       return true;
@@ -850,6 +869,12 @@ function CsvFlow({
               Covers <span className="font-mono font-medium text-foreground">{preview.coverRange}</span>
             </div>
           )}
+          {preview.warnings?.map((w, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+              <AlertCircle className="size-4 shrink-0 mt-0.5" />
+              <span>{w}</span>
+            </div>
+          ))}
           {preview.blockReason && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
               <AlertCircle className="size-4 shrink-0 mt-0.5" />
@@ -1615,6 +1640,17 @@ async function buildPlus(
     previewRows.push({ Date: date, [label]: isOrders ? fmtInt(v) : fmtJOD(v) });
   }
   const willUpdate = rowFlags.filter(Boolean).length;
+  const lowerValueCol = valueCol.toLowerCase();
+  const looksLikeOverall =
+    lowerValueCol.includes("overall") ||
+    (!lowerValueCol.includes("plus") && !lowerValueCol.includes("careem"));
+  const warnings: string[] = looksLikeOverall
+    ? [
+        `The value column is "${valueCol}" — this looks like the Overall line, not the Careem Plus segment. Select the "Careem Plus / non-Careem Plus" segment in Sales Performance before exporting.`,
+      ]
+    : [];
+  const allDates = Array.from(grouped.keys()).sort();
+  const coverRange = allDates.length > 0 ? `${allDates[0]} → ${allDates[allDates.length - 1]}` : undefined;
   const notes = [
     `Value read from the 2nd column ("${valueCol}") — its header is ignored.`,
     `Writes Careem Plus ${isOrders ? "orders" : "sales"} into daily_sales (loyalty), without touching the overall totals.`,
@@ -1629,6 +1665,8 @@ async function buildPlus(
     previewCols: ["Date", label],
     previewRows,
     rowFlags,
+    warnings,
+    coverRange,
   };
 }
 
