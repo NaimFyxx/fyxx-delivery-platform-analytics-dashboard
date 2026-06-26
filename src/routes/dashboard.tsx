@@ -174,13 +174,22 @@ function PublicDashboard() {
   }
 
   // Monthly margin series — always uses monthAggs so it matches the KPI headline exactly.
+  // Trailing-average entries are non-null only when ≥ 2 prior months exist (avoids misleading single-month "averages").
   const marginTrend = useMemo(
     () =>
-      monthAggs.map((a) => ({
-        label: monthLabel(a.month),
-        net: pct(exVat(a.payout) - a.cogs, exVat(a.payout)),
-        prod: pct(exVat(a.gross) - a.cogs, exVat(a.gross)),
-      })),
+      monthAggs.map((a, i, arr) => {
+        const win = arr.slice(Math.max(0, i - 2), i + 1);
+        const validNets = win.map((w) => pct(exVat(w.payout) - w.cogs, exVat(w.payout))).filter((v): v is number => v !== null);
+        const validProds = win.map((w) => pct(exVat(w.gross) - w.cogs, exVat(w.gross))).filter((v): v is number => v !== null);
+        const trailEnough = win.length >= 2;
+        return {
+          label: monthLabel(a.month),
+          net: pct(exVat(a.payout) - a.cogs, exVat(a.payout)),
+          prod: pct(exVat(a.gross) - a.cogs, exVat(a.gross)),
+          netTrail: trailEnough && validNets.length >= 2 ? validNets.reduce((s, v) => s + v, 0) / validNets.length : null,
+          prodTrail: trailEnough && validProds.length >= 2 ? validProds.reduce((s, v) => s + v, 0) / validProds.length : null,
+        };
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [monthAggs],
   );
@@ -227,6 +236,20 @@ function PublicDashboard() {
     };
   }, [data, currentMonth, today]);
 
+  // Distinct dates with any data in range + platform filter (used for avg/day KPI sub-stats).
+  const activeDays = useMemo(() => {
+    if (!data) return 1;
+    const set = new Set(
+      data.daily
+        .filter((d) => rangeMonths.includes(monthOfDate(d.date)) && platforms.includes(d.platform))
+        .map((d) => d.date),
+    );
+    return Math.max(1, set.size);
+  }, [data, rangeMonths, platforms]);
+
+  // Toggle for the 3-month trailing-average lines on the margin trend chart (off by default).
+  const [showTrailing, setShowTrailing] = useState(false);
+
   // --- Chart series ---
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -262,7 +285,13 @@ function PublicDashboard() {
           Talabat: v.Talabat, Careem: v.Careem,
           gross, prod, net, profit: exVat(payout) - cogs,
           drag: prod != null && net != null ? prod - net : null, target: 45,
+          avg7d: 0, // filled below
         });
+      }
+      // 7-day rolling average over the filtered daily gross
+      for (let i = 0; i < arr.length; i++) {
+        const win = arr.slice(Math.max(0, i - 6), i + 1);
+        arr[i].avg7d = win.reduce((s, r) => s + r.gross, 0) / win.length;
       }
       return arr;
     }
@@ -339,10 +368,12 @@ function PublicDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
           <Kpi label="Sales (incl VAT)" value={`${Math.round(kpis.gross).toLocaleString()}`} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
-               prior={priorKpis ? `Prior: ${Math.round(priorKpis.gross).toLocaleString()} JOD` : platformContext(platform)} />
+               prior={priorKpis ? `Prior: ${Math.round(priorKpis.gross).toLocaleString()} JOD` : platformContext(platform)}
+               sub={`avg ${Math.round(kpis.gross / activeDays).toLocaleString()} JOD/day`} />
           <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "—"} unit="JOD"
                delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
-               prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"} />
+               prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"}
+               sub={`avg ${(kpis.orders / activeDays).toFixed(1)} orders/day`} />
           <Kpi label="Product Margin" value={kpis.prodMargin.toFixed(1)} unit="%"
                delta={priorKpis ? ptDelta(kpis.prodMargin, priorKpis.prodMargin) : null}
                prior={priorKpis ? `Prior: ${priorKpis.prodMargin.toFixed(1)}%` : "on menu price exVAT"} />
@@ -358,15 +389,18 @@ function PublicDashboard() {
         <div className="grid lg:grid-cols-2 gap-3.5">
           <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"}>
             <ResponsiveContainer>
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip {...tooltipStyle} />
+                <Tooltip {...tooltipStyle} formatter={(v: number, name: string) => name === "7-day avg" ? `${Math.round(v)} JOD` : `${Math.round(v)} JOD`} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {platforms.includes("Talabat") && <Bar dataKey="Talabat" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--talabat)" radius={[3, 3, 0, 0]} />}
                 {platforms.includes("Careem") && <Bar dataKey="Careem" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--careem)" radius={[3, 3, 0, 0]} />}
-              </BarChart>
+                {rangeIsSingleMonth && (
+                  <Line type="monotone" dataKey="avg7d" name="7-day avg" stroke="#f5b400" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                )}
+              </ComposedChart>
             </ResponsiveContainer>
           </ChartCard>
           <ChartCard title="Two Margins Compared" sub="Product margin vs what you keep after the platform's cut">
@@ -392,6 +426,19 @@ function PublicDashboard() {
             <ChartCard
               title="Net Margin over Time"
               sub="Monthly net margin (after platform cut) vs product margin — always from monthly totals, matching the KPI cards above"
+              action={
+                marginTrend.some((d) => d.netTrail !== null) ? (
+                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={showTrailing}
+                      onChange={(e) => setShowTrailing(e.target.checked)}
+                    />
+                    3m trailing avg
+                  </label>
+                ) : null
+              }
             >
               <ResponsiveContainer>
                 <LineChart data={marginTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -414,24 +461,10 @@ function PublicDashboard() {
                     strokeDasharray="6 4"
                     label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="prod"
-                    name="Product margin %"
-                    stroke="var(--primary)"
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: "var(--primary)" }}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="net"
-                    name="Net margin after commission %"
-                    stroke="var(--careem)"
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: "var(--careem)" }}
-                    activeDot={{ r: 5 }}
-                  />
+                  <Line type="monotone" dataKey="prod" name="Product margin %" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)" }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="net" name="Net margin after commission %" stroke="var(--careem)" strokeWidth={2} dot={{ r: 4, fill: "var(--careem)" }} activeDot={{ r: 5 }} />
+                  {showTrailing && <Line type="monotone" dataKey="prodTrail" name="Product margin 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line type="monotone" dataKey="netTrail" name="Net margin 3m avg" stroke="var(--careem)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -586,13 +619,14 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Kpi({
-  label, value, unit, delta, prior,
+  label, value, unit, delta, prior, sub,
 }: {
   label: string;
   value: string;
   unit: string;
   delta: { up: boolean; text: string; good: boolean } | null;
   prior: string;
+  sub?: string;
 }) {
   const deltaColor = !delta ? "var(--muted-foreground)" : delta.good ? "var(--careem)" : "var(--destructive)";
   return (
@@ -605,14 +639,18 @@ function Kpi({
         {delta ? delta.text : "no prior period"}
       </div>
       <div className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border">{prior}</div>
+      {sub && <div className="text-[9.5px] text-muted-foreground mt-0.5">{sub}</div>}
     </div>
   );
 }
 
-function ChartCard({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
+function ChartCard({ title, sub, children, action }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
-      <h3 className="font-display text-[15px] font-semibold">{title}</h3>
+      <div className="flex items-start justify-between gap-2 mb-0.5">
+        <h3 className="font-display text-[15px] font-semibold">{title}</h3>
+        {action}
+      </div>
       <div className="text-[10.5px] text-muted-foreground mb-3">{sub}</div>
       <div className="h-[230px]">{children}</div>
     </div>
