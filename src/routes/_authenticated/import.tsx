@@ -406,6 +406,16 @@ function Step2Report({
                   )}
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
+                {!imported && r.id === "careem:plus_orders" && (
+                  <div className="text-[10.5px] text-primary/70 mt-1.5">
+                    Tip: same export as Plus — Sales, just flip the toggle to ORDERS.
+                  </div>
+                )}
+                {!imported && r.id === "careem:plus_sales" && (
+                  <div className="text-[10.5px] text-primary/70 mt-1.5">
+                    Tip: same export as Plus — Orders, just flip the toggle to SALES.
+                  </div>
+                )}
               </button>
               <div className="flex items-center justify-between gap-2 mt-2 text-[10.5px]">
                 <span>
