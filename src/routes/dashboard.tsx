@@ -155,10 +155,11 @@ function PublicDashboard() {
   // All-time totals (ignore filters — everything since day one)
   const allTime = useMemo(() => {
     if (!data) return { sales: 0, orders: 0 };
-    return data.daily.reduce(
-      (acc, d) => ({ sales: acc.sales + d.sales, orders: acc.orders + (d.orders ?? 0) }),
-      { sales: 0, orders: 0 },
-    );
+    // Use monthly_financials for sales — same source as the KPI — so the header pill
+    // always agrees with the KPI when range=all / platform=All.
+    const sales = data.financials.reduce((s, r) => s + r.gross, 0);
+    const orders = data.daily.reduce((s, d) => s + (d.orders ?? 0), 0);
+    return { sales, orders };
   }, [data]);
 
   const kpis = computeKpis(totals);
@@ -402,7 +403,8 @@ function PublicDashboard() {
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `${v}%`}
-                    domain={[0, 55]}
+                    domain={[0, 100]}
+                    allowDataOverflow
                   />
                   <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)}%`} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
