@@ -202,10 +202,11 @@ function InsightsPage() {
     );
   }
 
-  const allTime = data.daily.reduce(
-    (acc, d) => ({ sales: acc.sales + d.sales, orders: acc.orders + (d.orders ?? 0) }),
-    { sales: 0, orders: 0 },
-  );
+  // Use monthly_financials for sales — same source as the dashboard pill.
+  const allTime = {
+    sales: data.financials.reduce((s, r) => s + r.gross, 0),
+    orders: data.daily.reduce((s, d) => s + (d.orders ?? 0), 0),
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
