@@ -72,7 +72,13 @@ export const Route = createFileRoute("/_authenticated/import")({
 });
 
 /** A direct upsert batch. */
-type UpsertGroup = { table: string; onConflict: string; rows: Record<string, unknown>[] };
+type UpsertGroup = {
+  table: string;
+  onConflict: string;
+  rows: Record<string, unknown>[];
+  /** If set, delete matching rows before upserting (replace-by-slice semantics). */
+  replace?: { column: string; values: string[]; match?: Record<string, unknown> };
+};
 /** Read-back rollups run after the upserts land (keeps re-imports idempotent). */
 type Reconcile = {
   careemDailyDates?: string[];
@@ -631,6 +637,17 @@ function CsvFlow({
     mutationFn: async () => {
       if (!preview) return;
       for (const g of preview.upserts) {
+        if (g.replace) {
+          // Delete the existing (platform, month) slice before inserting fresh rows so that
+          // corrected values (e.g. sign fixes) fully replace stale rows rather than duplicating.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let q = (supabase.from(g.table as any) as any).delete().in(g.replace.column, g.replace.values);
+          if (g.replace.match) {
+            for (const [k, v] of Object.entries(g.replace.match)) q = q.eq(k, v);
+          }
+          const { error: delErr } = await q;
+          if (delErr) throw delErr;
+        }
         for (let i = 0; i < g.rows.length; i += 500) {
           const chunk = g.rows.slice(i, i + 500);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1463,9 +1480,9 @@ async function buildAdjustments(
   }
   const months = Array.from(monthsSet).sort();
   const notes = [
-    `${adjRows.length} deduction(s) → monthly_adjustments (stored positive; subtracted from the order-derived payout).`,
+    `${adjRows.length} adjustment row(s) → monthly_adjustments (signed: fees negative, credits positive).`,
     filtered
-      ? `${filtered} row(s) excluded as cashout / carry-over (ON_DEMAND_PAYOUT, rollover, or any positive cashflow line).`
+      ? `${filtered} row(s) excluded as cashout / carry-over (ON_DEMAND_PAYOUT or rollover categories).`
       : "",
     `Monthly financials payout recomputed for ${months.join(", ")}.`,
     "Re-importing the same export is safe — rows dedupe on (date, type, order, amount).",
@@ -1477,6 +1494,7 @@ async function buildAdjustments(
         table: "monthly_adjustments",
         onConflict: "platform,date,deduction_type,order_id,amount",
         rows: adjRows,
+        replace: { column: "month", values: months, match: { platform } },
       },
     ],
     reconcile: { financials: { platform, months } },
