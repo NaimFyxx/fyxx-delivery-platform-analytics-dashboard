@@ -155,45 +155,6 @@ export type Database = {
         }
         Relationships: []
       }
-      monthly_customers: {
-        Row: {
-          basis: string
-          created_at: string
-          id: string
-          month: string
-          new: number
-          overall: number
-          platform: string
-          reactivated: number
-          returning: number
-          updated_at: string
-        }
-        Insert: {
-          basis: string
-          created_at?: string
-          id?: string
-          month: string
-          new?: number
-          overall?: number
-          platform: string
-          reactivated?: number
-          returning?: number
-          updated_at?: string
-        }
-        Update: {
-          basis?: string
-          created_at?: string
-          id?: string
-          month?: string
-          new?: number
-          overall?: number
-          platform?: string
-          reactivated?: number
-          returning?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
       monthly_financials: {
         Row: {
           actual_payout: number
