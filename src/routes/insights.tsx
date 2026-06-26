@@ -266,7 +266,7 @@ function InsightsPage() {
             ) : !careemTiers.hasSub ? (
               <Empty text="No Careem+ figures imported for this range. Import the Careem Plus — Orders and Sales files." />
             ) : (
-              <TierBody t={careemTiers} subLabel="C+" colorVar="var(--careem)" />
+              <TierBody t={careemTiers} subLabel="C+" colorVar="var(--careem)" barColor="#5fd0a3" />
             )}
           </TierCard>
           <TierCard
@@ -280,7 +280,7 @@ function InsightsPage() {
             ) : !talabatTiers.hasSub ? (
               <Empty text="No Talabat Pro figures imported for this range. Import the Performance Report with the Pro Orders / Pro Revenue columns." />
             ) : (
-              <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat)" />
+              <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat)" barColor="#ff8c42" />
             )}
           </TierCard>
         </div>
@@ -607,21 +607,29 @@ function buildTiers(
   const totalOrders = rows.reduce((s, r) => s + r.orders, 0);
   const subSales = rows.reduce((s, r) => s + getSubSales(r), 0);
   const subOrders = rows.reduce((s, r) => s + getSubOrders(r), 0);
+  // Clamp regular figures — Plus data can cover a different date window than overall,
+  // making subSales > totalSales and producing negative regular AOV / >100% share.
+  const regSales = Math.max(0, totalSales - subSales);
+  const regOrders = Math.max(0, totalOrders - subOrders);
   return {
     totalSales,
     totalOrders,
     subSales,
     subOrders,
-    nonSales: Math.max(0, totalSales - subSales),
-    nonOrders: Math.max(0, totalOrders - subOrders),
+    nonSales: regSales,
+    nonOrders: regOrders,
     subAov: subOrders > 0 ? subSales / subOrders : 0,
-    regAov: totalOrders - subOrders > 0 ? (totalSales - subSales) / (totalOrders - subOrders) : 0,
+    regAov: regOrders > 0 ? regSales / regOrders : 0,
     overallAov: totalOrders > 0 ? totalSales / totalOrders : 0,
     hasSub: subSales > 0 || subOrders > 0,
   };
 }
 
-function TierBody({ t, subLabel, colorVar }: { t: Tiers; subLabel: string; colorVar: string }) {
+function TierBody({
+  t, subLabel, colorVar, barColor,
+}: {
+  t: Tiers; subLabel: string; colorVar: string; barColor: string;
+}) {
   const sharePctSales = t.totalSales > 0 ? (t.subSales / t.totalSales) * 100 : 0;
   const sharePctOrders = t.totalOrders > 0 ? (t.subOrders / t.totalOrders) * 100 : 0;
   return (
@@ -632,7 +640,7 @@ function TierBody({ t, subLabel, colorVar }: { t: Tiers; subLabel: string; color
         other={t.nonSales}
         pct={sharePctSales}
         unit="JOD"
-        colorVar={colorVar}
+        barColor={barColor}
       />
       <ShareRow
         label="Orders share"
@@ -640,11 +648,11 @@ function TierBody({ t, subLabel, colorVar }: { t: Tiers; subLabel: string; color
         other={t.nonOrders}
         pct={sharePctOrders}
         unit="orders"
-        colorVar={colorVar}
+        barColor={barColor}
       />
       <div className="grid grid-cols-3 gap-2 pt-2">
         <MiniStat label={`${subLabel} AOV`} value={t.subAov.toFixed(2)} unit="JOD" accentColor={colorVar} />
-        <MiniStat label="Regular AOV" value={t.regAov.toFixed(2)} unit="JOD" />
+        <MiniStat label="Regular AOV" value={t.nonOrders > 0 ? t.regAov.toFixed(2) : "—"} unit={t.nonOrders > 0 ? "JOD" : ""} />
         <MiniStat label="Overall AOV" value={t.overallAov.toFixed(2)} unit="JOD" />
       </div>
     </div>
@@ -657,14 +665,14 @@ function ShareRow({
   other,
   pct,
   unit,
-  colorVar,
+  barColor,
 }: {
   label: string;
   sub: number;
   other: number;
   pct: number;
   unit: string;
-  colorVar: string;
+  barColor: string;
 }) {
   const cap = Math.max(0, Math.min(pct, 100));
   return (
@@ -672,7 +680,7 @@ function ShareRow({
       <div className="flex items-center justify-between text-[11px] mb-1">
         <span className="text-white/60">{label}</span>
         <span className="text-num">
-          <span className="font-semibold" style={{ color: colorVar }}>
+          <span className="font-semibold text-white">
             {Math.round(sub).toLocaleString()}
           </span>
           <span className="text-white/50">
@@ -680,19 +688,15 @@ function ShareRow({
             / {Math.round(sub + other).toLocaleString()} {unit}
           </span>
           <span className="ml-2 font-semibold text-white">
-            ({pct.toFixed(1)}%)
+            ({Math.min(100, pct).toFixed(1)}%)
           </span>
         </span>
       </div>
       <div
         className="h-2 rounded-md overflow-hidden flex"
-        style={{ background: "rgba(255,255,255,0.08)" }}
+        style={{ background: "rgba(255,255,255,0.15)" }}
       >
-        <div className="h-full transition-all" style={{ width: `${cap}%`, background: colorVar }} />
-        <div
-          className="h-full transition-all"
-          style={{ width: `${100 - cap}%`, background: "rgba(255,255,255,0.12)" }}
-        />
+        <div className="h-full transition-all" style={{ width: `${cap}%`, background: barColor }} />
       </div>
     </div>
   );
