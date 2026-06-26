@@ -634,7 +634,7 @@ function ClearMonthForm() {
 
       const tables: Array<{ table: string; dateCol: string; dateIsMonth: boolean }> = [
         { table: "daily_sales",        dateCol: "date",       dateIsMonth: false },
-        { table: "platform_orders",    dateCol: "order_date", dateIsMonth: false },
+        { table: "platform_orders",    dateCol: "date",       dateIsMonth: false },
         { table: "monthly_item_sales", dateCol: "month",      dateIsMonth: true  },
         { table: "monthly_financials", dateCol: "month",      dateIsMonth: true  },
         { table: "monthly_adjustments",dateCol: "month",      dateIsMonth: true  },
