@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
+import { InfoTip } from "@/components/fyxx/info-tip";
+import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
@@ -49,27 +50,7 @@ export const Route = createFileRoute("/insights")({
 type SortKey = "item" | "units" | "revenue" | "avgPrice" | "cogs" | "cost" | "margin" | "commMargin" | "netMargin";
 
 function InsightsPage() {
-  const nav = useNavigate();
-  const [adminUser, setAdminUser] = useState<{ email: string } | null>(null);
-  const [sessionChecked, setSessionChecked] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        localStorage.setItem("tgr_dash_unlock", "1");
-        setAdminUser({ email: data.user.email ?? "" });
-      } else if (localStorage.getItem("tgr_dash_unlock") !== "1") {
-        nav({ to: "/" });
-        return;
-      }
-      setSessionChecked(true);
-    });
-  }, [nav]);
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    nav({ to: "/auth" });
-  }
+  const { adminUser, sessionChecked, handleSignOut } = useSoftGate();
 
   const fetchData = useServerFn(getDashboardData);
   const { data, isLoading } = useQuery({
@@ -353,7 +334,7 @@ function InsightsPage() {
         {customerKpi && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="bg-card border border-border rounded-2xl p-4">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">% Returning (repeat rate)</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% Returning (repeat rate)<InfoTip id="repeat_rate" side="bottom" /></div>
               <div className="font-display text-3xl font-semibold">
                 {customerKpi.pctReturning != null ? `${customerKpi.pctReturning.toFixed(1)}%` : "—"}
               </div>
@@ -371,7 +352,7 @@ function InsightsPage() {
               )}
             </div>
             <div className="bg-card border border-border rounded-2xl p-4">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">% New</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% New<InfoTip id="new_customers" side="bottom" /></div>
               <div className="font-display text-3xl font-semibold">
                 {customerKpi.pctNew != null ? `${customerKpi.pctNew.toFixed(1)}%` : "—"}
               </div>
@@ -483,35 +464,39 @@ function InsightsPage() {
                 <thead className="bg-background text-muted-foreground sticky top-0">
                   <tr>
                     <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" className="sticky left-0 z-20 bg-background border-r border-border" />
-                    <ThSort label="Units" col="units" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
-                    <ThSort label="Revenue (JOD)" col="revenue" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
-                    <ThSort label="Avg price/unit" col="avgPrice" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
-                    <ThSort label="Cost/unit (exVAT)" col="cost" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
-                    <ThSort label="COGS (JOD)" col="cogs" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
-                    <ThSort label="Product margin %" col="margin" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
+                    <ThSort label="Units" col="units" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} infoId="units" />
+                    <ThSort label="Revenue (JOD)" col="revenue" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} infoId="revenue" />
+                    <ThSort label="Avg price/unit" col="avgPrice" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} infoId="avg_price_unit" />
+                    <ThSort label="Cost/unit (exVAT)" col="cost" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} infoId="unit_cost" />
+                    <ThSort label="COGS (JOD)" col="cogs" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} infoId="total_cogs" />
+                    <ThSort label="Product margin %" col="margin" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} infoId="product_margin" />
                     <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
-                      <button
-                        onClick={() => toggleSort("commMargin", sortBy, sortDir, setSortBy, setSortDir)}
-                        className="inline-flex items-center gap-1 hover:text-foreground"
-                        title="Margin after the platform's commission & fixed fees only — promos/discounts added back so it isn't distorted by inconsistent promo spend. Ex-VAT, allocated by revenue share (Zeid's method)."
-                      >
-                        Margin after commission %
-                        <span className="text-[9px]" style={{ color: sortBy === "commMargin" ? "var(--primary)" : "transparent" }}>
-                          {sortDir === "asc" ? "▲" : "▼"}
-                        </span>
-                      </button>
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => toggleSort("commMargin", sortBy, sortDir, setSortBy, setSortDir)}
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          Margin after commission %
+                          <span className="text-[9px]" style={{ color: sortBy === "commMargin" ? "var(--primary)" : "transparent" }}>
+                            {sortDir === "asc" ? "▲" : "▼"}
+                          </span>
+                        </button>
+                        <InfoTip id="margin_after_commission" side="bottom" />
+                      </span>
                     </th>
                     <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
-                      <button
-                        onClick={() => toggleSort("netMargin", sortBy, sortDir, setSortBy, setSortDir)}
-                        className="inline-flex items-center gap-1 hover:text-foreground"
-                        title="Zeid's net margin: ex-VAT payout − COGS, over ex-VAT payout. Platform fees are per order, so each month's payout is allocated to items by revenue share."
-                      >
-                        Net margin %
-                        <span className="text-[9px]" style={{ color: sortBy === "netMargin" ? "var(--primary)" : "transparent" }}>
-                          {sortDir === "asc" ? "▲" : "▼"}
-                        </span>
-                      </button>
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => toggleSort("netMargin", sortBy, sortDir, setSortBy, setSortDir)}
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          Net margin %
+                          <span className="text-[9px]" style={{ color: sortBy === "netMargin" ? "var(--primary)" : "transparent" }}>
+                            {sortDir === "asc" ? "▲" : "▼"}
+                          </span>
+                        </button>
+                        <InfoTip id="net_margin" side="bottom" />
+                      </span>
                     </th>
                   </tr>
                 </thead>
@@ -583,6 +568,7 @@ function ThSort({
   onSort,
   align = "right",
   className = "",
+  infoId,
 }: {
   label: string;
   col: SortKey;
@@ -591,21 +577,25 @@ function ThSort({
   onSort: (c: SortKey) => void;
   align?: "left" | "right";
   className?: string;
+  infoId?: string;
 }) {
   const active = col === sortBy;
   return (
     <th
       className={`px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-${align} ${className}`}
     >
-      <button
-        onClick={() => onSort(col)}
-        className="inline-flex items-center gap-1 hover:text-foreground"
-      >
-        {label}
-        <span className="text-[9px]" style={{ color: active ? "var(--primary)" : "transparent" }}>
-          {sortDir === "asc" ? "▲" : "▼"}
-        </span>
-      </button>
+      <span className="inline-flex items-center gap-1">
+        <button
+          onClick={() => onSort(col)}
+          className="inline-flex items-center gap-1 hover:text-foreground"
+        >
+          {label}
+          <span className="text-[9px]" style={{ color: active ? "var(--primary)" : "transparent" }}>
+            {sortDir === "asc" ? "▲" : "▼"}
+          </span>
+        </button>
+        {infoId && <InfoTip id={infoId} side="bottom" />}
+      </span>
     </th>
   );
 }

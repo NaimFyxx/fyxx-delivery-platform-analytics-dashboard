@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
+import { InfoTip } from "@/components/fyxx/info-tip";
+import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
@@ -68,27 +69,7 @@ export function nextMonth(m: string) {
 export type MonthAgg = { month: string; gross: number; payout: number; discount: number; cogs: number; orders: number };
 
 function PublicDashboard() {
-  const nav = useNavigate();
-  const [adminUser, setAdminUser] = useState<{ email: string } | null>(null);
-  const [sessionChecked, setSessionChecked] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        localStorage.setItem("tgr_dash_unlock", "1");
-        setAdminUser({ email: data.user.email ?? "" });
-      } else if (localStorage.getItem("tgr_dash_unlock") !== "1") {
-        nav({ to: "/" });
-        return;
-      }
-      setSessionChecked(true);
-    });
-  }, [nav]);
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    nav({ to: "/auth" });
-  }
+  const { adminUser, sessionChecked, handleSignOut } = useSoftGate();
 
   const fetchData = useServerFn(getDashboardData);
   const { data, isLoading } = useQuery({
@@ -439,24 +420,29 @@ function PublicDashboard() {
           <Kpi label="Sales (incl VAT)" value={`${Math.round(kpis.gross).toLocaleString()}`} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
                prior={priorKpis ? `Prior: ${Math.round(priorKpis.gross).toLocaleString()} JOD` : platformContext(platform)}
-               sub={`avg ${Math.round(kpis.gross / activeDays).toLocaleString()} JOD/day`} />
+               sub={`avg ${Math.round(kpis.gross / activeDays).toLocaleString()} JOD/day`}
+               infoId="sales_incl_vat" />
           <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "—"} unit="JOD"
                delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
                prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"}
-               sub={`avg ${(kpis.orders / activeDays).toFixed(1)} orders/day`} />
+               sub={`avg ${(kpis.orders / activeDays).toFixed(1)} orders/day`}
+               infoId="aov" />
           <Kpi label="Product Margin" value={kpis.prodMargin.toFixed(1)} unit="%"
                delta={priorKpis ? ptDelta(kpis.prodMargin, priorKpis.prodMargin) : null}
-               prior={priorKpis ? `Prior: ${priorKpis.prodMargin.toFixed(1)}%` : "on menu price exVAT"} />
+               prior={priorKpis ? `Prior: ${priorKpis.prodMargin.toFixed(1)}%` : "on menu price exVAT"}
+               infoId="product_margin" />
           <Kpi label="Net Margin · after commission" value={kpis.netMargin.toFixed(1)} unit="%"
                delta={priorKpis ? ptDelta(kpis.netMargin, priorKpis.netMargin) : null}
-               prior={priorKpis ? `Prior: ${priorKpis.netMargin.toFixed(1)}%` : "on payout exVAT"} />
+               prior={priorKpis ? `Prior: ${priorKpis.netMargin.toFixed(1)}%` : "on payout exVAT"}
+               infoId="net_margin" />
           <Kpi label="Net Profit Kept" value={`${Math.round(kpis.netProfit).toLocaleString()}`} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.netProfit, priorKpis.netProfit) : null}
-               prior={priorKpis ? `Prior: ${Math.round(priorKpis.netProfit).toLocaleString()} JOD` : "payout exVAT − cost"} />
+               prior={priorKpis ? `Prior: ${Math.round(priorKpis.netProfit).toLocaleString()} JOD` : "payout exVAT − cost"}
+               infoId="net_profit_kept" />
         </div>
 
         <SectionLabel>Analytics — Controlled by the Range &amp; Platform Filters Above</SectionLabel>
-        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"}>
+        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform">
           <ResponsiveContainer>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -479,6 +465,7 @@ function PublicDashboard() {
             <ChartCard
               title="Margin over Time"
               sub="Product → After commission → Net margin — full monthly history; not affected by the date filter above"
+              infoId="chart_margin_trend"
               action={
                 marginTrend.some((d) => d.netTrail !== null) ? (
                   <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
@@ -533,6 +520,7 @@ function PublicDashboard() {
             <ChartCard
               title="Order Volume Trend"
               sub="Avg orders/day (left) vs avg sales/day JOD (right) — full history; not affected by the date filter above"
+              infoId="chart_order_volume"
               action={
                 orderVolumeTrend.some((d) => d.ordersTrail !== null) ? (
                   <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
@@ -562,7 +550,7 @@ function PublicDashboard() {
 
         <SectionLabel>Profitability Detail</SectionLabel>
         <div className="grid lg:grid-cols-2 gap-3.5">
-          <ChartCard title="Net Profit Kept (JOD)" sub="Actual payout exVAT − cost of goods · what lands with you">
+          <ChartCard title="Net Profit Kept (JOD)" sub="Actual payout exVAT − cost of goods · what lands with you" infoId="net_profit_kept">
             <ResponsiveContainer>
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -573,7 +561,7 @@ function PublicDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
-          <ChartCard title="The Commission Drag" sub="Margin points lost to platform fees">
+          <ChartCard title="The Commission Drag" sub="Margin points lost to platform fees" infoId="chart_commission_drag">
             <ResponsiveContainer>
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -736,7 +724,7 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function Kpi({
-  label, value, unit, delta, prior, sub,
+  label, value, unit, delta, prior, sub, infoId,
 }: {
   label: string;
   value: string;
@@ -744,11 +732,14 @@ export function Kpi({
   delta: { up: boolean; text: string; good: boolean } | null;
   prior: string;
   sub?: string;
+  infoId?: string;
 }) {
   const deltaColor = !delta ? "var(--muted-foreground)" : delta.good ? "var(--careem)" : "var(--destructive)";
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
-      <div className="text-[9.5px] uppercase tracking-[0.8px] font-semibold text-muted-foreground">{label}</div>
+      <div className="text-[9.5px] uppercase tracking-[0.8px] font-semibold text-muted-foreground flex items-center">
+        {label}{infoId && <InfoTip id={infoId} />}
+      </div>
       <div className="font-display text-[25px] font-semibold mt-1.5">
         {value} <span className="text-[13px] text-muted-foreground">{unit}</span>
       </div>
@@ -761,11 +752,13 @@ export function Kpi({
   );
 }
 
-function ChartCard({ title, sub, children, action }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode }) {
+function ChartCard({ title, sub, children, action, infoId }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode; infoId?: string }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
       <div className="flex items-start justify-between gap-2 mb-0.5">
-        <h3 className="font-display text-[15px] font-semibold">{title}</h3>
+        <h3 className="font-display text-[15px] font-semibold flex items-center">
+          {title}{infoId && <InfoTip id={infoId} side="bottom" />}
+        </h3>
         {action}
       </div>
       <div className="text-[10.5px] text-muted-foreground mb-3">{sub}</div>
@@ -927,6 +920,7 @@ export function PaceTracker({ pace, currentMonth }: {
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">WD</span>
             <span style={{ color: "var(--primary)" }}>{pace.workingDay}</span>
+            <InfoTip id="working_days" side="bottom" />
           </span>
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">Day</span>
@@ -939,6 +933,7 @@ export function PaceTracker({ pace, currentMonth }: {
               style={{ color: pace.dataThroughStale ? "#f5b400" : "var(--muted-foreground)" }}
             >
               data through {pace.dataThroughLabel}
+              <InfoTip id="data_through" side="bottom" />
             </span>
           )}
         </div>
@@ -947,9 +942,11 @@ export function PaceTracker({ pace, currentMonth }: {
                 style={{ color: pctColor(pace.totalAchievement) }}>
             {pace.totalTarget ? Math.round(pace.totalAchievement) + "%" : "—"}
           </span>
+          <InfoTip id="pace_pct" side="bottom" />
           <span className="ml-2 text-[10.5px] text-muted-foreground align-middle">
             {pace.totalTarget ? `pro-rated ${Math.round(pace.proRatedAch)}%` : "no target set"}
           </span>
+          {pace.totalTarget > 0 && <InfoTip id="pace_prorated" side="bottom" />}
         </div>
       </div>
 
@@ -976,6 +973,7 @@ export function PaceTracker({ pace, currentMonth }: {
           <span className="text-num font-semibold" style={{ color: pctColor(careem?.achievement ?? 0) }}>
             {careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "—"}
           </span>
+          <InfoTip id="target_pct" side="top" />
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Talabat") }} />
@@ -985,6 +983,7 @@ export function PaceTracker({ pace, currentMonth }: {
           <span className="text-num font-semibold" style={{ color: pctColor(talabat?.achievement ?? 0) }}>
             {talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "—"}
           </span>
+          <InfoTip id="target_pct" side="top" />
         </span>
         <span className="ml-auto text-muted-foreground text-num">
           Combined <span className="text-foreground font-semibold">{Math.round(pace.totalSales).toLocaleString()}</span> / {Math.round(pace.totalTarget).toLocaleString()} JOD

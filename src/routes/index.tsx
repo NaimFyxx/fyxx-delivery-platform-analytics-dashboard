@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { UNLOCK_KEY } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
@@ -43,7 +44,7 @@ function PaceLandingPage() {
   const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
 
   function handleViewDashboards() {
-    if (localStorage.getItem("tgr_dash_unlock") === "1") {
+    if (localStorage.getItem(UNLOCK_KEY) === "1") {
       nav({ to: "/dashboard" });
     } else {
       setShowModal(true);
@@ -53,7 +54,7 @@ function PaceLandingPage() {
   function handleSubmitCode(e: React.FormEvent) {
     e.preventDefault();
     if (code === "12345") {
-      localStorage.setItem("tgr_dash_unlock", "1");
+      localStorage.setItem(UNLOCK_KEY, "1");
       nav({ to: "/dashboard" });
     } else {
       setCodeError(true);
