@@ -1,8 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
+type DashboardData = NonNullable<Awaited<ReturnType<typeof getDashboardData>>>;
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
 import careemLogo from "@/assets/careem-logo-full.svg";
@@ -62,7 +63,14 @@ export function nextMonth(m: string) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+export type MonthAgg = { month: string; gross: number; payout: number; cogs: number; orders: number };
+
 function PublicDashboard() {
+  const nav = useNavigate();
+  useEffect(() => {
+    if (localStorage.getItem("tgr_dash_unlock") !== "1") nav({ to: "/" });
+  }, [nav]);
+
   const fetchData = useServerFn(getDashboardData);
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
@@ -118,7 +126,6 @@ function PublicDashboard() {
   const rangeIsSingleMonth = rangeMonths.length === 1;
 
   // --- Aggregations per month, respecting platform filter ---
-  type MonthAgg = { month: string; gross: number; payout: number; cogs: number; orders: number };
   const monthAggs: MonthAgg[] = useMemo(() => {
     if (!data) return [];
     return rangeMonths.map((m) => {
@@ -260,66 +267,7 @@ function PublicDashboard() {
   const [showAvgSalesTrailing, setShowAvgSalesTrailing] = useState(false);
 
   // --- Pace tracker: always current month, ignores range filter ---
-  // Always shows the current month, but respects the platform filter
-  // (single platform → only that row). Mirrors the GM tracking sheet:
-  // Channel | Sales | Target | Achievement %, plus a combined "TOTAL".
-  const pace = useMemo(() => {
-    if (!data) return null;
-    const dayOfMonth = Number(today.slice(8, 10));
-    const [y, mm] = currentMonth.split("-").map(Number);
-    const daysInMonth = new Date(Date.UTC(y, mm, 0)).getUTCDate();
-
-    // Working day = distinct dates in current month (≤ today) with any sales.
-    const workingDates = new Set(
-      data.daily
-        .filter((d) => monthOfDate(d.date) === currentMonth && d.date <= today)
-        .map((d) => d.date),
-    );
-    const workingDay = workingDates.size;
-
-    const platformsOnSheet: ("Talabat" | "Careem")[] = ["Talabat", "Careem"];
-    const rows = platformsOnSheet.map((p) => {
-      const sales = data.daily
-        .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
-        .reduce((s, d) => s + d.sales, 0);
-      const target = data.targets
-        .filter((t) => t.month === currentMonth && t.platform === p)
-        .reduce((s, t) => s + t.salesTarget, 0);
-      const achievement = target > 0 ? (sales / target) * 100 : 0;
-      return { platform: p, sales, target, achievement };
-    });
-
-    const totalSales = rows.reduce((s, r) => s + r.sales, 0);
-    const totalTarget = rows.reduce((s, r) => s + r.target, 0);
-    const totalAchievement = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
-    const proRated = totalTarget * (dayOfMonth / daysInMonth);
-    const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
-
-    // Latest daily date per platform for current month → take the earliest (most stale).
-    const latestByPlatform = (["Talabat", "Careem"] as const).map((p) => {
-      const dates = data.daily
-        .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
-        .map((d) => d.date);
-      return { platform: p, latest: dates.length ? dates.sort().at(-1)! : null };
-    }).filter((x) => x.latest !== null) as { platform: "Talabat" | "Careem"; latest: string }[];
-    const dataThroughDate = latestByPlatform.length
-      ? latestByPlatform.reduce((min, x) => (x.latest < min ? x.latest : min), latestByPlatform[0].latest)
-      : null;
-    const dataThroughLabel = dataThroughDate
-      ? new Date(dataThroughDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-      : null;
-    const dataThroughStale = dataThroughDate !== null && dataThroughDate < today;
-    const perPlatformThrough = latestByPlatform.map((x) => ({
-      platform: x.platform,
-      label: new Date(x.latest + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
-    }));
-
-    return {
-      rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
-      dayOfMonth, daysInMonth, workingDay,
-      dataThroughLabel, dataThroughStale, perPlatformThrough,
-    };
-  }, [data, currentMonth, today]);
+  const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
 
   // Distinct dates with any data in range + platform filter (used for avg/day KPI sub-stats).
   const activeDays = useMemo(() => {
@@ -779,7 +727,7 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Kpi({
+export function Kpi({
   label, value, unit, delta, prior, sub,
 }: {
   label: string;
@@ -818,7 +766,7 @@ function ChartCard({ title, sub, children, action }: { title: string; sub: strin
   );
 }
 
-type PaceData = {
+export type PaceData = {
   rows: { platform: "Talabat" | "Careem"; sales: number; target: number; achievement: number }[];
   totalSales: number; totalTarget: number; totalAchievement: number;
   proRated: number; proRatedAch: number;
@@ -827,6 +775,61 @@ type PaceData = {
   dataThroughStale: boolean;
   perPlatformThrough: { platform: "Talabat" | "Careem"; label: string }[];
 };
+
+export function computePace(data: DashboardData, currentMonth: string, today: string): PaceData {
+  const dayOfMonth = Number(today.slice(8, 10));
+  const [y, mm] = currentMonth.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(y, mm, 0)).getUTCDate();
+
+  const workingDates = new Set(
+    data.daily
+      .filter((d) => monthOfDate(d.date) === currentMonth && d.date <= today)
+      .map((d) => d.date),
+  );
+  const workingDay = workingDates.size;
+
+  const platformsOnSheet: ("Talabat" | "Careem")[] = ["Talabat", "Careem"];
+  const rows = platformsOnSheet.map((p) => {
+    const sales = data.daily
+      .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
+      .reduce((s, d) => s + d.sales, 0);
+    const target = data.targets
+      .filter((t) => t.month === currentMonth && t.platform === p)
+      .reduce((s, t) => s + t.salesTarget, 0);
+    const achievement = target > 0 ? (sales / target) * 100 : 0;
+    return { platform: p, sales, target, achievement };
+  });
+
+  const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+  const totalTarget = rows.reduce((s, r) => s + r.target, 0);
+  const totalAchievement = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+  const proRated = totalTarget * (dayOfMonth / daysInMonth);
+  const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
+
+  const latestByPlatform = (["Talabat", "Careem"] as const).map((p) => {
+    const dates = data.daily
+      .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
+      .map((d) => d.date);
+    return { platform: p, latest: dates.length ? dates.sort().at(-1)! : null };
+  }).filter((x) => x.latest !== null) as { platform: "Talabat" | "Careem"; latest: string }[];
+  const dataThroughDate = latestByPlatform.length
+    ? latestByPlatform.reduce((min, x) => (x.latest < min ? x.latest : min), latestByPlatform[0].latest)
+    : null;
+  const dataThroughLabel = dataThroughDate
+    ? new Date(dataThroughDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    : null;
+  const dataThroughStale = dataThroughDate !== null && dataThroughDate < today;
+  const perPlatformThrough = latestByPlatform.map((x) => ({
+    platform: x.platform,
+    label: new Date(x.latest + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+  }));
+
+  return {
+    rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
+    dayOfMonth, daysInMonth, workingDay,
+    dataThroughLabel, dataThroughStale, perPlatformThrough,
+  };
+}
 
 function AvgDayTooltip({ active, payload, unit, fmt }: {
   active?: boolean;
@@ -857,7 +860,7 @@ function AvgDayTooltip({ active, payload, unit, fmt }: {
   );
 }
 
-function PaceTracker({ pace, currentMonth }: {
+export function PaceTracker({ pace, currentMonth }: {
   pace: PaceData | null; currentMonth: string;
 }) {
   if (!pace) return null;
@@ -874,7 +877,7 @@ function PaceTracker({ pace, currentMonth }: {
   return (
     <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
             {monthLabel(currentMonth)} pace · Combined
           </h3>
@@ -957,7 +960,7 @@ const tooltipStyle = {
 };
 
 // ---------- math ----------
-function sum(rows: { gross: number; payout: number; cogs: number; orders: number }[]) {
+export function sum(rows: { gross: number; payout: number; cogs: number; orders: number }[]) {
   return rows.reduce(
     (acc, r) => ({
       gross: acc.gross + r.gross,
@@ -968,7 +971,7 @@ function sum(rows: { gross: number; payout: number; cogs: number; orders: number
     { gross: 0, payout: 0, cogs: 0, orders: 0 },
   );
 }
-function computeKpis(t: { gross: number; payout: number; cogs: number; orders: number }) {
+export function computeKpis(t: { gross: number; payout: number; cogs: number; orders: number }) {
   const prodMargin = t.gross > 0 ? ((exVat(t.gross) - t.cogs) / exVat(t.gross)) * 100 : 0;
   const netMargin = t.payout > 0 ? ((exVat(t.payout) - t.cogs) / exVat(t.payout)) * 100 : 0;
   const netProfit = exVat(t.payout) - t.cogs;

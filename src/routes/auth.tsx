@@ -29,6 +29,7 @@ function AuthPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) return toast.error(error.message);
+    localStorage.setItem("tgr_dash_unlock", "1");
     toast.success("Welcome back");
     nav({ to: "/dashboard" });
   }
@@ -43,6 +44,7 @@ function AuthPage() {
     });
     setLoading(false);
     if (error) return toast.error(error.message);
+    localStorage.setItem("tgr_dash_unlock", "1");
     toast.success("Account created — signing you in");
     nav({ to: "/dashboard" });
   }

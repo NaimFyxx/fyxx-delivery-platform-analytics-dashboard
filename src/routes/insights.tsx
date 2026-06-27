@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
@@ -48,6 +48,11 @@ export const Route = createFileRoute("/insights")({
 type SortKey = "item" | "units" | "revenue" | "avgPrice" | "cogs" | "cost" | "margin" | "netMargin";
 
 function InsightsPage() {
+  const nav = useNavigate();
+  useEffect(() => {
+    if (localStorage.getItem("tgr_dash_unlock") !== "1") nav({ to: "/" });
+  }, [nav]);
+
   const fetchData = useServerFn(getDashboardData);
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
@@ -489,11 +494,11 @@ function InsightsPage() {
           {items.length === 0 ? (
             <Empty text="No item-level data for this range." />
           ) : (
-            <div className="overflow-x-auto -mx-2 max-h-[520px]">
+            <div className="overflow-auto overscroll-contain max-h-[520px]">
               <table className="min-w-[700px] w-full text-[12px]">
                 <thead className="bg-background/40 text-muted-foreground sticky top-0">
                   <tr>
-                    <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" />
+                    <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" className="sticky left-0 z-20 bg-background/40 border-r border-border" />
                     <ThSort label="Units" col="units" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <ThSort label="Revenue (JOD)" col="revenue" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <ThSort label="Avg price/unit" col="avgPrice" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
@@ -517,7 +522,7 @@ function InsightsPage() {
                 <tbody>
                   {items.map((r) => (
                     <tr key={r.item} className="border-t border-border">
-                      <td className="px-3 py-2">{r.item}</td>
+                      <td className="px-3 py-2 sticky left-0 z-10 bg-card border-r border-border">{r.item}</td>
                       <td className="px-3 py-2 text-right text-num">{r.units.toLocaleString()}</td>
                       <td className="px-3 py-2 text-right text-num font-semibold">
                         {r.revenue > 0 ? Math.round(r.revenue).toLocaleString() : "—"}
@@ -577,6 +582,7 @@ function ThSort({
   sortDir,
   onSort,
   align = "right",
+  className = "",
 }: {
   label: string;
   col: SortKey;
@@ -584,11 +590,12 @@ function ThSort({
   sortDir: "asc" | "desc";
   onSort: (c: SortKey) => void;
   align?: "left" | "right";
+  className?: string;
 }) {
   const active = col === sortBy;
   return (
     <th
-      className={`px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-${align}`}
+      className={`px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-${align} ${className}`}
     >
       <button
         onClick={() => onSort(col)}
