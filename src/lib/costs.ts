@@ -114,6 +114,28 @@ export function costAsOf(costs: CostRow[], item: string, asOfDate: string): numb
   return null;
 }
 
+/**
+ * For one item + platform, return the price active as of asOfDate: the row with the
+ * GREATEST effective_from that is <= asOfDate. Returns null if nothing found.
+ * Canonicalizes both sides so alias variants resolve correctly.
+ */
+export function priceAsOf(
+  prices: { item_name: string; platform: string; price_incl_vat: number; effective_from?: string }[],
+  item: string,
+  platform: string,
+  asOf: string,
+): number | null {
+  const canonItem = canonicalItemName(item);
+  let best: { price: number; from: string } | null = null;
+  for (const p of prices) {
+    if (canonicalItemName(p.item_name) !== canonItem || p.platform !== platform) continue;
+    const from = p.effective_from ?? "0000-01-01";
+    if (from > asOf) continue;
+    if (!best || from > best.from) best = { price: Number(p.price_incl_vat), from };
+  }
+  return best ? best.price : null;
+}
+
 function lastDayOfMonth(m: string): string {
   const [y, mm] = m.split("-").map(Number);
   return new Date(Date.UTC(y, mm, 0)).toISOString().slice(0, 10);

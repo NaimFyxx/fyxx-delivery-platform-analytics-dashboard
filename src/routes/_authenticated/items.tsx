@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { MonthPicker } from "@/components/fyxx/date-picker";
-import { fmtJOD, fmtInt, platformBg, exVat, type Platform } from "@/lib/fyxx";
-import { costAsOf, normalizeItemName, canonicalItemName, type CostRow } from "@/lib/costs";
+import { fmtJOD, fmtInt, platformBg, type Platform } from "@/lib/fyxx";
+import { type CostRow } from "@/lib/costs";
+import { aggregateItems } from "@/lib/items";
 import {
   Segmented,
   monthOfDate,
@@ -25,22 +26,6 @@ export const Route = createFileRoute("/_authenticated/items")({
   component: Items,
 });
 
-function priceAsOf(
-  prices: Array<{ item_name: string; platform: string; price_incl_vat: number; effective_from?: string }>,
-  item: string,
-  platform: string,
-  asOf: string,
-): number | null {
-  const canonItem = canonicalItemName(item);
-  let best: { price: number; from: string } | null = null;
-  for (const p of prices) {
-    if (canonicalItemName(p.item_name) !== canonItem || p.platform !== platform) continue;
-    const from = p.effective_from ?? "0000-01-01";
-    if (from > asOf) continue;
-    if (!best || from > best.from) best = { price: Number(p.price_incl_vat), from };
-  }
-  return best ? best.price : null;
-}
 
 function Items() {
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -83,9 +68,6 @@ function Items() {
     }
     return allMonths;
   }, [range, currentMonthStr, customFrom, customTo, allMonths]);
-
-  const latestMonth = rangeMonths.length ? rangeMonths[rangeMonths.length - 1] : currentMonthStr;
-  const latestMonthEnd = `${latestMonth}-28`;
 
   const { data: sales = [] } = useQuery({
     queryKey: ["monthly_item_sales", rangeMonths],
@@ -139,83 +121,32 @@ function Items() {
     enabled: rangeMonths.length > 0,
   });
 
-  // Map raw cost rows to the CostRow shape that costAsOf (from costs.ts) expects
   const costRows: CostRow[] = useMemo(
     () => costs.map((c) => ({ item: c.item_name, cost: Number(c.cost_exvat), effective_from: c.effective_from })),
     [costs],
   );
 
+  const activePlatforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
+
   const aggregated = useMemo(() => {
-    type PerPlatform = { units: number; revenue: number };
-    const map = new Map<string, {
-      item: string;
-      units: number;
-      platforms: Set<string>;
-      talabat: PerPlatform;
-      careem: PerPlatform;
-      totalCogs: number;
-      commPayout: number;
-    }>();
-
-    const activePlatforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
-
-    for (const s of sales) {
-      if (!activePlatforms.includes(s.platform)) continue;
-      const canonKey = canonicalItemName(s.item_name);
-      if (!map.has(canonKey)) {
-        map.set(canonKey, {
-          item: s.item_name, units: 0, platforms: new Set(),
-          talabat: { units: 0, revenue: 0 },
-          careem: { units: 0, revenue: 0 },
-          totalCogs: 0,
-          commPayout: 0,
-        });
-      }
-      const e = map.get(canonKey)!;
-      // Prefer the name that maps directly to the canonical key (no alias lookup needed);
-      // when tied, prefer shorter (drops "(12pcs)" etc.)
-      const newIsDirect = normalizeItemName(s.item_name) === canonKey;
-      const existingIsDirect = normalizeItemName(e.item) === canonKey;
-      if (newIsDirect && !existingIsDirect) {
-        e.item = s.item_name;
-      } else if (!newIsDirect && existingIsDirect) {
-        // keep existing — it's the canonical spelling
-      } else if (s.item_name.length < e.item.length) {
-        e.item = s.item_name;
-      }
-      e.units += s.units;
-      e.platforms.add(s.platform);
-      const itemRevenue = Number((s as any).revenue_jod ?? 0);
-      if (s.platform === "Talabat") {
-        e.talabat.units += s.units;
-        e.talabat.revenue += itemRevenue;
-      } else if (s.platform === "Careem") {
-        e.careem.units += s.units;
-        e.careem.revenue += itemRevenue;
-      }
-      // Per-month cost — pass through canonical key so alias variants resolve correctly
-      const asOf = `${s.month}-28`;
-      const c = costAsOf(costRows, canonicalItemName(s.item_name), asOf);
-      if (c != null) e.totalCogs += s.units * c;
-      // Allocate (payout + discount) by revenue share — same method as Insights page
-      const finRow = financials.find((f) => f.month === s.month && f.platform === s.platform);
-      if (finRow && finRow.gross > 0 && itemRevenue > 0) {
-        e.commPayout += exVat((itemRevenue / finRow.gross) * (finRow.payout + finRow.discount));
-      }
-    }
-
-    return Array.from(map.values())
-      .filter((r) => r.units > 0)
+    const mapped = sales.map((s) => ({
+      month: s.month,
+      platform: s.platform,
+      item: s.item_name,
+      units: s.units,
+      revenue: Number((s as any).revenue_jod ?? 0),
+    }));
+    return aggregateItems({
+      itemSales: mapped,
+      costs: costRows,
+      prices,
+      financials,
+      rangeMonths,
+      platforms: activePlatforms,
+    })
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
-      .map((r) => ({
-        ...r,
-        cost: costAsOf(costRows, canonicalItemName(r.item), latestMonthEnd),
-        listPriceTalabat: priceAsOf(prices, r.item, "Talabat", latestMonthEnd),
-        listPriceCareem: priceAsOf(prices, r.item, "Careem", latestMonthEnd),
-        marginAfterComm: r.commPayout > 0 ? ((r.commPayout - r.totalCogs) / r.commPayout) * 100 : null,
-      }))
       .sort((a, b) => b.units - a.units);
-  }, [sales, costRows, prices, financials, platform, q, latestMonthEnd]);
+  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, q]);
 
   const rangeLabel = useMemo(() => {
     if (range === "this") return monthLabel(currentMonthStr);
@@ -302,37 +233,37 @@ function Items() {
                 <TableCell className="text-right text-num">{fmtInt(r.units)}</TableCell>
                 <TableCell className="text-right text-num">
                   <PriceCell
-                    listPrice={r.listPriceTalabat}
-                    ppUnits={r.talabat.units}
-                    ppRevenue={r.talabat.revenue}
+                    listPrice={r.listPrice["Talabat"]}
+                    ppUnits={r.perPlatform["Talabat"]?.units ?? 0}
+                    ppRevenue={r.perPlatform["Talabat"]?.revenue ?? 0}
                   />
                 </TableCell>
                 <TableCell className="text-right text-num">
                   <PriceCell
-                    listPrice={r.listPriceCareem}
-                    ppUnits={r.careem.units}
-                    ppRevenue={r.careem.revenue}
+                    listPrice={r.listPrice["Careem"]}
+                    ppUnits={r.perPlatform["Careem"]?.units ?? 0}
+                    ppRevenue={r.perPlatform["Careem"]?.revenue ?? 0}
                   />
                 </TableCell>
                 <TableCell className="text-right text-num">
-                  {r.cost == null
+                  {r.lastCost == null
                     ? <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/10">no cost</Badge>
-                    : fmtJOD(r.cost)}
+                    : fmtJOD(r.lastCost)}
                 </TableCell>
                 <TableCell className="text-right text-num">
-                  {r.totalCogs === 0 && r.cost == null
+                  {r.cogs === 0 && r.lastCost == null
                     ? <span className="text-muted-foreground">—</span>
-                    : fmtJOD(r.totalCogs)}
+                    : fmtJOD(r.cogs)}
                 </TableCell>
                 <TableCell
                   className="text-right text-num font-semibold"
                   style={{
-                    color: r.marginAfterComm != null
-                      ? r.marginAfterComm >= 0 ? "var(--careem)" : "var(--destructive)"
+                    color: r.commMargin != null
+                      ? r.commMargin >= 0 ? "var(--careem)" : "var(--destructive)"
                       : "var(--muted-foreground)",
                   }}
                 >
-                  {r.marginAfterComm != null ? `${r.marginAfterComm.toFixed(1)}%` : "—"}
+                  {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "—"}
                 </TableCell>
               </TableRow>
             ))}

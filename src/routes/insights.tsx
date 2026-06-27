@@ -27,11 +27,10 @@ import {
   prevMonth,
   monthLabel,
   monthsBetween,
-  costAsOf,
-  exVat,
   type RangeKey,
   type PlatformKey,
 } from "./dashboard";
+import { aggregateItems } from "@/lib/items";
 
 export const Route = createFileRoute("/insights")({
   ssr: false,
@@ -128,55 +127,15 @@ function InsightsPage() {
   // --- Per-item aggregation across selected months + platforms ---
   const items = useMemo(() => {
     if (!data) return [];
-    const map = new Map<
-      string,
-      { item: string; units: number; revenue: number; cogs: number; lastCost: number | null; netPayout: number; netProfit: number; commPayout: number }
-    >();
-    for (const s of data.itemSales) {
-      if (!rangeMonths.includes(s.month)) continue;
-      if (!platforms.includes(s.platform)) continue;
-      const asOf = `${s.month}-28`;
-      const c = costAsOf(data.costs, s.item, asOf);
-      const row = map.get(s.item) ?? {
-        item: s.item,
-        units: 0,
-        revenue: 0,
-        cogs: 0,
-        lastCost: null,
-        netPayout: 0,
-        netProfit: 0,
-        commPayout: 0,
-      };
-      row.units += s.units;
-      const itemRevenue = s.revenue ?? 0;
-      row.revenue += itemRevenue;
-      const itemCogs = c != null ? s.units * c : 0;
-      if (c != null) {
-        row.cogs += itemCogs;
-        row.lastCost = c;
-      }
-      // Allocate payout (and payout+discount) to the item by revenue share (Zeid's formula).
-      // Guard: skip if monthGross ≤ 0 or item has no revenue (avoids nonsense allocations).
-      const finRow = data.financials.find((f) => f.month === s.month && f.platform === s.platform);
-      if (finRow && finRow.gross > 0 && itemRevenue > 0) {
-        const share = itemRevenue / finRow.gross;
-        const itemPayout = share * finRow.payout;
-        row.netPayout += exVat(itemPayout);
-        row.netProfit += exVat(itemPayout) - itemCogs;
-        // Commission payout: payout + discount (promos added back = only fixed platform cut)
-        row.commPayout += exVat(share * (finRow.payout + finRow.discount));
-      }
-      map.set(s.item, row);
-    }
-    const rows = Array.from(map.values()).map((r) => ({
-      ...r,
-      margin:
-        r.revenue > 0 ? ((r.revenue / (1 + 0.16) - r.cogs) / (r.revenue / (1 + 0.16))) * 100 : 0,
-      commMargin: r.commPayout > 0 ? ((r.commPayout - r.cogs) / r.commPayout) * 100 : null,
-      netMargin: r.netPayout > 0 ? (r.netProfit / r.netPayout) * 100 : null,
-      avgPrice: r.units > 0 ? r.revenue / r.units : null,
-    }));
-    rows.sort((a, b) => {
+    const agg = aggregateItems({
+      itemSales: data.itemSales,
+      costs: data.costs,
+      prices: [],
+      financials: data.financials,
+      rangeMonths,
+      platforms,
+    }).map((r) => ({ ...r, margin: r.productMargin ?? 0 }));
+    agg.sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortBy === "item") return a.item.localeCompare(b.item) * dir;
       if (sortBy === "units") return (a.units - b.units) * dir;
@@ -188,7 +147,7 @@ function InsightsPage() {
       if (sortBy === "netMargin") return ((a.netMargin ?? -Infinity) - (b.netMargin ?? -Infinity)) * dir;
       return ((a.lastCost ?? 0) - (b.lastCost ?? 0)) * dir;
     });
-    return rows;
+    return agg;
   }, [data, rangeMonths, platforms, sortBy, sortDir]);
 
   const anyRevenue = useMemo(() => items.some((r) => r.revenue > 0), [items]);
