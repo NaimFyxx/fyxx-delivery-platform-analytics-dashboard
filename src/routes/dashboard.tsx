@@ -853,10 +853,14 @@ export function PaceTracker({ pace, currentMonth }: {
   const careem = pace.rows.find((r) => r.platform === "Careem");
   const talabat = pace.rows.find((r) => r.platform === "Talabat");
 
-  // Segments of the combined bar (against the combined target).
-  const segCareem  = pace.totalTarget > 0 ? Math.min((careem?.sales  ?? 0) / pace.totalTarget * 100, 100) : 0;
-  const segTalabat = pace.totalTarget > 0 ? Math.min((talabat?.sales ?? 0) / pace.totalTarget * 100, 100) : 0;
-  const segCappedTalabat = Math.max(0, Math.min(segTalabat, 100 - segCareem));
+  // Segments of the combined bar. The bar fills to combined/target (capped at 100%),
+  // then splits proportionally to each platform's actual sales — so the bigger seller
+  // always shows the longer segment, even when combined sales exceed the target.
+  const segSales = (careem?.sales ?? 0) + (talabat?.sales ?? 0);
+  const segFill = pace.totalTarget > 0 ? Math.min(segSales / pace.totalTarget, 1) * 100 : 0;
+  const segCareemShare = segSales > 0 ? (careem?.sales ?? 0) / segSales : 0;
+  const segCareem = segFill * segCareemShare;
+  const segCappedTalabat = segFill * (1 - segCareemShare);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
@@ -892,7 +896,7 @@ export function PaceTracker({ pace, currentMonth }: {
           </span>
           <InfoTip id="pace_pct" side="bottom" />
           <span className="ml-2 text-[10.5px] text-muted-foreground align-middle">
-            {pace.totalTarget ? `pro-rated ${Math.round(pace.proRatedAch)}%` : "no target set"}
+            {pace.totalTarget ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set"}
           </span>
           {pace.totalTarget > 0 && <InfoTip id="pace_prorated" side="bottom" />}
         </div>
@@ -907,7 +911,7 @@ export function PaceTracker({ pace, currentMonth }: {
         </div>
         <div className="h-full transition-all relative group" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }}>
           {segCappedTalabat > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/80 pointer-events-none">{Math.round(segTalabat)}%</span>
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/80 pointer-events-none">{Math.round(segCappedTalabat)}%</span>
           )}
         </div>
       </div>

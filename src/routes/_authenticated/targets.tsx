@@ -173,11 +173,14 @@ function TargetsPage() {
           const status = buildStatus(inProgress, cActual, cTarget, proRated);
           const combinedPct = cTarget > 0 ? cActual / cTarget : 0;
 
-          // Stacked bar segments against the combined target
+          // Stacked bar segments. The bar fills to combined/target (capped at 100%),
+          // then splits proportionally to each platform's actual sales — so the bigger
+          // seller always shows the longer segment, even past 100% of target.
           const careemActual = salesMap.get(`${month}|Careem`) ?? 0;
-          const talabatActual = salesMap.get(`${month}|Talabat`) ?? 0;
-          const careemW = cTarget > 0 ? Math.min((careemActual / cTarget) * 100, 100) : 0;
-          const talabatW = cTarget > 0 ? Math.min((talabatActual / cTarget) * 100, 100 - careemW) : 0;
+          const fill = cTarget > 0 ? Math.min(cActual / cTarget, 1) : 0;
+          const careemShare = cActual > 0 ? careemActual / cActual : 0;
+          const careemW = fill * careemShare * 100;
+          const talabatW = fill * (1 - careemShare) * 100;
 
           return (
             <Card key={month} className="p-5">

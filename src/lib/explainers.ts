@@ -106,10 +106,10 @@ export const EXPLAINERS: Record<string, Explainer> = {
     example: "698 ÷ 1,650 ≈ 42%.",
   },
   pace_prorated: {
-    label: "Pro-rated pace %",
-    meaning: "Pace vs where you should be this far into the month, given how many days have passed.",
+    label: "% of pace",
+    meaning: "Where you are vs where you'd need to be by today to finish the month on target. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the target you've hit — that's the big number on the left.)",
     formula: "sales ÷ (target × dayOfMonth ÷ daysInMonth) × 100",
-    example: "Day 26/30 → expected 1,430; 698 / 1,430 ≈ 49%.",
+    example: "Day 27/30 → you'd expect 1,485; at 771 that's 52% of pace (well behind).",
   },
   working_days: {
     label: "Working days (WD)",
