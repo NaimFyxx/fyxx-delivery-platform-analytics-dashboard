@@ -272,16 +272,11 @@ function InsightsPage() {
   }
 
   // Use monthly_financials for sales — same source as the dashboard pill.
-  const allTime = {
-    sales: data.financials.reduce((s, r) => s + r.gross, 0),
-    orders: data.daily.reduce((s, d) => s + (d.orders ?? 0), 0),
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} allTime={allTime} />
+      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} />
 
-      <div className="max-w-[1180px] mx-auto px-7 pt-7 pb-20">
+      <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center mb-5">
           <Segmented
@@ -324,7 +319,7 @@ function InsightsPage() {
 
         {/* CUSTOMER TIERS — prominent */}
         <SectionLabel>Customer Tiers — Careem+ &amp; Talabat Pro</SectionLabel>
-        <div className="grid lg:grid-cols-2 gap-3.5 mb-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
           <TierCard
             title="Careem+ vs Regular"
             sub="Share of sales, orders & AOV for Careem subscribers"
@@ -358,7 +353,7 @@ function InsightsPage() {
         {/* NEW VS RETURNING */}
         <SectionLabel>New vs Returning</SectionLabel>
         {customerKpi && (
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="bg-card border border-border rounded-2xl p-4">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">% Returning (repeat rate)</div>
               <div className="font-display text-3xl font-semibold">
@@ -393,7 +388,7 @@ function InsightsPage() {
           </div>
         )}
         {platform === "All" ? (
-          <div className="grid lg:grid-cols-2 gap-3.5 mb-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
             <CustomerPanel platform="Careem" series={makeCustomerSeries("Careem")} freshness={freshness.daily} />
             <CustomerPanel platform="Talabat" series={makeCustomerSeries("Talabat")} freshness={freshness.daily} />
           </div>
@@ -485,8 +480,8 @@ function InsightsPage() {
           {items.length === 0 ? (
             <Empty text="No item-level data for this range." />
           ) : (
-            <div className="overflow-auto -mx-2 max-h-[520px]">
-              <table className="w-full text-[12px]">
+            <div className="overflow-x-auto -mx-2 max-h-[520px]">
+              <table className="min-w-[700px] w-full text-[12px]">
                 <thead className="bg-background/40 text-muted-foreground sticky top-0">
                   <tr>
                     <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" />
