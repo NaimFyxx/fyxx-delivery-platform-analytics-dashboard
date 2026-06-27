@@ -61,12 +61,16 @@ export interface MonthPickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /** Earliest selectable month, YYYY-MM. Defaults to "2025-10". */
+  min?: string;
+  /** Latest selectable month, YYYY-MM. Defaults to the current month. */
+  max?: string;
 }
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const MIN_MONTH = "2025-10";
+const DEFAULT_MIN = "2025-10";
 
-export function MonthPicker({ value, onChange, placeholder = "Pick a month", className, disabled }: MonthPickerProps) {
+export function MonthPicker({ value, onChange, placeholder = "Pick a month", className, disabled, min, max }: MonthPickerProps) {
   const [open, setOpen] = React.useState(false);
   const valid = /^\d{4}-\d{2}$/.test(value);
   const [vy, vm] = valid ? value.split("-").map(Number) : [new Date().getFullYear(), 0];
@@ -75,13 +79,13 @@ export function MonthPicker({ value, onChange, placeholder = "Pick a month", cla
   React.useEffect(() => { if (valid) setYear(vy); }, [value, valid, vy]);
 
   const now = new Date();
-  const maxMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [minY] = MIN_MONTH.split("-").map(Number);
-  const [maxY] = maxMonth.split("-").map(Number);
+  const defaultMax = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const effectiveMin = min ?? DEFAULT_MIN;
+  const effectiveMax = max ?? defaultMax;
+  const [minY] = effectiveMin.split("-").map(Number);
+  const [maxY] = effectiveMax.split("-").map(Number);
 
-  const label = valid
-    ? `${MONTH_NAMES[vm - 1]} ${vy}`
-    : placeholder;
+  const label = valid ? `${MONTH_NAMES[vm - 1]} ${vy}` : placeholder;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -109,7 +113,7 @@ export function MonthPicker({ value, onChange, placeholder = "Pick a month", cla
         <div className="grid grid-cols-3 gap-1.5">
           {MONTH_NAMES.map((name, i) => {
             const monthStr = `${year}-${String(i + 1).padStart(2, "0")}`;
-            const outOfRange = monthStr < MIN_MONTH || monthStr > maxMonth;
+            const outOfRange = monthStr < effectiveMin || monthStr > effectiveMax;
             const selected = valid && vy === year && vm === i + 1;
             return (
               <Button
