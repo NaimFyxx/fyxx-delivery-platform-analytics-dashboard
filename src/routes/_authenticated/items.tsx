@@ -8,36 +8,110 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { fmtJOD, fmtInt, currentMonth, platformBg, type Platform } from "@/lib/fyxx";
+import { MonthPicker } from "@/components/fyxx/date-picker";
+import { fmtJOD, fmtInt, platformBg, type Platform } from "@/lib/fyxx";
+import {
+  Segmented,
+  monthOfDate,
+  prevMonth,
+  monthsBetween,
+  nextMonth,
+  monthLabel,
+  type RangeKey,
+} from "../dashboard";
 
 export const Route = createFileRoute("/_authenticated/items")({
   head: () => ({ meta: [{ title: "Items · TGR" }] }),
   component: Items,
 });
 
+function costAsOfLocal(
+  costs: Array<{ item_name: string; cost_exvat: number | string; effective_from: string }>,
+  item: string,
+  asOf: string,
+): number | null {
+  let best: { cost: number; from: string } | null = null;
+  for (const c of costs) {
+    if (c.item_name !== item) continue;
+    if (c.effective_from > asOf) continue;
+    if (!best || c.effective_from > best.from) best = { cost: Number(c.cost_exvat), from: c.effective_from };
+  }
+  return best ? best.cost : null;
+}
+
+function priceAsOf(
+  prices: Array<{ item_name: string; platform: string; price_incl_vat: number; effective_from?: string }>,
+  item: string,
+  platform: string,
+  asOf: string,
+): number | null {
+  let best: { price: number; from: string } | null = null;
+  for (const p of prices) {
+    if (p.item_name !== item || p.platform !== platform) continue;
+    const from = p.effective_from ?? "0000-01-01";
+    if (from > asOf) continue;
+    if (!best || from > best.from) best = { price: Number(p.price_incl_vat), from };
+  }
+  return best ? best.price : null;
+}
+
 function Items() {
-  const [month, setMonth] = useState(currentMonth());
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const currentMonthStr = monthOfDate(todayStr);
+
+  const [range, setRange] = useState<RangeKey>("this");
+  const [customFrom, setCustomFrom] = useState(currentMonthStr);
+  const [customTo, setCustomTo] = useState(currentMonthStr);
   const [platform, setPlatform] = useState<"all" | Platform>("all");
   const [q, setQ] = useState("");
+
+  const handleCustomFrom = (v: string) => {
+    setCustomFrom(v);
+    if (v > customTo) setCustomTo(v);
+  };
+  const handleCustomTo = (v: string) => {
+    setCustomTo(v);
+    if (v < customFrom) setCustomFrom(v);
+  };
 
   const { data: months = [] } = useQuery({
     queryKey: ["item_sales_months"],
     queryFn: async () => {
       const { data, error } = await supabase.from("monthly_item_sales").select("month");
       if (error) throw error;
-      return Array.from(new Set((data ?? []).map((r) => r.month))).sort().reverse();
+      return Array.from(new Set((data ?? []).map((r) => r.month))).sort() as string[];
     },
   });
 
+  const allMonths = months;
+
+  const rangeMonths = useMemo<string[]>(() => {
+    if (range === "this") return [currentMonthStr];
+    if (range === "last") return [prevMonth(currentMonthStr)];
+    if (!allMonths.length) return [];
+    if (range === "custom") {
+      const lo = customFrom <= customTo ? customFrom : customTo;
+      const hi = customFrom <= customTo ? customTo : customFrom;
+      return monthsBetween(lo, hi);
+    }
+    return allMonths;
+  }, [range, currentMonthStr, customFrom, customTo, allMonths]);
+
+  const latestMonth = rangeMonths.length ? rangeMonths[rangeMonths.length - 1] : currentMonthStr;
+  const latestMonthEnd = `${latestMonth}-28`;
+
   const { data: sales = [] } = useQuery({
-    queryKey: ["monthly_item_sales", month, platform],
+    queryKey: ["monthly_item_sales", rangeMonths],
     queryFn: async () => {
-      let qy = supabase.from("monthly_item_sales").select("*").eq("month", month);
-      if (platform !== "all") qy = qy.eq("platform", platform);
-      const { data, error } = await qy;
+      if (!rangeMonths.length) return [];
+      const { data, error } = await supabase
+        .from("monthly_item_sales")
+        .select("*")
+        .in("month", rangeMonths);
       if (error) throw error;
       return data ?? [];
     },
+    enabled: rangeMonths.length > 0,
   });
 
   const { data: costs = [] } = useQuery({
@@ -54,29 +128,9 @@ function Items() {
     queryFn: async () => {
       const { data, error } = await (supabase.from as any)("item_prices").select("*");
       if (error) throw error;
-      return (data ?? []) as { item_name: string; platform: string; price_incl_vat: number }[];
+      return (data ?? []) as { item_name: string; platform: string; price_incl_vat: number; effective_from?: string }[];
     },
   });
-
-  // "item_name|platform" → list price incl VAT
-  const priceMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const p of prices) {
-      map.set(`${p.item_name}|${p.platform}`, Number(p.price_incl_vat));
-    }
-    return map;
-  }, [prices]);
-
-  // Cost as of end of month (string comparison — month-31 is always ≥ any real date in that month)
-  const monthEnd = `${month}-31`;
-  const costFor = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const c of costs) {
-      if (c.effective_from > monthEnd) continue;
-      if (!map.has(c.item_name)) map.set(c.item_name, Number(c.cost_exvat));
-    }
-    return map;
-  }, [costs, monthEnd]);
 
   const aggregated = useMemo(() => {
     type PerPlatform = { units: number; revenue: number };
@@ -86,13 +140,19 @@ function Items() {
       platforms: Set<string>;
       talabat: PerPlatform;
       careem: PerPlatform;
+      totalCogs: number;
     }>();
+
+    const platforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
+
     for (const s of sales) {
+      if (!platforms.includes(s.platform)) continue;
       if (!map.has(s.item_name)) {
         map.set(s.item_name, {
           item: s.item_name, units: 0, platforms: new Set(),
           talabat: { units: 0, revenue: 0 },
           careem: { units: 0, revenue: 0 },
+          totalCogs: 0,
         });
       }
       const e = map.get(s.item_name)!;
@@ -105,27 +165,58 @@ function Items() {
         e.careem.units += s.units;
         e.careem.revenue += Number((s as any).revenue_jod ?? 0);
       }
+      // Per-month cost for accurate COGS across date range
+      const asOf = `${s.month}-28`;
+      const c = costAsOfLocal(costs, s.item_name, asOf);
+      if (c != null) e.totalCogs += s.units * c;
     }
+
     return Array.from(map.values())
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
       .map((r) => ({
         ...r,
-        cost: costFor.get(r.item) ?? null,
-        totalCost: (costFor.get(r.item) ?? 0) * r.units,
+        cost: costAsOfLocal(costs, r.item, latestMonthEnd),
+        listPriceTalabat: priceAsOf(prices, r.item, "Talabat", latestMonthEnd),
+        listPriceCareem: priceAsOf(prices, r.item, "Careem", latestMonthEnd),
       }))
       .sort((a, b) => b.units - a.units);
-  }, [sales, costFor, q]);
+  }, [sales, costs, prices, platform, q, latestMonthEnd]);
 
-  const monthOptions = months.length ? months : [currentMonth()];
+  const rangeLabel = useMemo(() => {
+    if (range === "this") return monthLabel(currentMonthStr);
+    if (range === "last") return monthLabel(prevMonth(currentMonthStr));
+    if (range === "custom") {
+      const lo = customFrom <= customTo ? customFrom : customTo;
+      const hi = customFrom <= customTo ? customTo : customFrom;
+      const ms = monthsBetween(lo, hi);
+      return ms.length === 1 ? monthLabel(ms[0]) : `${monthLabel(ms[0])} – ${monthLabel(ms[ms.length - 1])}`;
+    }
+    return allMonths.length ? `${monthLabel(allMonths[0])} – ${monthLabel(allMonths[allMonths.length - 1])}` : "All time";
+  }, [range, currentMonthStr, customFrom, customTo, allMonths]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader title="Items" description="Popular dishes per month with COGS and per-platform selling prices." />
-      <div className="flex flex-wrap gap-3 mb-4">
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>{monthOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-        </Select>
+      <PageHeader title="Items" description={`Popular dishes and COGS over the selected range.`} />
+
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
+        <Segmented
+          options={[
+            { v: "this", l: "This Month" },
+            { v: "last", l: "Last Month" },
+            { v: "custom", l: "Custom" },
+            { v: "all", l: "All-Time" },
+          ]}
+          value={range}
+          onChange={(v) => setRange(v as RangeKey)}
+        />
+        {range === "custom" && (
+          <div className="flex gap-2 items-center bg-card border border-border rounded-full px-3 py-1 text-xs">
+            <label className="text-muted-foreground">From</label>
+            <div className="w-36"><MonthPicker value={customFrom} onChange={handleCustomFrom} /></div>
+            <label className="text-muted-foreground">To</label>
+            <div className="w-36"><MonthPicker value={customTo} onChange={handleCustomTo} min={customFrom} /></div>
+          </div>
+        )}
         <Select value={platform} onValueChange={(v) => setPlatform(v as typeof platform)}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -136,6 +227,10 @@ function Items() {
         </Select>
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
       </div>
+
+      {range !== "this" && range !== "last" && (
+        <p className="text-xs text-muted-foreground mb-3">{rangeLabel}</p>
+      )}
 
       <Card className="p-0 overflow-hidden overflow-x-auto">
         <Table className="min-w-[700px]">
@@ -154,7 +249,7 @@ function Items() {
             {aggregated.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-12">
-                  No item sales for {month}.
+                  No item sales for {rangeLabel}.
                 </TableCell>
               </TableRow>
             )}
@@ -169,14 +264,14 @@ function Items() {
                 <TableCell className="text-right text-num">{fmtInt(r.units)}</TableCell>
                 <TableCell className="text-right text-num">
                   <PriceCell
-                    listPrice={priceMap.get(`${r.item}|Talabat`)}
+                    listPrice={r.listPriceTalabat}
                     ppUnits={r.talabat.units}
                     ppRevenue={r.talabat.revenue}
                   />
                 </TableCell>
                 <TableCell className="text-right text-num">
                   <PriceCell
-                    listPrice={priceMap.get(`${r.item}|Careem`)}
+                    listPrice={r.listPriceCareem}
                     ppUnits={r.careem.units}
                     ppRevenue={r.careem.revenue}
                   />
@@ -185,7 +280,9 @@ function Items() {
                   {r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.cost)}
                 </TableCell>
                 <TableCell className="text-right text-num">
-                  {r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.totalCost)}
+                  {r.totalCogs === 0 && r.cost == null
+                    ? <span className="text-muted-foreground">—</span>
+                    : fmtJOD(r.totalCogs)}
                 </TableCell>
               </TableRow>
             ))}
@@ -197,7 +294,7 @@ function Items() {
 }
 
 function PriceCell({ listPrice, ppUnits, ppRevenue }: {
-  listPrice: number | undefined;
+  listPrice: number | null | undefined;
   ppUnits: number;
   ppRevenue: number;
 }) {

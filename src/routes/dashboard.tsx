@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
@@ -67,9 +69,26 @@ export type MonthAgg = { month: string; gross: number; payout: number; cogs: num
 
 function PublicDashboard() {
   const nav = useNavigate();
+  const [adminUser, setAdminUser] = useState<{ email: string } | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
   useEffect(() => {
-    if (localStorage.getItem("tgr_dash_unlock") !== "1") nav({ to: "/" });
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        localStorage.setItem("tgr_dash_unlock", "1");
+        setAdminUser({ email: data.user.email ?? "" });
+      } else if (localStorage.getItem("tgr_dash_unlock") !== "1") {
+        nav({ to: "/" });
+        return;
+      }
+      setSessionChecked(true);
+    });
   }, [nav]);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    nav({ to: "/auth" });
+  }
 
   const fetchData = useServerFn(getDashboardData);
   const { data, isLoading } = useQuery({
@@ -349,7 +368,7 @@ function PublicDashboard() {
     });
   }, [data, rangeIsSingleMonth, rangeMonths, monthAggs, platforms, currentMonth, today]);
 
-  if (isLoading || !data) {
+  if (!sessionChecked || isLoading || !data) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         Loading dashboard…
@@ -358,8 +377,9 @@ function PublicDashboard() {
   }
 
   return (
+    <AdminShell admin={adminUser} onSignOut={handleSignOut}>
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} />
+      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} />
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
@@ -591,15 +611,17 @@ function PublicDashboard() {
         </div>
       </div>
     </div>
+    </AdminShell>
   );
 }
 
 // ---------- small UI primitives ----------
 export function Header({
-  today, lastDailyDate,
+  today, lastDailyDate, showNav = true,
 }: {
   today: string;
   lastDailyDate: string | null;
+  showNav?: boolean;
 }) {
   const fresh = useFreshness(today, lastDailyDate);
   return (
@@ -608,20 +630,22 @@ export function Header({
       <div className="flex md:hidden flex-col px-4 py-2.5 gap-1.5">
         <div className="flex items-center justify-between">
           <img src={tgrLogoDark} alt="The Green Room" className="h-8 w-auto" />
-          <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
-            <Link
-              to="/dashboard"
-              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-            >Dashboard</Link>
-            <Link
-              to="/insights"
-              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-            >Insights</Link>
-          </nav>
+          {showNav && (
+            <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
+              <Link
+                to="/dashboard"
+                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+                activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+                inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+              >Dashboard</Link>
+              <Link
+                to="/insights"
+                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+                activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+                inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+              >Insights</Link>
+            </nav>
+          )}
         </div>
         <div className="flex items-center justify-between gap-2">
           <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
@@ -648,20 +672,22 @@ export function Header({
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
-          <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
-            <Link
-              to="/dashboard"
-              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-            >Dashboard</Link>
-            <Link
-              to="/insights"
-              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-            >Insights</Link>
-          </nav>
+          {showNav && (
+            <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
+              <Link
+                to="/dashboard"
+                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+                activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+                inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+              >Dashboard</Link>
+              <Link
+                to="/insights"
+                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+                activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+                inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+              >Insights</Link>
+            </nav>
+          )}
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: fresh.color }} />
             <span style={{ color: fresh.color }}>{fresh.text}</span>

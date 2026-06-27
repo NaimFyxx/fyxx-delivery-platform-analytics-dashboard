@@ -76,7 +76,7 @@ function PaceLandingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header today={today} lastDailyDate={lastDailyDate} />
+      <Header today={today} lastDailyDate={lastDailyDate} showNav={false} />
       <div className="px-4 md:px-7 pt-5 md:pt-7 pb-12 max-w-5xl mx-auto">
         <PaceTracker pace={pace} currentMonth={currentMonth} />
 

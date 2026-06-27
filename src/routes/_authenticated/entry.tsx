@@ -127,6 +127,8 @@ function MenuPricesForm() {
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [platform, setPlatform] = useState<Platform>("Talabat");
   const [price, setPrice] = useState("");
+  const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [q, setQ] = useState("");
   const invalidate = useInvalidateAll();
 
   const { data: costRows = [] } = useQuery({
@@ -141,28 +143,42 @@ function MenuPricesForm() {
   const { data: priceRows = [] } = useQuery({
     queryKey: ["entry_item_prices"],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("item_prices").select("*").order("item_name");
+      const { data, error } = await (supabase.from as any)("item_prices").select("*").order("effective_from", { ascending: false }).limit(1000);
       if (error) throw error;
-      return (data ?? []) as { id: string; item_name: string; platform: string; price_incl_vat: number }[];
+      return (data ?? []) as { id: string; item_name: string; platform: string; price_incl_vat: number; effective_from: string }[];
     },
   });
 
   const itemNames = useMemo(
-    () => Array.from(new Set(costRows.map((r: { item_name: string }) => r.item_name))).sort() as string[],
-    [costRows],
+    () => Array.from(new Set([
+      ...costRows.map((r: { item_name: string }) => r.item_name),
+      ...priceRows.map((r) => r.item_name),
+    ])).sort() as string[],
+    [costRows, priceRows],
   );
+
+  const today = new Date().toISOString().slice(0, 10);
+  const currentIds = useMemo(() => {
+    const byKey = new Map<string, { id: string; date: string }>();
+    for (const r of priceRows) {
+      if (r.effective_from > today) continue;
+      const key = `${r.item_name}|${r.platform}`;
+      const cur = byKey.get(key);
+      if (!cur || r.effective_from > cur.date) byKey.set(key, { id: r.id, date: r.effective_from });
+    }
+    return new Set(Array.from(byKey.values()).map((v) => v.id));
+  }, [priceRows, today]);
 
   const save = useMutation({
     mutationFn: async () => {
       const name = item.trim();
       if (!name) throw new Error("Item name is required");
-      const { error } = await (supabase.from as any)("item_prices").upsert(
-        { item_name: name, platform, price_incl_vat: Number(price) },
-        { onConflict: "item_name,platform" },
-      );
+      const { error } = await (supabase.from as any)("item_prices").insert({
+        item_name: name, platform, price_incl_vat: Number(price), effective_from: from,
+      });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Price saved"); setPrice(""); invalidate(); },
+    onSuccess: () => { toast.success("Price version added"); setPrice(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -178,7 +194,7 @@ function MenuPricesForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
-        <p className="text-xs text-muted-foreground mb-3">Listed price the customer sees in the app (incl VAT). Saving again overwrites the prior price for that item + platform.</p>
+        <p className="text-xs text-muted-foreground mb-3">Each save adds a new version. The Items table shows the price effective as of the selected month.</p>
         <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Item name">
             {mode === "existing" ? (
@@ -198,18 +214,41 @@ function MenuPricesForm() {
           </Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Price (incl VAT, JOD)"><Input type="number" step="0.001" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required /></Field>
+          <Field label="Effective from"><DatePicker value={from} onChange={setFrom} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
       <RecentTable
-        title="Menu prices"
-        headers={["Item", "Platform", "Price (incl VAT)", ""]}
-        rows={priceRows.map((r) => [
-          r.item_name,
-          <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
-          fmtJOD(Number(r.price_incl_vat)),
-          <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
-        ])}
+        title="Price history"
+        right={
+          <Input
+            placeholder="Search items…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-8 w-48 text-xs"
+          />
+        }
+        headers={["Item", "Platform", "Price (incl VAT)", "Effective from", "Status", ""]}
+        rows={priceRows
+          .filter((r) => !q || r.item_name.toLowerCase().includes(q.toLowerCase()))
+          .map((r) => {
+            const isCurrent = currentIds.has(r.id);
+            const isFuture = r.effective_from > today;
+            return [
+              r.item_name,
+              <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
+              fmtJOD(Number(r.price_incl_vat)),
+              r.effective_from,
+              isFuture ? (
+                <Badge key="s" variant="outline" className="bg-primary/10 text-primary border-primary/30">scheduled</Badge>
+              ) : isCurrent ? (
+                <Badge key="s" variant="outline" className="bg-success/15 text-success border-success/30">current</Badge>
+              ) : (
+                <Badge key="s" variant="outline" className="text-muted-foreground">superseded</Badge>
+              ),
+              <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
+            ];
+          })}
       />
     </div>
   );
