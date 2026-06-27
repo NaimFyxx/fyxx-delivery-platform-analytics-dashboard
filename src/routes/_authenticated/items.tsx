@@ -10,7 +10,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Badge } from "@/components/ui/badge";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { fmtJOD, fmtInt, platformBg, type Platform } from "@/lib/fyxx";
-import { costAsOf, normalizeItemName, type CostRow } from "@/lib/costs";
+import { costAsOf, normalizeItemName, canonicalItemName, type CostRow } from "@/lib/costs";
 import {
   Segmented,
   monthOfDate,
@@ -31,9 +31,10 @@ function priceAsOf(
   platform: string,
   asOf: string,
 ): number | null {
+  const canonItem = canonicalItemName(item);
   let best: { price: number; from: string } | null = null;
   for (const p of prices) {
-    if (p.item_name !== item || p.platform !== platform) continue;
+    if (canonicalItemName(p.item_name) !== canonItem || p.platform !== platform) continue;
     const from = p.effective_from ?? "0000-01-01";
     if (from > asOf) continue;
     if (!best || from > best.from) best = { price: Number(p.price_incl_vat), from };
@@ -140,18 +141,27 @@ function Items() {
 
     for (const s of sales) {
       if (!activePlatforms.includes(s.platform)) continue;
-      const normKey = normalizeItemName(s.item_name);
-      if (!map.has(normKey)) {
-        map.set(normKey, {
+      const canonKey = canonicalItemName(s.item_name);
+      if (!map.has(canonKey)) {
+        map.set(canonKey, {
           item: s.item_name, units: 0, platforms: new Set(),
           talabat: { units: 0, revenue: 0 },
           careem: { units: 0, revenue: 0 },
           totalCogs: 0,
         });
       }
-      const e = map.get(normKey)!;
-      // Prefer the shorter spelling for display (drops "(12pcs)" etc.)
-      if (s.item_name.length < e.item.length) e.item = s.item_name;
+      const e = map.get(canonKey)!;
+      // Prefer the name that maps directly to the canonical key (no alias lookup needed);
+      // when tied, prefer shorter (drops "(12pcs)" etc.)
+      const newIsDirect = normalizeItemName(s.item_name) === canonKey;
+      const existingIsDirect = normalizeItemName(e.item) === canonKey;
+      if (newIsDirect && !existingIsDirect) {
+        e.item = s.item_name;
+      } else if (!newIsDirect && existingIsDirect) {
+        // keep existing — it's the canonical spelling
+      } else if (s.item_name.length < e.item.length) {
+        e.item = s.item_name;
+      }
       e.units += s.units;
       e.platforms.add(s.platform);
       if (s.platform === "Talabat") {
@@ -161,17 +171,18 @@ function Items() {
         e.careem.units += s.units;
         e.careem.revenue += Number((s as any).revenue_jod ?? 0);
       }
-      // Per-month cost using shared normalized matcher (same as dashboard/Insights)
+      // Per-month cost — pass through canonical key so alias variants resolve correctly
       const asOf = `${s.month}-28`;
-      const c = costAsOf(costRows, s.item_name, asOf);
+      const c = costAsOf(costRows, canonicalItemName(s.item_name), asOf);
       if (c != null) e.totalCogs += s.units * c;
     }
 
     return Array.from(map.values())
+      .filter((r) => r.units > 0)
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
       .map((r) => ({
         ...r,
-        cost: costAsOf(costRows, r.item, latestMonthEnd),
+        cost: costAsOf(costRows, canonicalItemName(r.item), latestMonthEnd),
         listPriceTalabat: priceAsOf(prices, r.item, "Talabat", latestMonthEnd),
         listPriceCareem: priceAsOf(prices, r.item, "Careem", latestMonthEnd),
       }))
@@ -192,7 +203,7 @@ function Items() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader title="Items" description={`Popular dishes and COGS over the selected range.`} />
+      <PageHeader title="Items" description="Sell-price columns show your set list price (bold); 'avg' is what customers actually paid — revenue ÷ units, after discounts & combos." />
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <Segmented
@@ -235,8 +246,8 @@ function Items() {
               <TableHead>Item</TableHead>
               <TableHead>Platforms</TableHead>
               <TableHead className="text-right">Units</TableHead>
-              <TableHead className="text-right">Talabat</TableHead>
-              <TableHead className="text-right">Careem</TableHead>
+              <TableHead className="text-right">Talabat — sell price</TableHead>
+              <TableHead className="text-right">Careem — sell price</TableHead>
               <TableHead className="text-right">Unit cost (ex-VAT)</TableHead>
               <TableHead className="text-right">Total COGS</TableHead>
             </TableRow>
@@ -273,7 +284,9 @@ function Items() {
                   />
                 </TableCell>
                 <TableCell className="text-right text-num">
-                  {r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.cost)}
+                  {r.cost == null
+                    ? <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/10">no cost</Badge>
+                    : fmtJOD(r.cost)}
                 </TableCell>
                 <TableCell className="text-right text-num">
                   {r.totalCogs === 0 && r.cost == null
@@ -300,14 +313,17 @@ function PriceCell({ listPrice, ppUnits, ppRevenue }: {
     return <span className="text-muted-foreground">—</span>;
   }
 
-  const primary = listPrice != null ? listPrice : realized!;
-  const secondary = listPrice != null && realized != null ? realized : null;
+  if (listPrice == null) {
+    // No list price entered — label the realized avg so it's not mistaken for a set price
+    return <div className="text-[11px] text-muted-foreground">avg {fmtJOD(realized!)}</div>;
+  }
 
+  // List price is set — bold headline, realized avg beneath
   return (
     <div>
-      <div className="font-semibold">{fmtJOD(primary)}</div>
-      {secondary != null && (
-        <div className="text-[10px] text-muted-foreground">avg {fmtJOD(secondary)}</div>
+      <div className="font-semibold">{fmtJOD(listPrice)}</div>
+      {realized != null && (
+        <div className="text-[10px] text-muted-foreground">avg {fmtJOD(realized)}</div>
       )}
     </div>
   );

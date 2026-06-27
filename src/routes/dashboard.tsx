@@ -97,7 +97,7 @@ function PublicDashboard() {
     refetchOnWindowFocus: false,
   });
 
-  const [range, setRange] = useState<RangeKey>("all");
+  const [range, setRange] = useState<RangeKey>("this");
   const [platform, setPlatform] = useState<PlatformKey>("All");
   const platforms = platform === "All" ? ["Talabat", "Careem"] : [platform];
 

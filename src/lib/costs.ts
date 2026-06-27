@@ -35,6 +35,25 @@ export function normalizeItemName(s: string): string {
     .trim();
 }
 
+/**
+ * Known cross-platform name variants that normalizeItemName alone can't collapse.
+ * Keys are normalized; values are the canonical normalized name.
+ * Extend this table as new mismatches are found.
+ */
+const ALIASES: Record<string, string> = {
+  "beetroot and lentils salad": "beetroot and lentils",
+  "nuts": "nuts, olives and pickles",
+};
+
+/**
+ * Returns the canonical normalized name for an item, applying the alias map after
+ * normalization so cross-platform spelling variants merge to the same key.
+ */
+export function canonicalItemName(s: string): string {
+  const norm = normalizeItemName(s);
+  return ALIASES[norm] ?? norm;
+}
+
 /** Base name with option/modifier decorations removed — any "(...)" or "[...]" group.
  *  e.g. "TGR Smash Burger [1 With cheese]" → "tgr smash burger". */
 export function baseItemName(s: string): string {
