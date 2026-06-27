@@ -20,17 +20,10 @@ import {
   Cell,
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
-import {
-  Header,
-  Segmented,
-  SectionLabel,
-  monthOfDate,
-  prevMonth,
-  monthLabel,
-  monthsBetween,
-  type RangeKey,
-  type PlatformKey,
-} from "./dashboard";
+import { Header, Segmented, SectionLabel, type PlatformKey } from "./dashboard";
+import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
+import { platformsFromFilter } from "@/lib/fyxx";
+import { useRangeFilter } from "@/hooks/use-range-filter";
 import { aggregateItems } from "@/lib/items";
 
 export const Route = createFileRoute("/insights")({
@@ -59,27 +52,13 @@ function InsightsPage() {
     refetchOnWindowFocus: false,
   });
 
-  const [range, setRange] = useState<RangeKey>("this");
   const [platform, setPlatform] = useState<PlatformKey>("All");
-  const platforms = platform === "All" ? ["Talabat", "Careem"] : [platform];
+  const platforms: string[] = platformsFromFilter(platform);
 
   const today = useMemo(() => {
     const last = data?.daily.at(-1)?.date;
     return last ?? new Date().toISOString().slice(0, 10);
   }, [data]);
-  const currentMonth = monthOfDate(today);
-
-  const [customFrom, setCustomFrom] = useState(currentMonth);
-  const [customTo, setCustomTo] = useState(currentMonth);
-
-  const handleCustomFrom = (v: string) => {
-    setCustomFrom(v);
-    if (v > customTo) setCustomTo(v);
-  };
-  const handleCustomTo = (v: string) => {
-    setCustomTo(v);
-    if (v < customFrom) setCustomFrom(v);
-  };
 
   const allMonths = useMemo(() => {
     if (!data) return [];
@@ -90,17 +69,8 @@ function InsightsPage() {
     return Array.from(set).sort();
   }, [data]);
 
-  const rangeMonths: string[] = useMemo(() => {
-    if (!allMonths.length) return [];
-    if (range === "this") return [currentMonth];
-    if (range === "last") return [prevMonth(currentMonth)];
-    if (range === "custom") {
-      const lo = customFrom <= customTo ? customFrom : customTo;
-      const hi = customFrom <= customTo ? customTo : customFrom;
-      return monthsBetween(lo, hi);
-    }
-    return allMonths;
-  }, [range, currentMonth, customFrom, customTo, allMonths]);
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths } =
+    useRangeFilter({ allMonths, today });
 
   const [sortBy, setSortBy] = useState<SortKey>("revenue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");

@@ -14,9 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { fmtJOD, fmtPct, exVat, platformBg, type Platform } from "@/lib/fyxx";
+import { fmtJOD, fmtPct, exVat, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { cogsFor } from "@/lib/costs";
+import { Segmented } from "../dashboard";
 
 export const Route = createFileRoute("/_authenticated/financials")({
   head: () => ({ meta: [{ title: "Financials · TGR" }] }),
@@ -52,7 +52,7 @@ function Financials() {
     },
   });
 
-  const [platformFilter, setPlatformFilter] = useState<"All" | Platform>("All");
+  const [platformFilter, setPlatformFilter] = useState<PlatformKey>("All");
   const allRows = data?.financials ?? [];
   const rows = platformFilter === "All" ? allRows : allRows.filter((r) => r.platform === platformFilter);
 
@@ -62,18 +62,17 @@ function Financials() {
         title="Monthly financials"
         description="Gross sales, actual payouts and COGS per platform. COGS and net margin are ex-VAT (matching the Overview)."
       />
-      <div className="flex gap-1.5 mb-4">
-        {(["All", "Talabat", "Careem"] as const).map((p) => (
-          <Button
-            key={p}
-            size="sm"
-            variant={platformFilter === p ? "default" : "outline"}
-            onClick={() => setPlatformFilter(p)}
-            className="text-xs h-7 px-3"
-          >
-            {p}
-          </Button>
-        ))}
+      <div className="mb-4">
+        <Segmented
+          platform
+          options={[
+            { v: "All", l: "All" },
+            { v: "Talabat", l: "Talabat" },
+            { v: "Careem", l: "Careem" },
+          ]}
+          value={platformFilter}
+          onChange={(v) => setPlatformFilter(v as PlatformKey)}
+        />
       </div>
       <Card className="p-0 overflow-hidden">
         <Table>

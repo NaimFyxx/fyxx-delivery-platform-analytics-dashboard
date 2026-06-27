@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform } from "@/lib/fyxx";
+import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 
 export const Route = createFileRoute("/_authenticated/entry")({
@@ -478,13 +478,13 @@ function DeleteBtn({ onClick }: { onClick: () => void }) {
 }
 /** Client-side list filter (platform + month) for the "browse" tables below each form. */
 type ListFilter = {
-  platform: "all" | Platform;
-  setPlatform: (v: "all" | Platform) => void;
+  platform: PlatformKey;
+  setPlatform: (v: PlatformKey) => void;
   month: string;
   setMonth: (v: string) => void;
 };
 function useListFilter(): ListFilter {
-  const [platform, setPlatform] = useState<"all" | Platform>("all");
+  const [platform, setPlatform] = useState<PlatformKey>("All");
   const [month, setMonth] = useState("all");
   return { platform, setPlatform, month, setMonth };
 }
@@ -495,19 +495,19 @@ function applyListFilter<T extends { platform?: string }>(
 ): T[] {
   return rows.filter(
     (r) =>
-      (f.platform === "all" || r.platform === f.platform) &&
+      (f.platform === "All" || r.platform === f.platform) &&
       (f.month === "all" || monthOf(r) === f.month),
   );
 }
 function ListFilterBar({ f, months }: { f: ListFilter; months: string[] }) {
   return (
     <div className="flex items-center gap-2">
-      <Select value={f.platform} onValueChange={(v) => f.setPlatform(v as "all" | Platform)}>
+      <Select value={f.platform} onValueChange={(v) => f.setPlatform(v as PlatformKey)}>
         <SelectTrigger className="h-8 w-36 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All platforms</SelectItem>
+          <SelectItem value="All">All platforms</SelectItem>
           {PLATFORMS.map((p) => (
             <SelectItem key={p} value={p}>
               {p}

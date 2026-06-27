@@ -7,20 +7,14 @@ import { InfoTip } from "@/components/fyxx/info-tip";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { MonthPicker } from "@/components/fyxx/date-picker";
-import { fmtJOD, fmtInt, platformBg, type Platform } from "@/lib/fyxx";
+import { fmtJOD, fmtInt, platformBg, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
+import { monthLabel, type RangeKey } from "@/lib/months";
 import { type CostRow } from "@/lib/costs";
 import { aggregateItems } from "@/lib/items";
-import {
-  Segmented,
-  monthOfDate,
-  prevMonth,
-  monthsBetween,
-  monthLabel,
-  type RangeKey,
-} from "../dashboard";
+import { Segmented } from "../dashboard";
+import { useRangeFilter } from "@/hooks/use-range-filter";
 
 export const Route = createFileRoute("/_authenticated/items")({
   head: () => ({ meta: [{ title: "Items · TGR" }] }),
@@ -29,23 +23,8 @@ export const Route = createFileRoute("/_authenticated/items")({
 
 
 function Items() {
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const currentMonthStr = monthOfDate(todayStr);
-
-  const [range, setRange] = useState<RangeKey>("this");
-  const [customFrom, setCustomFrom] = useState(currentMonthStr);
-  const [customTo, setCustomTo] = useState(currentMonthStr);
-  const [platform, setPlatform] = useState<"all" | Platform>("all");
+  const [platform, setPlatform] = useState<PlatformKey>("All");
   const [q, setQ] = useState("");
-
-  const handleCustomFrom = (v: string) => {
-    setCustomFrom(v);
-    if (v > customTo) setCustomTo(v);
-  };
-  const handleCustomTo = (v: string) => {
-    setCustomTo(v);
-    if (v < customFrom) setCustomFrom(v);
-  };
 
   const { data: months = [] } = useQuery({
     queryKey: ["item_sales_months"],
@@ -58,17 +37,14 @@ function Items() {
 
   const allMonths = months;
 
-  const rangeMonths = useMemo<string[]>(() => {
-    if (range === "this") return [currentMonthStr];
-    if (range === "last") return [prevMonth(currentMonthStr)];
-    if (!allMonths.length) return [];
-    if (range === "custom") {
-      const lo = customFrom <= customTo ? customFrom : customTo;
-      const hi = customFrom <= customTo ? customTo : customFrom;
-      return monthsBetween(lo, hi);
-    }
-    return allMonths;
-  }, [range, currentMonthStr, customFrom, customTo, allMonths]);
+  // Derive "today" from the latest data month so "This Month" resolves the same as dashboard/insights.
+  const today = useMemo(() => {
+    const last = allMonths.at(-1);
+    return last ? `${last}-28` : new Date().toISOString().slice(0, 10);
+  }, [allMonths]);
+
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths } =
+    useRangeFilter({ allMonths, today });
 
   const { data: sales = [] } = useQuery({
     queryKey: ["monthly_item_sales", rangeMonths],
@@ -127,7 +103,7 @@ function Items() {
     [costs],
   );
 
-  const activePlatforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
+  const activePlatforms: string[] = platformsFromFilter(platform);
 
   const aggregated = useMemo(() => {
     const mapped = sales.map((s) => ({
@@ -150,16 +126,10 @@ function Items() {
   }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, q]);
 
   const rangeLabel = useMemo(() => {
-    if (range === "this") return monthLabel(currentMonthStr);
-    if (range === "last") return monthLabel(prevMonth(currentMonthStr));
-    if (range === "custom") {
-      const lo = customFrom <= customTo ? customFrom : customTo;
-      const hi = customFrom <= customTo ? customTo : customFrom;
-      const ms = monthsBetween(lo, hi);
-      return ms.length === 1 ? monthLabel(ms[0]) : `${monthLabel(ms[0])} – ${monthLabel(ms[ms.length - 1])}`;
-    }
-    return allMonths.length ? `${monthLabel(allMonths[0])} – ${monthLabel(allMonths[allMonths.length - 1])}` : "All time";
-  }, [range, currentMonthStr, customFrom, customTo, allMonths]);
+    if (!rangeMonths.length) return "All time";
+    if (rangeMonths.length === 1) return monthLabel(rangeMonths[0]);
+    return `${monthLabel(rangeMonths[0])} – ${monthLabel(rangeMonths[rangeMonths.length - 1])}`;
+  }, [rangeMonths]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -184,14 +154,16 @@ function Items() {
             <div className="w-36"><MonthPicker value={customTo} onChange={handleCustomTo} min={customFrom} /></div>
           </div>
         )}
-        <Select value={platform} onValueChange={(v) => setPlatform(v as typeof platform)}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
-            <SelectItem value="Talabat">Talabat</SelectItem>
-            <SelectItem value="Careem">Careem</SelectItem>
-          </SelectContent>
-        </Select>
+        <Segmented
+          platform
+          options={[
+            { v: "All", l: "All" },
+            { v: "Talabat", l: "Talabat" },
+            { v: "Careem", l: "Careem" },
+          ]}
+          value={platform}
+          onChange={(v) => setPlatform(v as PlatformKey)}
+        />
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
       </div>
 

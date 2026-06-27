@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 export const VAT_RATE = 0.16;
 export const PLATFORMS = ["Talabat", "Careem"] as const;
 export type Platform = (typeof PLATFORMS)[number];
+export type PlatformKey = "All" | Platform;
+export const platformsFromFilter = (key: PlatformKey): Platform[] =>
+  key === "All" ? [...PLATFORMS] : [key];
 
 /** Precise money: "JOD 1,234.50" — used in admin tables (Financials, etc.) */
 export const fmtJOD = (n: number) =>

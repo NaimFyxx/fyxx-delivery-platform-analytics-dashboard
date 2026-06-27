@@ -16,10 +16,14 @@ import {
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { cogsFor } from "@/lib/costs";
-import { exVat, fmtJOD0, fmtInt } from "@/lib/fyxx";
-// Re-exported so other routes (e.g. /insights) keep importing it from here.
+import { exVat, fmtJOD0, fmtInt, platformsFromFilter, type PlatformKey } from "@/lib/fyxx";
+import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
+import { useRangeFilter } from "@/hooks/use-range-filter";
+// Re-exported so other routes keep importing these from here.
 export { costAsOf, cogsFor } from "@/lib/costs";
 export { exVat } from "@/lib/fyxx";
+export { monthOfDate, lastDayOfMonth, prevMonth, monthLabel, monthsBetween, nextMonth, type RangeKey } from "@/lib/months";
+export { type PlatformKey, platformsFromFilter } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -34,35 +38,6 @@ export const Route = createFileRoute("/dashboard")({
   component: PublicDashboard,
 });
 
-export type RangeKey = "this" | "last" | "custom" | "all";
-export type PlatformKey = "All" | "Talabat" | "Careem";
-
-/** Month string helpers ("YYYY-MM"). */
-export const monthOfDate = (iso: string) => iso.slice(0, 7);
-export const lastDayOfMonth = (m: string) => {
-  const [y, mm] = m.split("-").map(Number);
-  return new Date(Date.UTC(y, mm, 0)).toISOString().slice(0, 10);
-};
-export const prevMonth = (m: string) => {
-  const [y, mm] = m.split("-").map(Number);
-  const d = new Date(Date.UTC(y, mm - 2, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-};
-export const monthLabel = (m: string) =>
-  new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
-
-export function monthsBetween(from: string, to: string): string[] {
-  const out: string[] = [];
-  let cur = from;
-  while (cur <= to) { out.push(cur); cur = nextMonth(cur); }
-  return out;
-}
-export function nextMonth(m: string) {
-  const [y, mm] = m.split("-").map(Number);
-  const d = new Date(Date.UTC(y, mm, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
 export type MonthAgg = { month: string; gross: number; payout: number; discount: number; cogs: number; orders: number };
 
 function PublicDashboard() {
@@ -75,9 +50,8 @@ function PublicDashboard() {
     refetchOnWindowFocus: false,
   });
 
-  const [range, setRange] = useState<RangeKey>("this");
   const [platform, setPlatform] = useState<PlatformKey>("All");
-  const platforms = platform === "All" ? ["Talabat", "Careem"] : [platform];
+  const platforms: string[] = platformsFromFilter(platform);
 
   // Reference "today" — derived from the latest daily sales date, falls back to real today.
   const today = useMemo(() => {
@@ -85,18 +59,6 @@ function PublicDashboard() {
     return last ?? new Date().toISOString().slice(0, 10);
   }, [data]);
   const currentMonth = monthOfDate(today);
-
-  const [customFrom, setCustomFrom] = useState(currentMonth);
-  const [customTo, setCustomTo] = useState(currentMonth);
-
-  const handleCustomFrom = (v: string) => {
-    setCustomFrom(v);
-    if (v > customTo) setCustomTo(v);
-  };
-  const handleCustomTo = (v: string) => {
-    setCustomTo(v);
-    if (v < customFrom) setCustomFrom(v);
-  };
 
   // All months that appear anywhere in the data, sorted.
   const allMonths = useMemo(() => {
@@ -108,19 +70,8 @@ function PublicDashboard() {
     return Array.from(set).sort();
   }, [data]);
 
-  const rangeMonths: string[] = useMemo(() => {
-    if (!allMonths.length) return [];
-    if (range === "this") return [currentMonth];
-    if (range === "last") return [prevMonth(currentMonth)];
-    if (range === "custom") {
-      const lo = customFrom <= customTo ? customFrom : customTo;
-      const hi = customFrom <= customTo ? customTo : customFrom;
-      return monthsBetween(lo, hi);
-    }
-    return allMonths;
-  }, [range, currentMonth, customFrom, customTo, allMonths]);
-
-  const rangeIsSingleMonth = rangeMonths.length === 1;
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeIsSingleMonth } =
+    useRangeFilter({ allMonths, today });
 
   // --- Aggregations per month, respecting platform filter ---
   const monthAggs: MonthAgg[] = useMemo(() => {
