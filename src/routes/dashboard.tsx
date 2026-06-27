@@ -642,8 +642,8 @@ export function Segmented<T extends string>({
           platform && o.v === "Careem" ? "var(--careem)" :
           "#f4efe7";
         const activeFg =
-          platform && o.v === "Talabat" ? "#fff" :
-          platform && o.v === "Careem" ? "#06251a" :
+          platform && o.v === "Talabat" ? "var(--talabat-foreground)" :
+          platform && o.v === "Careem" ? "var(--careem-foreground)" :
           "#1a1a1a";
         return (
           <button

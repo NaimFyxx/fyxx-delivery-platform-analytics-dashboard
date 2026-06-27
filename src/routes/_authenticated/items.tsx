@@ -174,15 +174,15 @@ function Items() {
       <Card className="p-0 overflow-hidden overflow-x-auto">
         <Table className="min-w-[700px]">
           <TableHeader>
-            <TableRow>
-              <TableHead>Item</TableHead>
-              <TableHead>Platforms</TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Units<InfoTip id="units" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Talabat — sell price<InfoTip id="sell_price" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Careem — sell price<InfoTip id="sell_price" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Unit cost (ex-VAT)<InfoTip id="unit_cost" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Total COGS<InfoTip id="total_cogs" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Margin after commission %<InfoTip id="margin_after_commission" side="bottom" /></span></TableHead>
+            <TableRow className="align-bottom">
+              <TableHead className="align-bottom h-auto py-2.5 leading-tight">Item</TableHead>
+              <TableHead className="align-bottom h-auto py-2.5 leading-tight">Platforms</TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Units<InfoTip id="units" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Talabat — sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Careem — sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Unit cost (ex-VAT)<InfoTip id="unit_cost" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Total COGS<InfoTip id="total_cogs" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Margin after commission %<InfoTip id="margin_after_commission" side="bottom" /></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
