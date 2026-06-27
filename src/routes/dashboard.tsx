@@ -65,7 +65,7 @@ export function nextMonth(m: string) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-export type MonthAgg = { month: string; gross: number; payout: number; cogs: number; orders: number };
+export type MonthAgg = { month: string; gross: number; payout: number; discount: number; cogs: number; orders: number };
 
 function PublicDashboard() {
   const nav = useNavigate();
@@ -151,6 +151,7 @@ function PublicDashboard() {
       const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
       const finGross = finRows.reduce((s, r) => s + r.gross, 0);
       const payout = finRows.reduce((s, r) => s + r.payout, 0);
+      const discount = finRows.reduce((s, r) => s + r.discount, 0);
       // Prefer monthly_financials.gross; fall back to summed daily_sales for that month.
       const dailyRows = data.daily
         .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
@@ -158,9 +159,27 @@ function PublicDashboard() {
       const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
       const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
-      return { month: m, gross, payout, cogs, orders };
+      return { month: m, gross, payout, discount, cogs, orders };
     });
   }, [data, rangeMonths, platforms]);
+
+  // Full-history month aggs — same logic but over ALL months (not rangeMonths).
+  // Used by the trend charts so they always show the complete timeline regardless of the date pills.
+  const allMonthAggs: MonthAgg[] = useMemo(() => {
+    if (!data) return [];
+    return allMonths.map((m) => {
+      const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
+      const finGross = finRows.reduce((s, r) => s + r.gross, 0);
+      const payout = finRows.reduce((s, r) => s + r.payout, 0);
+      const discount = finRows.reduce((s, r) => s + r.discount, 0);
+      const dailyRows = data.daily.filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform));
+      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
+      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
+      const gross = finGross > 0 ? finGross : dailyGross;
+      const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
+      return { month: m, gross, payout, discount, cogs, orders };
+    });
+  }, [data, allMonths, platforms]);
 
   // Prior equal-length period totals (for KPI deltas).
   const priorAggs: MonthAgg[] | null = useMemo(() => {
@@ -174,13 +193,14 @@ function PublicDashboard() {
       const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
       const finGross = finRows.reduce((s, r) => s + r.gross, 0);
       const payout = finRows.reduce((s, r) => s + r.payout, 0);
+      const discount = finRows.reduce((s, r) => s + r.discount, 0);
       const dailyRows = data.daily
         .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
       const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
       const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
       const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
-      return { month: m, gross, payout, cogs, orders };
+      return { month: m, gross, payout, discount, cogs, orders };
     });
   }, [data, range, rangeMonths, platforms, allMonths]);
 
@@ -199,25 +219,27 @@ function PublicDashboard() {
     return v < -500 || v > 500 ? null : v;
   }
 
-  // Monthly margin series — always uses monthAggs so it matches the KPI headline exactly.
-  // Trailing-average entries are non-null only when ≥ 2 prior months exist (avoids misleading single-month "averages").
+  // Monthly margin series — always uses ALL months (not rangeMonths) so the trend chart never
+  // blanks when a single month is selected. Platform filter still applies via allMonthAggs.
   const marginTrend = useMemo(
     () =>
-      monthAggs.map((a, i, arr) => {
+      allMonthAggs.map((a, i, arr) => {
         const win = arr.slice(Math.max(0, i - 2), i + 1);
-        const validNets = win.map((w) => pct(exVat(w.payout) - w.cogs, exVat(w.payout))).filter((v): v is number => v !== null);
-        const validProds = win.map((w) => pct(exVat(w.gross) - w.cogs, exVat(w.gross))).filter((v): v is number => v !== null);
         const trailEnough = win.length >= 2;
+        const validProds = win.map((w) => pct(exVat(w.gross) - w.cogs, exVat(w.gross))).filter((v): v is number => v !== null);
+        const validComms = win.map((w) => pct(exVat(w.payout + w.discount) - w.cogs, exVat(w.payout + w.discount))).filter((v): v is number => v !== null);
+        const validNets = win.map((w) => pct(exVat(w.payout) - w.cogs, exVat(w.payout))).filter((v): v is number => v !== null);
         return {
           label: monthLabel(a.month),
-          net: pct(exVat(a.payout) - a.cogs, exVat(a.payout)),
           prod: pct(exVat(a.gross) - a.cogs, exVat(a.gross)),
-          netTrail: trailEnough && validNets.length >= 2 ? validNets.reduce((s, v) => s + v, 0) / validNets.length : null,
+          comm: pct(exVat(a.payout + a.discount) - a.cogs, exVat(a.payout + a.discount)),
+          net: pct(exVat(a.payout) - a.cogs, exVat(a.payout)),
           prodTrail: trailEnough && validProds.length >= 2 ? validProds.reduce((s, v) => s + v, 0) / validProds.length : null,
+          commTrail: trailEnough && validComms.length >= 2 ? validComms.reduce((s, v) => s + v, 0) / validComms.length : null,
+          netTrail: trailEnough && validNets.length >= 2 ? validNets.reduce((s, v) => s + v, 0) / validNets.length : null,
         };
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [monthAggs],
+    [allMonthAggs],
   );
 
   // Shared active-days-per-month helper (orders denominator, per range).
@@ -234,56 +256,51 @@ function PublicDashboard() {
     return m;
   }, [data, monthAggs, platforms]);
 
-  // Avg orders/day per month with MoM % change.
-  const avgOrdersTrend = useMemo(() => {
-    return monthAggs.map((a, i, arr) => {
-      const days = activeDaysPerMonth.get(a.month) ?? 0;
-      const avg = days > 0 ? a.orders / days : null;
+  // Full-history active-days — used by the order volume trend chart (always shows all months).
+  const allActiveDaysPerMonth = useMemo(() => {
+    if (!data) return new Map<string, number>();
+    const m = new Map<string, number>();
+    for (const mo of allMonthAggs) {
+      m.set(mo.month, new Set(
+        data.daily
+          .filter((d) => monthOfDate(d.date) === mo.month && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
+          .map((d) => d.date),
+      ).size);
+    }
+    return m;
+  }, [data, allMonthAggs, platforms]);
+
+  // Combined order volume trend (orders/day + sales/day) — always shows all months.
+  const orderVolumeTrend = useMemo(() => {
+    return allMonthAggs.map((a, i, arr) => {
+      const days = allActiveDaysPerMonth.get(a.month) ?? 0;
+      const ordersAvg = days > 0 ? a.orders / days : null;
+      const salesAvg = days > 0 ? a.gross / days : null;
       const prevA = i > 0 ? arr[i - 1] : null;
-      const prevDays = prevA ? (activeDaysPerMonth.get(prevA.month) ?? 0) : 0;
-      const prevAvg = prevA && prevDays > 0 ? prevA.orders / prevDays : null;
-      const momPct = avg != null && prevAvg != null && prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : null;
+      const prevDays = prevA ? (allActiveDaysPerMonth.get(prevA.month) ?? 0) : 0;
+      const prevOrdersAvg = prevA && prevDays > 0 ? prevA.orders / prevDays : null;
+      const prevSalesAvg = prevA && prevDays > 0 ? prevA.gross / prevDays : null;
+      const ordersMomPct = ordersAvg != null && prevOrdersAvg != null && prevOrdersAvg > 0
+        ? ((ordersAvg - prevOrdersAvg) / prevOrdersAvg) * 100 : null;
+      const salesMomPct = salesAvg != null && prevSalesAvg != null && prevSalesAvg > 0
+        ? ((salesAvg - prevSalesAvg) / prevSalesAvg) * 100 : null;
       const win = arr.slice(Math.max(0, i - 2), i + 1);
-      const winAvgs = win.map((w) => {
-        const d = activeDaysPerMonth.get(w.month) ?? 0;
-        return d > 0 ? w.orders / d : null;
-      }).filter((v): v is number => v !== null);
+      const winOrders = win.map((w) => { const d = allActiveDaysPerMonth.get(w.month) ?? 0; return d > 0 ? w.orders / d : null; }).filter((v): v is number => v !== null);
+      const winSales = win.map((w) => { const d = allActiveDaysPerMonth.get(w.month) ?? 0; return d > 0 ? w.gross / d : null; }).filter((v): v is number => v !== null);
       return {
         label: monthLabel(a.month),
         prevLabel: prevA ? monthLabel(prevA.month) : null,
-        avg,
-        momPct,
-        trail: win.length >= 2 && winAvgs.length >= 2 ? winAvgs.reduce((s, v) => s + v, 0) / winAvgs.length : null,
+        ordersAvg,
+        salesAvg,
+        ordersMomPct,
+        salesMomPct,
+        ordersTrail: win.length >= 2 && winOrders.length >= 2 ? winOrders.reduce((s, v) => s + v, 0) / winOrders.length : null,
+        salesTrail: win.length >= 2 && winSales.length >= 2 ? winSales.reduce((s, v) => s + v, 0) / winSales.length : null,
       };
     });
-  }, [monthAggs, activeDaysPerMonth]);
+  }, [allMonthAggs, allActiveDaysPerMonth]);
 
-  // Avg gross sales/day per month with MoM % change.
-  const avgSalesTrend = useMemo(() => {
-    return monthAggs.map((a, i, arr) => {
-      const days = activeDaysPerMonth.get(a.month) ?? 0;
-      const avg = days > 0 ? a.gross / days : null;
-      const prevA = i > 0 ? arr[i - 1] : null;
-      const prevDays = prevA ? (activeDaysPerMonth.get(prevA.month) ?? 0) : 0;
-      const prevAvg = prevA && prevDays > 0 ? prevA.gross / prevDays : null;
-      const momPct = avg != null && prevAvg != null && prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : null;
-      const win = arr.slice(Math.max(0, i - 2), i + 1);
-      const winAvgs = win.map((w) => {
-        const d = activeDaysPerMonth.get(w.month) ?? 0;
-        return d > 0 ? w.gross / d : null;
-      }).filter((v): v is number => v !== null);
-      return {
-        label: monthLabel(a.month),
-        prevLabel: prevA ? monthLabel(prevA.month) : null,
-        avg,
-        momPct,
-        trail: win.length >= 2 && winAvgs.length >= 2 ? winAvgs.reduce((s, v) => s + v, 0) / winAvgs.length : null,
-      };
-    });
-  }, [monthAggs, activeDaysPerMonth]);
-
-  const [showAvgOrdersTrailing, setShowAvgOrdersTrailing] = useState(false);
-  const [showAvgSalesTrailing, setShowAvgSalesTrailing] = useState(false);
+  const [showAvgTrailing, setShowAvgTrailing] = useState(false);
 
   // --- Pace tracker: always current month, ignores range filter ---
   const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
@@ -439,46 +456,29 @@ function PublicDashboard() {
         </div>
 
         <SectionLabel>Analytics — Controlled by the Range &amp; Platform Filters Above</SectionLabel>
-        <div className="grid lg:grid-cols-2 gap-3.5">
-          <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"}>
-            <ResponsiveContainer>
-              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip {...tooltipStyle} formatter={(v: number, name: string) => name === "7-day avg" ? `${Math.round(v)} JOD` : `${Math.round(v)} JOD`} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {platforms.includes("Talabat") && <Bar dataKey="Talabat" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--talabat)" radius={[3, 3, 0, 0]} />}
-                {platforms.includes("Careem") && <Bar dataKey="Careem" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--careem)" radius={[3, 3, 0, 0]} />}
-                {rangeIsSingleMonth && (
-                  <Line type="monotone" dataKey="avg7d" name="7-day avg" stroke="#f5b400" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartCard>
-          <ChartCard title="Two Margins Compared" sub="Product margin vs what you keep after the platform's cut">
-            <ResponsiveContainer>
-              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false}
-                       tickFormatter={(v) => `${v}%`} domain={[0, 100]} allowDataOverflow />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)}%`} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <ReferenceLine y={45} stroke="var(--muted-foreground)" strokeDasharray="6 4" label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }} />
-                <Line type="monotone" dataKey="prod" name="Product margin %" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3, fill: "var(--primary)" }} />
-                <Line type="monotone" dataKey="net" name="Net margin after commission %" stroke="var(--careem)" strokeWidth={2} dot={{ r: 3, fill: "var(--careem)" }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </div>
+        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"}>
+          <ResponsiveContainer>
+            <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+              <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+              <Tooltip {...tooltipStyle} formatter={(v: number) => `${Math.round(v)} JOD`} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {platforms.includes("Talabat") && <Bar dataKey="Talabat" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--talabat)" radius={[3, 3, 0, 0]} />}
+              {platforms.includes("Careem") && <Bar dataKey="Careem" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--careem)" radius={[3, 3, 0, 0]} />}
+              {rangeIsSingleMonth && (
+                <Line type="monotone" dataKey="avg7d" name="7-day avg" stroke="#f5b400" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </ChartCard>
 
-        {marginTrend.length >= 2 && (
+        {allMonthAggs.length >= 2 && (
           <>
             <SectionLabel>Margin Trend · Monthly</SectionLabel>
             <ChartCard
-              title="Net Margin over Time"
-              sub="Monthly net margin (after platform cut) vs product margin — always from monthly totals, matching the KPI cards above"
+              title="Margin over Time"
+              sub="Product → After commission → Net margin — full monthly history; not affected by the date filter above"
               action={
                 marginTrend.some((d) => d.netTrail !== null) ? (
                   <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
@@ -514,67 +514,49 @@ function PublicDashboard() {
                     strokeDasharray="6 4"
                     label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }}
                   />
-                  <Line type="monotone" dataKey="prod" name="Product margin %" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)" }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="net" name="Net margin after commission %" stroke="var(--careem)" strokeWidth={2} dot={{ r: 4, fill: "var(--careem)" }} activeDot={{ r: 5 }} />
-                  {showTrailing && <Line type="monotone" dataKey="prodTrail" name="Product margin 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showTrailing && <Line type="monotone" dataKey="netTrail" name="Net margin 3m avg" stroke="var(--careem)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {/* Three clearly distinct colors: charcoal / taupe / green */}
+                  <Line type="monotone" dataKey="prod" name="Product margin" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="comm" name="After commission" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  {showTrailing && <Line type="monotone" dataKey="prodTrail" name="Product 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line type="monotone" dataKey="commTrail" name="After commission 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line type="monotone" dataKey="netTrail" name="Net 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
           </>
         )}
 
-        {avgOrdersTrend.length >= 2 && (
+        {orderVolumeTrend.length >= 2 && (
           <>
             <SectionLabel>Order Volume Trend · Monthly</SectionLabel>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-              <ChartCard
-                title="Avg Orders / Day"
-                sub="Active days = days with ≥1 order — matches the KPI avg/day sub-stat"
-                action={
-                  avgOrdersTrend.some((d) => d.trail !== null) ? (
-                    <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-                      <input type="checkbox" className="accent-primary" checked={showAvgOrdersTrailing} onChange={(e) => setShowAvgOrdersTrailing(e.target.checked)} />
-                      3m avg
-                    </label>
-                  ) : null
-                }
-              >
-                <ResponsiveContainer>
-                  <LineChart data={avgOrdersTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                    <CartesianGrid stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                    <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
-                    <Tooltip content={<AvgDayTooltip unit="orders/day" fmt={(v) => v.toFixed(1)} />} />
-                    <Line type="monotone" dataKey="avg" name="Avg orders/day" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)" }} activeDot={{ r: 5 }} connectNulls={false} />
-                    {showAvgOrdersTrailing && <Line type="monotone" dataKey="trail" name="3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Avg Sales / Day (JOD)"
-                sub="Active days = days with ≥1 order — matches the KPI avg JOD/day sub-stat"
-                action={
-                  avgSalesTrend.some((d) => d.trail !== null) ? (
-                    <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-                      <input type="checkbox" className="accent-primary" checked={showAvgSalesTrailing} onChange={(e) => setShowAvgSalesTrailing(e.target.checked)} />
-                      3m avg
-                    </label>
-                  ) : null
-                }
-              >
-                <ResponsiveContainer>
-                  <LineChart data={avgSalesTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                    <CartesianGrid stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                    <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
-                    <Tooltip content={<AvgDayTooltip unit="JOD/day" fmt={(v) => `${Math.round(v)}`} />} />
-                    <Line type="monotone" dataKey="avg" name="Avg sales/day" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B" }} activeDot={{ r: 5 }} connectNulls={false} />
-                    {showAvgSalesTrailing && <Line type="monotone" dataKey="trail" name="3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-            </div>
+            <ChartCard
+              title="Order Volume Trend"
+              sub="Avg orders/day (left) vs avg sales/day JOD (right) — full history; not affected by the date filter above"
+              action={
+                orderVolumeTrend.some((d) => d.ordersTrail !== null) ? (
+                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                    <input type="checkbox" className="accent-primary" checked={showAvgTrailing} onChange={(e) => setShowAvgTrailing(e.target.checked)} />
+                    3m avg
+                  </label>
+                ) : null
+              }
+            >
+              <ResponsiveContainer>
+                <LineChart data={orderVolumeTrend} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                  <CartesianGrid stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                  <YAxis yAxisId="orders" orientation="left" stroke="var(--foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
+                  <YAxis yAxisId="sales" orientation="right" stroke="#C8B89B" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
+                  <Tooltip content={<OrderVolumeTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line yAxisId="orders" type="monotone" dataKey="ordersAvg" name="Avg orders/day" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  <Line yAxisId="sales" type="monotone" dataKey="salesAvg" name="Avg JOD/day" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  {showAvgTrailing && <Line yAxisId="orders" type="monotone" dataKey="ordersTrail" name="Orders 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showAvgTrailing && <Line yAxisId="sales" type="monotone" dataKey="salesTrail" name="JOD 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
           </>
         )}
 
@@ -880,6 +862,41 @@ function AvgDayTooltip({ active, payload, unit, fmt }: {
       {momPct != null && !isTrail && (
         <div style={{ marginTop: 2, fontWeight: 600, color: momPct >= 0 ? "var(--careem)" : "var(--destructive)" }}>
           {momPct >= 0 ? "▲" : "▼"} {momPct >= 0 ? "+" : ""}{Math.round(momPct)}% vs {prevLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrderVolumeTooltip({ active, payload }: {
+  active?: boolean;
+  payload?: { value: number; name: string; color: string; payload: { label: string; prevLabel: string | null; ordersMomPct: number | null; salesMomPct: number | null } }[];
+}) {
+  if (!active || !payload?.length) return null;
+  const { label, prevLabel, ordersMomPct, salesMomPct } = payload[0].payload;
+  const ordersEntry = payload.find((e) => e.name === "Avg orders/day" || e.name === "Orders 3m avg");
+  const salesEntry = payload.find((e) => e.name === "Avg JOD/day" || e.name === "JOD 3m avg");
+  return (
+    <div style={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, padding: "8px 12px", lineHeight: 1.6 }}>
+      <div style={{ color: "var(--foreground)", fontWeight: 600 }}>{label}</div>
+      {ordersEntry && (
+        <div style={{ color: "var(--muted-foreground)" }}>
+          Orders/day: <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{ordersEntry.value.toFixed(1)}</span>
+          {ordersMomPct != null && (
+            <span style={{ marginLeft: 6, fontWeight: 600, color: ordersMomPct >= 0 ? "var(--careem)" : "var(--destructive)" }}>
+              {ordersMomPct >= 0 ? "+" : ""}{Math.round(ordersMomPct)}% vs {prevLabel}
+            </span>
+          )}
+        </div>
+      )}
+      {salesEntry && (
+        <div style={{ color: "var(--muted-foreground)" }}>
+          JOD/day: <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{Math.round(salesEntry.value)}</span>
+          {salesMomPct != null && (
+            <span style={{ marginLeft: 6, fontWeight: 600, color: salesMomPct >= 0 ? "var(--careem)" : "var(--destructive)" }}>
+              {salesMomPct >= 0 ? "+" : ""}{Math.round(salesMomPct)}% vs {prevLabel}
+            </span>
+          )}
         </div>
       )}
     </div>
