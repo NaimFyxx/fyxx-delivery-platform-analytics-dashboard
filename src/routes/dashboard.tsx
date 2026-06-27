@@ -344,7 +344,7 @@ function PublicDashboard() {
           {range === "custom" && (
             <div className="flex gap-2 items-center bg-card border border-border rounded-full px-3 py-1 text-xs">
               <label className="text-muted-foreground">From</label>
-              <div className="w-36"><MonthPicker value={customFrom} onChange={handleCustomFrom} max={customTo} /></div>
+              <div className="w-36"><MonthPicker value={customFrom} onChange={handleCustomFrom} /></div>
               <label className="text-muted-foreground">To</label>
               <div className="w-36"><MonthPicker value={customTo} onChange={handleCustomTo} min={customFrom} /></div>
             </div>
