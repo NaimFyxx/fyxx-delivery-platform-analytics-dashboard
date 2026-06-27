@@ -194,6 +194,36 @@ function PublicDashboard() {
     [monthAggs],
   );
 
+  // Avg orders/day per month — distinct dates with any orders as denominator.
+  const avgOrdersTrend = useMemo(() => {
+    if (!data) return [];
+    return monthAggs.map((a, i, arr) => {
+      const activeDaysMonth = new Set(
+        data.daily
+          .filter((d) => monthOfDate(d.date) === a.month && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
+          .map((d) => d.date),
+      ).size;
+      const avg = activeDaysMonth > 0 ? a.orders / activeDaysMonth : null;
+      // 3-month trailing avg
+      const win = arr.slice(Math.max(0, i - 2), i + 1);
+      const winAvgs = win.map((w) => {
+        const days = new Set(
+          data.daily
+            .filter((d) => monthOfDate(d.date) === w.month && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
+            .map((d) => d.date),
+        ).size;
+        return days > 0 ? w.orders / days : null;
+      }).filter((v): v is number => v !== null);
+      return {
+        label: monthLabel(a.month),
+        avg,
+        trail: win.length >= 2 && winAvgs.length >= 2 ? winAvgs.reduce((s, v) => s + v, 0) / winAvgs.length : null,
+      };
+    });
+  }, [data, monthAggs, platforms]);
+
+  const [showAvgOrdersTrailing, setShowAvgOrdersTrailing] = useState(false);
+
   // --- Pace tracker: always current month, ignores range filter ---
   // Always shows the current month, but respects the platform filter
   // (single platform → only that row). Mirrors the GM tracking sheet:
@@ -465,6 +495,46 @@ function PublicDashboard() {
                   <Line type="monotone" dataKey="net" name="Net margin after commission %" stroke="var(--careem)" strokeWidth={2} dot={{ r: 4, fill: "var(--careem)" }} activeDot={{ r: 5 }} />
                   {showTrailing && <Line type="monotone" dataKey="prodTrail" name="Product margin 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                   {showTrailing && <Line type="monotone" dataKey="netTrail" name="Net margin 3m avg" stroke="var(--careem)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </>
+        )}
+
+        {avgOrdersTrend.length >= 2 && (
+          <>
+            <SectionLabel>Order Volume Trend · Monthly</SectionLabel>
+            <ChartCard
+              title="Avg Orders / Day"
+              sub="Monthly average daily order count — active days only (days with at least one order), matching the avg/day KPI sub-stat"
+              action={
+                avgOrdersTrend.some((d) => d.trail !== null) ? (
+                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={showAvgOrdersTrailing}
+                      onChange={(e) => setShowAvgOrdersTrailing(e.target.checked)}
+                    />
+                    3m trailing avg
+                  </label>
+                ) : null
+              }
+            >
+              <ResponsiveContainer>
+                <LineChart data={avgOrdersTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                  <CartesianGrid stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(v: number, name: string) => [`${v.toFixed(1)} orders/day`, name === "trail" ? "3m trailing avg" : "Avg orders/day"]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="avg" name="Avg orders/day" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)" }} activeDot={{ r: 5 }} connectNulls={false} />
+                  {showAvgOrdersTrailing && (
+                    <Line type="monotone" dataKey="trail" name="3m trailing avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
