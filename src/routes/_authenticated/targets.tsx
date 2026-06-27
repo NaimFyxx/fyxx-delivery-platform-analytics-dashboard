@@ -3,16 +3,13 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
-import { InfoTip } from "@/components/fyxx/info-tip";
 import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, Loader2, Pencil, X } from "lucide-react";
-import { fmtJOD, fmtPct, platformBg, PLATFORMS, type Platform } from "@/lib/fyxx";
+import { ArrowDownRight, ArrowUpRight, Check, Loader2, PartyPopper, Pencil, X } from "lucide-react";
+import { fmtJOD, fmtPct, PLATFORMS, type Platform } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/_authenticated/targets")({
   head: () => ({ meta: [{ title: "Targets · TGR" }] }),
@@ -27,13 +24,68 @@ function fmtMonthLong(m: string) {
   const [y, mo] = m.split("-").map(Number);
   return `${MONTH_NAMES_LONG[mo - 1]} ${y}`;
 }
+const platformColor = (p: Platform) => (p === "Careem" ? "var(--careem)" : "var(--talabat)");
+
+type Tone = "win" | "onpace" | "close" | "behind" | "below";
+type Status = {
+  badge: { label: string; tone: Tone; celebrate?: boolean };
+  arrow: { up: boolean; pct: number; ref: string };
+} | null;
+
+// Decide the badge + over/under arrow for a month.
+// Completed months get a final verdict; the in-progress month is judged on pace (no harsh "missed").
+function buildStatus(inProgress: boolean, actual: number, target: number, proRated: number): Status {
+  if (target <= 0) return null;
+  if (inProgress) {
+    const delta = proRated > 0 ? (actual - proRated) / proRated : 0;
+    return {
+      badge: actual >= proRated ? { label: "On pace", tone: "onpace" } : { label: "Behind pace", tone: "behind" },
+      arrow: { up: delta >= 0, pct: Math.abs(delta) * 100, ref: "vs pace" },
+    };
+  }
+  const ach = actual / target;
+  const over = ach - 1;
+  const badge =
+    ach >= 1 ? { label: "Target hit", tone: "win" as Tone, celebrate: true }
+    : ach >= 0.9 ? { label: "So close", tone: "close" as Tone }
+    : { label: "Below target", tone: "below" as Tone };
+  return { badge, arrow: { up: over >= 0, pct: Math.abs(over) * 100, ref: "vs target" } };
+}
+
+const TONE_CLS: Record<Tone, string> = {
+  win:    "bg-success/10 text-success border-success/40",
+  onpace: "bg-success/10 text-success border-success/40",
+  close:  "bg-amber-500/10 text-amber-600 border-amber-500/40",
+  behind: "bg-amber-500/10 text-amber-600 border-amber-500/40",
+  below:  "bg-muted text-muted-foreground border-border",
+};
+
+function StatusBadge({ s }: { s: NonNullable<Status>["badge"] }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${TONE_CLS[s.tone]}`}>
+      {s.celebrate && <PartyPopper className="size-3.5" />}
+      {s.label}
+    </span>
+  );
+}
+
+function DeltaArrow({ a }: { a: NonNullable<Status>["arrow"] }) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold ${a.up ? "text-success" : "text-destructive"}`}>
+      {a.up ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
+      {a.pct.toFixed(0)}% {a.up ? "over" : "under"} <span className="text-muted-foreground font-normal">{a.ref}</span>
+    </span>
+  );
+}
 
 function TargetsPage() {
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const qc = useQueryClient();
 
-  // All targets across all months
+  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = today.slice(0, 7);
+
   const { data: targets = [] } = useQuery({
     queryKey: ["targets_all"],
     queryFn: async () => {
@@ -47,17 +99,13 @@ function TargetsPage() {
     () => Array.from(new Set(targets.map((t) => t.month))).sort().reverse(),
     [targets],
   );
-
-  // Earliest month with a target, for the daily_sales span query
   const earliest = useMemo(() => [...targetMonths].sort()[0] ?? null, [targetMonths]);
 
-  // Daily sales across the full span — proper date bounds (next-month exclusive)
   const { data: sales = [] } = useQuery({
     queryKey: ["daily_sales_span", earliest],
     queryFn: async () => {
       if (!earliest) return [];
       const start = `${earliest}-01`;
-      const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from("daily_sales").select("*").gte("date", start).lte("date", today);
       if (error) throw error;
@@ -66,7 +114,6 @@ function TargetsPage() {
     enabled: !!earliest,
   });
 
-  // "YYYY-MM|Platform" → gross sales
   const salesMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of sales) {
@@ -76,7 +123,6 @@ function TargetsPage() {
     return map;
   }, [sales]);
 
-  // Upsert a target — same mutation the Data entry Targets tab uses
   const saveMut = useMutation({
     mutationFn: async ({ month, platform, value }: { month: string; platform: Platform; value: number }) => {
       const { error } = await supabase.from("targets").upsert(
@@ -97,122 +143,131 @@ function TargetsPage() {
     setEditKey(`${month}|${platform}`);
     setEditValue(current > 0 ? String(current) : "");
   }
-
   function cancelEdit() {
     setEditKey(null);
     setEditValue("");
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader title="Targets vs actuals" description="Monthly sales targets per platform, from the first month targets were set." />
+    <div className="p-6 max-w-3xl mx-auto">
+      <PageHeader title="Targets vs actuals" description="Monthly pace per platform. Completed months show the final result; the current month is judged on pace." />
 
       {targetMonths.length === 0 && (
         <p className="text-sm text-muted-foreground mt-4">No targets set yet. Add them on the Data entry page.</p>
       )}
 
-      {targetMonths.map((month) => (
-        <div key={month} className="mb-8">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-            {fmtMonthLong(month)}
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {PLATFORMS.map((p) => {
-              const t = targets.find((x) => x.month === month && x.platform === p);
-              const actual = salesMap.get(`${month}|${p}`) ?? 0;
-              const targetVal = Number(t?.sales_target_jod ?? 0);
-              const pct = targetVal > 0 ? Math.min(actual / targetVal, 1) : 0;
-              const key = `${month}|${p}`;
-              const isEditing = editKey === key;
-              const previewTarget = Number(editValue);
-              const previewPct = previewTarget > 0 ? Math.min(actual / previewTarget, 1) : 0;
+      <div className="space-y-4">
+        {targetMonths.map((month) => {
+          const inProgress = month === currentMonth;
+          const [yy, mm] = month.split("-").map(Number);
+          const daysInMonth = new Date(yy, mm, 0).getDate();
+          const dayOfMonth = inProgress ? Math.min(Number(today.slice(8, 10)), daysInMonth) : daysInMonth;
 
-              return (
-                <Card key={p} className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-display text-xl font-semibold">{p}</h3>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={platformBg(p)}>{month}</Badge>
-                      {!isEditing && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                          onClick={() => startEdit(month, p, targetVal)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+          // Combined actual / target across both platforms
+          let cActual = 0, cTarget = 0;
+          for (const p of PLATFORMS) {
+            cActual += salesMap.get(`${month}|${p}`) ?? 0;
+            cTarget += Number(targets.find((x) => x.month === month && x.platform === p)?.sales_target_jod ?? 0);
+          }
+          const proRated = cTarget * (dayOfMonth / daysInMonth);
+          const status = buildStatus(inProgress, cActual, cTarget, proRated);
+          const combinedPct = cTarget > 0 ? cActual / cTarget : 0;
 
-                  {isEditing ? (
-                    <div className="space-y-4">
-                      <div>
-                        <Label className="text-xs mb-1.5 block">Sales target (JOD)</Label>
-                        <div className="flex gap-2">
+          // Stacked bar segments against the combined target
+          const careemActual = salesMap.get(`${month}|Careem`) ?? 0;
+          const talabatActual = salesMap.get(`${month}|Talabat`) ?? 0;
+          const careemW = cTarget > 0 ? Math.min((careemActual / cTarget) * 100, 100) : 0;
+          const talabatW = cTarget > 0 ? Math.min((talabatActual / cTarget) * 100, 100 - careemW) : 0;
+
+          return (
+            <Card key={month} className="p-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-display text-lg font-semibold">{fmtMonthLong(month)}</h2>
+                  {inProgress && (
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded-full px-2 py-0.5">
+                      Day {dayOfMonth}/{daysInMonth}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {status && <DeltaArrow a={status.arrow} />}
+                  {status && <StatusBadge s={status.badge} />}
+                </div>
+              </div>
+
+              {/* Combined stacked pace bar */}
+              <div className="h-3 w-full rounded-full bg-muted overflow-hidden flex mb-2">
+                <div style={{ width: `${careemW}%`, background: "var(--careem)" }} />
+                <div style={{ width: `${talabatW}%`, background: "var(--talabat)" }} />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+                <span className="text-num">
+                  Combined <span className="font-semibold text-foreground">{fmtJOD(cActual)}</span> / {fmtJOD(cTarget)}
+                </span>
+                <span className="text-num font-semibold" style={{ color: combinedPct >= 1 ? "var(--careem)" : undefined }}>
+                  {cTarget > 0 ? fmtPct(combinedPct) : "—"}
+                </span>
+              </div>
+
+              {/* Per-platform rows (with inline edit) */}
+              <div className="space-y-2 pt-3 border-t border-border">
+                {PLATFORMS.map((p) => {
+                  const t = targets.find((x) => x.month === month && x.platform === p);
+                  const actual = salesMap.get(`${month}|${p}`) ?? 0;
+                  const targetVal = Number(t?.sales_target_jod ?? 0);
+                  const pct = targetVal > 0 ? actual / targetVal : 0;
+                  const key = `${month}|${p}`;
+                  const isEditing = editKey === key;
+
+                  return (
+                    <div key={p} className="flex items-center gap-2 text-sm min-h-8">
+                      <span className="size-2 rounded-full shrink-0" style={{ background: platformColor(p) }} />
+                      <span className="font-medium w-16 shrink-0">{p}</span>
+                      {isEditing ? (
+                        <div className="flex gap-2 items-center flex-1">
+                          <Label className="sr-only">Sales target (JOD)</Label>
                           <Input
-                            type="number"
-                            step="0.001"
-                            min="0"
-                            value={editValue}
+                            type="number" step="0.001" min="0" value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             // eslint-disable-next-line jsx-a11y/no-autofocus
-                            autoFocus
-                            className="h-8 text-sm"
+                            autoFocus className="h-8 text-sm max-w-40"
+                            placeholder="Sales target (JOD)"
                           />
-                          <Button
-                            size="sm"
-                            className="h-8 px-3"
-                            disabled={saveMut.isPending || !editValue}
-                            onClick={() => saveMut.mutate({ month, platform: p as Platform, value: previewTarget })}
-                          >
+                          <Button size="sm" className="h-8 px-3" disabled={saveMut.isPending || !editValue}
+                            onClick={() => saveMut.mutate({ month, platform: p as Platform, value: Number(editValue) })}>
                             {saveMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                           </Button>
                           <Button size="sm" variant="ghost" className="h-8 px-3" onClick={cancelEdit}>
                             <X className="size-3.5" />
                           </Button>
                         </div>
-                      </div>
-                      {previewTarget > 0 && (
-                        <Row
-                          label="Sales (gross)"
-                          actual={fmtJOD(actual)}
-                          target={fmtJOD(previewTarget)}
-                          pct={previewPct}
-                          infoId="sales_incl_vat"
-                        />
+                      ) : t ? (
+                        <>
+                          <span className="text-num ml-auto">
+                            <span className="font-semibold">{fmtJOD(actual)}</span>{" "}
+                            <span className="text-muted-foreground">/ {fmtJOD(targetVal)}</span>
+                          </span>
+                          <span className="text-num text-xs text-muted-foreground w-12 text-right">{fmtPct(pct)}</span>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => startEdit(month, p, targetVal)}>
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          No target ·{" "}
+                          <button className="underline hover:text-foreground" onClick={() => startEdit(month, p, 0)}>set one</button>
+                        </span>
                       )}
                     </div>
-                  ) : !t ? (
-                    <p className="text-sm text-muted-foreground">No target set. Add one on the Data entry page.</p>
-                  ) : (
-                    <div className="space-y-5">
-                      <Row label="Sales (gross)" actual={fmtJOD(actual)} target={fmtJOD(targetVal)} pct={pct} infoId="sales_incl_vat" />
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Row({ label, actual, target, pct, infoId }: { label: string; actual: string; target: string; pct: number; infoId?: string }) {
-  return (
-    <div>
-      <div className="flex items-end justify-between mb-2 text-sm">
-        <span className="text-muted-foreground flex items-center">{label}{infoId && <InfoTip id={infoId} side="top" />}</span>
-        <span className="text-num">
-          <span className="font-semibold">{actual}</span>{" "}
-          <span className="text-muted-foreground">/ {target}</span>
-        </span>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })}
       </div>
-      <Progress value={pct * 100} className="h-3" />
-      <div className="mt-1 text-xs text-muted-foreground text-right text-num">{fmtPct(pct)}</div>
     </div>
   );
 }
