@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { InfoTip } from "@/components/fyxx/info-tip";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -179,6 +180,7 @@ function TargetsPage() {
                           actual={fmtJOD(actual)}
                           target={fmtJOD(previewTarget)}
                           pct={previewPct}
+                          infoId="sales_incl_vat"
                         />
                       )}
                     </div>
@@ -186,7 +188,7 @@ function TargetsPage() {
                     <p className="text-sm text-muted-foreground">No target set. Add one on the Data entry page.</p>
                   ) : (
                     <div className="space-y-5">
-                      <Row label="Sales (gross)" actual={fmtJOD(actual)} target={fmtJOD(targetVal)} pct={pct} />
+                      <Row label="Sales (gross)" actual={fmtJOD(actual)} target={fmtJOD(targetVal)} pct={pct} infoId="sales_incl_vat" />
                     </div>
                   )}
                 </Card>
@@ -199,11 +201,11 @@ function TargetsPage() {
   );
 }
 
-function Row({ label, actual, target, pct }: { label: string; actual: string; target: string; pct: number }) {
+function Row({ label, actual, target, pct, infoId }: { label: string; actual: string; target: string; pct: number; infoId?: string }) {
   return (
     <div>
       <div className="flex items-end justify-between mb-2 text-sm">
-        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground flex items-center">{label}{infoId && <InfoTip id={infoId} side="top" />}</span>
         <span className="text-num">
           <span className="font-semibold">{actual}</span>{" "}
           <span className="text-muted-foreground">/ {target}</span>

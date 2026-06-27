@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { InfoTip } from "@/components/fyxx/info-tip";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -80,14 +81,14 @@ function Financials() {
             <TableRow>
               <TableHead>Month</TableHead>
               <TableHead>Platform</TableHead>
-              <TableHead className="text-right">Gross (incl. VAT)</TableHead>
-              <TableHead className="text-right">Discount</TableHead>
-              <TableHead className="text-right">Net sales</TableHead>
-              <TableHead className="text-right">Actual payout</TableHead>
-              <TableHead className="text-right">Platform fee %</TableHead>
-              <TableHead className="text-right">COGS</TableHead>
-              <TableHead className="text-right">Net profit</TableHead>
-              <TableHead className="text-right">Net margin</TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Gross (incl. VAT)<InfoTip id="sales_incl_vat" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Discount<InfoTip id="discount" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Net sales<InfoTip id="net_sales" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Actual payout<InfoTip id="actual_payout" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Platform fee %<InfoTip id="platform_fee_pct" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">COGS<InfoTip id="total_cogs" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Net profit<InfoTip id="net_profit_kept" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Net margin<InfoTip id="net_margin" side="bottom" /></span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

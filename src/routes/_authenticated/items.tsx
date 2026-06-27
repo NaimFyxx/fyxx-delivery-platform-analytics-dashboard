@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { InfoTip } from "@/components/fyxx/info-tip";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -204,14 +205,12 @@ function Items() {
             <TableRow>
               <TableHead>Item</TableHead>
               <TableHead>Platforms</TableHead>
-              <TableHead className="text-right">Units</TableHead>
-              <TableHead className="text-right">Talabat — sell price</TableHead>
-              <TableHead className="text-right">Careem — sell price</TableHead>
-              <TableHead className="text-right">Unit cost (ex-VAT)</TableHead>
-              <TableHead className="text-right">Total COGS</TableHead>
-              <TableHead className="text-right" title="Margin after the platform's commission & fixed fees only — promos/discounts added back so it isn't distorted by inconsistent promo spend. Ex-VAT, allocated by revenue share (Zeid's method).">
-                Margin after commission %
-              </TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Units<InfoTip id="units" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Talabat — sell price<InfoTip id="sell_price" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Careem — sell price<InfoTip id="sell_price" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Unit cost (ex-VAT)<InfoTip id="unit_cost" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Total COGS<InfoTip id="total_cogs" side="bottom" /></span></TableHead>
+              <TableHead className="text-right"><span className="inline-flex items-center">Margin after commission %<InfoTip id="margin_after_commission" side="bottom" /></span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
