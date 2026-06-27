@@ -496,9 +496,9 @@ function InsightsPage() {
           ) : (
             <div className="overflow-auto overscroll-contain max-h-[520px]">
               <table className="min-w-[700px] w-full text-[12px]">
-                <thead className="bg-background/40 text-muted-foreground sticky top-0">
+                <thead className="bg-background text-muted-foreground sticky top-0">
                   <tr>
-                    <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" className="sticky left-0 z-20 bg-background/40 border-r border-border" />
+                    <ThSort label="Item" col="item" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} align="left" className="sticky left-0 z-20 bg-background border-r border-border" />
                     <ThSort label="Units" col="units" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <ThSort label="Revenue (JOD)" col="revenue" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <ThSort label="Avg price/unit" col="avgPrice" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
