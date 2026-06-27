@@ -68,6 +68,15 @@ function InsightsPage() {
   const [customFrom, setCustomFrom] = useState(currentMonth);
   const [customTo, setCustomTo] = useState(currentMonth);
 
+  const handleCustomFrom = (v: string) => {
+    setCustomFrom(v);
+    if (v > customTo) setCustomTo(v);
+  };
+  const handleCustomTo = (v: string) => {
+    setCustomTo(v);
+    if (v < customFrom) setCustomFrom(v);
+  };
+
   const allMonths = useMemo(() => {
     if (!data) return [];
     const set = new Set<string>();
@@ -293,11 +302,11 @@ function InsightsPage() {
             <div className="flex gap-2 items-center bg-card border border-border rounded-full px-3 py-1 text-xs">
               <label className="text-muted-foreground">From</label>
               <div className="w-36">
-                <MonthPicker value={customFrom} onChange={setCustomFrom} />
+                <MonthPicker value={customFrom} onChange={handleCustomFrom} max={customTo} />
               </div>
               <label className="text-muted-foreground">To</label>
               <div className="w-36">
-                <MonthPicker value={customTo} onChange={setCustomTo} />
+                <MonthPicker value={customTo} onChange={handleCustomTo} min={customFrom} />
               </div>
             </div>
           )}
