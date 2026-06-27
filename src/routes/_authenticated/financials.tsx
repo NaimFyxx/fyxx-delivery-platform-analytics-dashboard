@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { InfoTip } from "@/components/fyxx/info-tip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -126,7 +127,14 @@ function Financials() {
                     {fmtJOD(discount)}
                   </TableCell>
                   <TableCell className="text-right text-num">{fmtJOD(netSales)}</TableCell>
-                  <TableCell className="text-right text-num">{fmtJOD(payout)}</TableCell>
+                  <TableCell className="text-right text-num">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {fmtJOD(payout)}
+                      {(payout <= 0 || fee >= 0.95) && (
+                        <AnomalyNote gross={gross} discount={discount} payout={payout} cogs={cogs} />
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-right text-num">{fmtPct(fee)}</TableCell>
                   <TableCell className="text-right text-num text-muted-foreground">
                     {fmtJOD(cogs)}
@@ -148,5 +156,47 @@ function Financials() {
         </Table>
       </Card>
     </div>
+  );
+}
+
+function AnomalyNote({ gross, discount, payout, cogs }: { gross: number; discount: number; payout: number; cogs: number }) {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (timer.current) clearTimeout(timer.current); };
+  const scheduleClose = () => { timer.current = setTimeout(() => setOpen(false), 120); };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center justify-center text-amber-500 hover:text-amber-600 rounded-full focus:outline-none"
+          aria-label="Payout anomaly explanation"
+          onMouseEnter={() => { cancelClose(); setOpen(true); }}
+          onMouseLeave={scheduleClose}
+        >
+          <span className="text-[12px] leading-none select-none">⚠</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="left"
+        sideOffset={6}
+        className="w-[300px] p-3 text-[12px] leading-relaxed z-[200]"
+        onMouseEnter={cancelClose}
+        onMouseLeave={scheduleClose}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <p className="font-semibold text-[13px] mb-1.5 text-amber-600">Payout wiped out this month.</p>
+        <p className="text-muted-foreground">
+          Gross was <span className="text-foreground font-medium">{fmtJOD(gross)}</span>, but after
+          partner-funded promos (<span className="text-foreground font-medium">{fmtJOD(discount)}</span>),
+          the platform's commission & fees, and platform <strong>adjustments</strong> (e.g. a
+          clawback/correction settled this month), the actual payout was{" "}
+          <span className="text-foreground font-medium">{fmtJOD(payout)}</span>. You still paid{" "}
+          <span className="text-foreground font-medium">{fmtJOD(cogs)}</span> in food cost, so net
+          profit (= ex-VAT payout − COGS) is negative even though sales looked healthy. This is real
+          settlement data, not an error — the detail is in the platform's invoice/adjustments.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }

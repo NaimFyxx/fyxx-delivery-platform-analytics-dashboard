@@ -157,12 +157,12 @@ export const EXPLAINERS: Record<string, Explainer> = {
   // Customers
   new_customers: {
     label: "New customers",
-    meaning: "First-ever orders in the period — customers placing their debut order.",
+    meaning: "First-ever orders in the period — customers placing their debut order. Careem counts unique customers; Talabat reports order counts (not unique customers), so 'All platforms' blends the two bases.",
     formula: "count(new)",
   },
   returning_customers: {
     label: "Returning customers",
-    meaning: "Customers who had ordered from you before this period.",
+    meaning: "Customers who had ordered from you before this period. Careem counts unique customers; Talabat reports order counts, so 'All platforms' blends the two bases.",
     formula: "count(returning)",
   },
   reactivated: {
@@ -177,7 +177,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   repeat_rate: {
     label: "Repeat rate",
-    meaning: "Share of all customers (or orders for Talabat) that are returning, not first-timers.",
+    meaning: "Share of returning (non-first-time) customers. Careem measures this by unique customers; Talabat by orders, since Talabat only reports order-level data — so 'All platforms' blends the two bases.",
     formula: "returning ÷ total × 100",
     example: "14 returning / 20 total = 70%.",
   },
