@@ -1061,7 +1061,7 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
     const { start, next } = monthRange(month);
     const { data: orders, error } = await supabase
       .from("platform_orders")
-      .select("gross,net_payout,commission,payment_fee,platform_fee,discount,status")
+      .select("gross,net_payout,commission,payment_fee,platform_fee,discount,status,order_id")
       .eq("platform", platform)
       .gte("date", start)
       .lt("date", next);
@@ -1098,13 +1098,33 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
       }
     }
     if (platform === "Careem") {
+      // Build the set of same-month non-delivered (cancelled) Careem order IDs.
+      // A CLAWBACK adjustment that references one of these orders double-counts:
+      // the order's payout is already excluded from the delivered sum, so
+      // subtracting its clawback produces a phantom loss. Skip those rows.
+      // A CLAWBACK whose order_id is NOT in this set references a prior-period
+      // order (the payout was included in an earlier month) — keep it.
+      const cancelledIds = new Set<string>(
+        (orders ?? [])
+          .filter((o) => !isDelivered(o.status))
+          .map((o) => ((o as Record<string, unknown>).order_id as string) ?? "")
+          .filter((id) => id && id !== "-"),
+      );
       const { data: adj, error: aerr } = await supabase
         .from("monthly_adjustments")
-        .select("amount")
+        .select("amount,deduction_type,order_id")
         .eq("platform", "Careem")
         .eq("month", month);
       if (aerr) throw aerr;
-      payout += (adj ?? []).reduce((s, a) => s + Number(a.amount), 0);
+      for (const a of adj ?? []) {
+        const isClawback =
+          ((a as Record<string, unknown>).deduction_type as string | null)
+            ?.trim()
+            .toUpperCase() === "CLAWBACK";
+        const refId = (((a as Record<string, unknown>).order_id as string) ?? "").trim();
+        if (isClawback && refId && refId !== "-" && cancelledIds.has(refId)) continue;
+        payout += Number(a.amount);
+      }
     }
     const payload = {
       month,
@@ -1597,9 +1617,10 @@ async function buildCareemItems(
 //  - ON_DEMAND_PAYOUT = a cashout of money already earned/counted, not a cost.
 //  - Carry-over / brought-forward / rollover = the prior cycle's below-threshold payout rolling
 //    forward — a POSITIVE cashflow line; summing it as income/cost double-counts.
-// CLAWBACK (the customer-complaint deduction) is NOT here — it's a real loss and stays in: the
-// clawed-back order still appears as a full positive Delivered order in Order Level, so the
-// clawback is an extra deduction not already reflected.
+// CLAWBACK is stored as-is here. At reconcile time, reconcileFinancials skips any CLAWBACK whose
+// order_id matches a same-month non-delivered order (the payout was already excluded from the
+// delivered sum, so subtracting its clawback would double-count). CLAWBACKs for prior-period
+// orders (not in the current file) are kept — they're a genuine additional deduction.
 // Credits (e.g. COMPENSATIONS) are positive in the export and are real income — do NOT drop them.
 // Only drop rows whose category is a pure cashflow item (carry-over, cashout), not genuine P&L.
 const ADJ_EXCLUDED = new Set([
