@@ -153,15 +153,6 @@ function PublicDashboard() {
   const priorTotals = useMemo(() => (priorAggs ? sum(priorAggs) : null), [priorAggs]);
 
   // All-time totals (ignore filters — everything since day one)
-  const allTime = useMemo(() => {
-    if (!data) return { sales: 0, orders: 0 };
-    // Use monthly_financials for sales — same source as the KPI — so the header pill
-    // always agrees with the KPI when range=all / platform=All.
-    const sales = data.financials.reduce((s, r) => s + r.gross, 0);
-    const orders = data.daily.reduce((s, d) => s + (d.orders ?? 0), 0);
-    return { sales, orders };
-  }, [data]);
-
   const kpis = computeKpis(totals);
   const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
 
@@ -326,9 +317,9 @@ function PublicDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} allTime={allTime} />
+      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} />
 
-      <div className="max-w-[1180px] mx-auto px-7 pt-7 pb-20">
+      <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center mb-5">
           <Segmented
@@ -509,54 +500,76 @@ function PublicDashboard() {
 
 // ---------- small UI primitives ----------
 export function Header({
-  today, lastDailyDate, allTime,
+  today, lastDailyDate,
 }: {
   today: string;
   lastDailyDate: string | null;
-  allTime: { sales: number; orders: number };
 }) {
   const fresh = useFreshness(today, lastDailyDate);
   return (
-    <div className="flex items-center justify-between px-7 py-4 border-b border-border bg-card sticky top-0 z-50">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
-          <img src={tgrLogoDark} alt="The Green Room" className="h-10 w-auto" />
-          <span className="text-muted-foreground text-xs">×</span>
-          <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
-          <span className="text-muted-foreground text-xs">×</span>
-          <img src={careemLogo} alt="Careem" className="h-5 w-auto" />
+    <div className="border-b border-border bg-card sticky top-0 z-50">
+      {/* Mobile: two compact rows */}
+      <div className="flex md:hidden flex-col px-4 py-2.5 gap-1.5">
+        <div className="flex items-center justify-between">
+          <img src={tgrLogoDark} alt="The Green Room" className="h-8 w-auto" />
+          <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
+            <Link
+              to="/dashboard"
+              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+            >Dashboard</Link>
+            <Link
+              to="/insights"
+              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+            >Insights</Link>
+          </nav>
         </div>
-        <div>
-          <h1 className="font-display text-[17px] font-semibold leading-none">The Green Room — Delivery Dashboard</h1>
-          <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
+          <div className="flex items-center gap-1 text-[10px] shrink-0">
+            <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: fresh.color }} />
+            <span style={{ color: fresh.color }}>{fresh.text}</span>
+          </div>
         </div>
-        <nav className="ml-2 flex items-center gap-1 bg-background border border-border rounded-full p-1">
-          <Link
-            to="/dashboard"
-            className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-            activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-            inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-          >Dashboard</Link>
-          <Link
-            to="/insights"
-            className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-            activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-            inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-          >Insights</Link>
-        </nav>
       </div>
-      <div className="text-right">
-        <div className="flex items-center justify-end gap-1.5 text-[11px]">
-          <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: fresh.color }} />
-          <span style={{ color: fresh.color }}>{fresh.text}</span>
+
+      {/* Desktop: single row */}
+      <div className="hidden md:flex items-center justify-between px-7 py-3.5 gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="flex items-center gap-3 shrink-0">
+            <img src={tgrLogoDark} alt="The Green Room" className="h-10 w-auto" />
+            <span className="text-muted-foreground text-xs">×</span>
+            <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
+            <span className="text-muted-foreground text-xs">×</span>
+            <img src={careemLogo} alt="Careem" className="h-5 w-auto" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-[17px] font-semibold leading-none truncate">The Green Room — Delivery Dashboard</h1>
+            <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
+          </div>
         </div>
-        <div className="flex items-center justify-end gap-2 mt-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a] text-white/90">
-            All-time sales: {Math.round(allTime.sales).toLocaleString()} JOD
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#0f2c2c] border border-[#1a3a3a] text-white/90">
-            Orders: {allTime.orders.toLocaleString()}
-          </span>
+        <div className="flex items-center gap-4 shrink-0">
+          <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
+            <Link
+              to="/dashboard"
+              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+            >Dashboard</Link>
+            <Link
+              to="/insights"
+              className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+              activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+              inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+            >Insights</Link>
+          </nav>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: fresh.color }} />
+            <span style={{ color: fresh.color }}>{fresh.text}</span>
+          </div>
         </div>
       </div>
     </div>
