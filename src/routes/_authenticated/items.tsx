@@ -10,12 +10,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Badge } from "@/components/ui/badge";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { fmtJOD, fmtInt, platformBg, type Platform } from "@/lib/fyxx";
+import { costAsOf, normalizeItemName, type CostRow } from "@/lib/costs";
 import {
   Segmented,
   monthOfDate,
   prevMonth,
   monthsBetween,
-  nextMonth,
   monthLabel,
   type RangeKey,
 } from "../dashboard";
@@ -24,20 +24,6 @@ export const Route = createFileRoute("/_authenticated/items")({
   head: () => ({ meta: [{ title: "Items · TGR" }] }),
   component: Items,
 });
-
-function costAsOfLocal(
-  costs: Array<{ item_name: string; cost_exvat: number | string; effective_from: string }>,
-  item: string,
-  asOf: string,
-): number | null {
-  let best: { cost: number; from: string } | null = null;
-  for (const c of costs) {
-    if (c.item_name !== item) continue;
-    if (c.effective_from > asOf) continue;
-    if (!best || c.effective_from > best.from) best = { cost: Number(c.cost_exvat), from: c.effective_from };
-  }
-  return best ? best.cost : null;
-}
 
 function priceAsOf(
   prices: Array<{ item_name: string; platform: string; price_incl_vat: number; effective_from?: string }>,
@@ -132,10 +118,17 @@ function Items() {
     },
   });
 
+  // Map raw cost rows to the CostRow shape that costAsOf (from costs.ts) expects
+  const costRows: CostRow[] = useMemo(
+    () => costs.map((c) => ({ item: c.item_name, cost: Number(c.cost_exvat), effective_from: c.effective_from })),
+    [costs],
+  );
+
   const aggregated = useMemo(() => {
     type PerPlatform = { units: number; revenue: number };
+    // Key by normalizeItemName so "(12pcs)" and base spelling merge into one row
     const map = new Map<string, {
-      item: string;
+      item: string;        // shortest seen spelling for display
       units: number;
       platforms: Set<string>;
       talabat: PerPlatform;
@@ -143,19 +136,22 @@ function Items() {
       totalCogs: number;
     }>();
 
-    const platforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
+    const activePlatforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
 
     for (const s of sales) {
-      if (!platforms.includes(s.platform)) continue;
-      if (!map.has(s.item_name)) {
-        map.set(s.item_name, {
+      if (!activePlatforms.includes(s.platform)) continue;
+      const normKey = normalizeItemName(s.item_name);
+      if (!map.has(normKey)) {
+        map.set(normKey, {
           item: s.item_name, units: 0, platforms: new Set(),
           talabat: { units: 0, revenue: 0 },
           careem: { units: 0, revenue: 0 },
           totalCogs: 0,
         });
       }
-      const e = map.get(s.item_name)!;
+      const e = map.get(normKey)!;
+      // Prefer the shorter spelling for display (drops "(12pcs)" etc.)
+      if (s.item_name.length < e.item.length) e.item = s.item_name;
       e.units += s.units;
       e.platforms.add(s.platform);
       if (s.platform === "Talabat") {
@@ -165,9 +161,9 @@ function Items() {
         e.careem.units += s.units;
         e.careem.revenue += Number((s as any).revenue_jod ?? 0);
       }
-      // Per-month cost for accurate COGS across date range
+      // Per-month cost using shared normalized matcher (same as dashboard/Insights)
       const asOf = `${s.month}-28`;
-      const c = costAsOfLocal(costs, s.item_name, asOf);
+      const c = costAsOf(costRows, s.item_name, asOf);
       if (c != null) e.totalCogs += s.units * c;
     }
 
@@ -175,12 +171,12 @@ function Items() {
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
       .map((r) => ({
         ...r,
-        cost: costAsOfLocal(costs, r.item, latestMonthEnd),
+        cost: costAsOf(costRows, r.item, latestMonthEnd),
         listPriceTalabat: priceAsOf(prices, r.item, "Talabat", latestMonthEnd),
         listPriceCareem: priceAsOf(prices, r.item, "Careem", latestMonthEnd),
       }))
       .sort((a, b) => b.units - a.units);
-  }, [sales, costs, prices, platform, q, latestMonthEnd]);
+  }, [sales, costRows, prices, platform, q, latestMonthEnd]);
 
   const rangeLabel = useMemo(() => {
     if (range === "this") return monthLabel(currentMonthStr);
