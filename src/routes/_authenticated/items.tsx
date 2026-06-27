@@ -49,7 +49,25 @@ function Items() {
     },
   });
 
-  // Map item -> latest cost on or before the month
+  const { data: prices = [] } = useQuery({
+    queryKey: ["item_prices"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("item_prices").select("*");
+      if (error) throw error;
+      return (data ?? []) as { item_name: string; platform: string; price_incl_vat: number }[];
+    },
+  });
+
+  // "item_name|platform" → list price incl VAT
+  const priceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of prices) {
+      map.set(`${p.item_name}|${p.platform}`, Number(p.price_incl_vat));
+    }
+    return map;
+  }, [prices]);
+
+  // Cost as of end of month (string comparison — month-31 is always ≥ any real date in that month)
   const monthEnd = `${month}-31`;
   const costFor = useMemo(() => {
     const map = new Map<string, number>();
@@ -61,16 +79,40 @@ function Items() {
   }, [costs, monthEnd]);
 
   const aggregated = useMemo(() => {
-    const map = new Map<string, { item: string; units: number; platforms: Set<string> }>();
+    type PerPlatform = { units: number; revenue: number };
+    const map = new Map<string, {
+      item: string;
+      units: number;
+      platforms: Set<string>;
+      talabat: PerPlatform;
+      careem: PerPlatform;
+    }>();
     for (const s of sales) {
-      if (!map.has(s.item_name)) map.set(s.item_name, { item: s.item_name, units: 0, platforms: new Set() });
+      if (!map.has(s.item_name)) {
+        map.set(s.item_name, {
+          item: s.item_name, units: 0, platforms: new Set(),
+          talabat: { units: 0, revenue: 0 },
+          careem: { units: 0, revenue: 0 },
+        });
+      }
       const e = map.get(s.item_name)!;
       e.units += s.units;
       e.platforms.add(s.platform);
+      if (s.platform === "Talabat") {
+        e.talabat.units += s.units;
+        e.talabat.revenue += Number((s as any).revenue_jod ?? 0);
+      } else if (s.platform === "Careem") {
+        e.careem.units += s.units;
+        e.careem.revenue += Number((s as any).revenue_jod ?? 0);
+      }
     }
     return Array.from(map.values())
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
-      .map((r) => ({ ...r, cost: costFor.get(r.item) ?? null, totalCost: (costFor.get(r.item) ?? 0) * r.units }))
+      .map((r) => ({
+        ...r,
+        cost: costFor.get(r.item) ?? null,
+        totalCost: (costFor.get(r.item) ?? 0) * r.units,
+      }))
       .sort((a, b) => b.units - a.units);
   }, [sales, costFor, q]);
 
@@ -78,7 +120,7 @@ function Items() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader title="Items" description="Popular dishes per month and their COGS using the latest effective cost." />
+      <PageHeader title="Items" description="Popular dishes per month with COGS and per-platform selling prices." />
       <div className="flex flex-wrap gap-3 mb-4">
         <Select value={month} onValueChange={setMonth}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -95,20 +137,26 @@ function Items() {
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
       </div>
 
-      <Card className="p-0 overflow-hidden">
-        <Table>
+      <Card className="p-0 overflow-hidden overflow-x-auto">
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead>Item</TableHead>
               <TableHead>Platforms</TableHead>
               <TableHead className="text-right">Units</TableHead>
+              <TableHead className="text-right">Talabat</TableHead>
+              <TableHead className="text-right">Careem</TableHead>
               <TableHead className="text-right">Unit cost (ex-VAT)</TableHead>
               <TableHead className="text-right">Total COGS</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {aggregated.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">No item sales for {month}.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-12">
+                  No item sales for {month}.
+                </TableCell>
+              </TableRow>
             )}
             {aggregated.map((r) => (
               <TableRow key={r.item}>
@@ -119,13 +167,55 @@ function Items() {
                   ))}
                 </TableCell>
                 <TableCell className="text-right text-num">{fmtInt(r.units)}</TableCell>
-                <TableCell className="text-right text-num">{r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.cost)}</TableCell>
-                <TableCell className="text-right text-num">{r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.totalCost)}</TableCell>
+                <TableCell className="text-right text-num">
+                  <PriceCell
+                    listPrice={priceMap.get(`${r.item}|Talabat`)}
+                    ppUnits={r.talabat.units}
+                    ppRevenue={r.talabat.revenue}
+                  />
+                </TableCell>
+                <TableCell className="text-right text-num">
+                  <PriceCell
+                    listPrice={priceMap.get(`${r.item}|Careem`)}
+                    ppUnits={r.careem.units}
+                    ppRevenue={r.careem.revenue}
+                  />
+                </TableCell>
+                <TableCell className="text-right text-num">
+                  {r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.cost)}
+                </TableCell>
+                <TableCell className="text-right text-num">
+                  {r.cost == null ? <span className="text-muted-foreground">—</span> : fmtJOD(r.totalCost)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
+    </div>
+  );
+}
+
+function PriceCell({ listPrice, ppUnits, ppRevenue }: {
+  listPrice: number | undefined;
+  ppUnits: number;
+  ppRevenue: number;
+}) {
+  const realized = ppUnits > 0 ? ppRevenue / ppUnits : null;
+
+  if (listPrice == null && realized == null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const primary = listPrice != null ? listPrice : realized!;
+  const secondary = listPrice != null && realized != null ? realized : null;
+
+  return (
+    <div>
+      <div className="font-semibold">{fmtJOD(primary)}</div>
+      {secondary != null && (
+        <div className="text-[10px] text-muted-foreground">avg {fmtJOD(secondary)}</div>
+      )}
     </div>
   );
 }

@@ -14,7 +14,6 @@ import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform } from "@/lib/fyxx";
-import { cogsFor } from "@/lib/costs";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 
 export const Route = createFileRoute("/_authenticated/entry")({
@@ -25,20 +24,18 @@ export const Route = createFileRoute("/_authenticated/entry")({
 function Entry() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader title="Data entry" description="Add or update sales, financials, item costs and targets. Existing rows for the same key are overwritten — item costs are append-only and versioned." />
+      <PageHeader title="Data entry" description="Add or update daily sales, item costs, menu prices and targets. Financials and item sales are populated by CSV import." />
       <Tabs defaultValue="daily">
-        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
           <TabsTrigger value="daily">Daily sales</TabsTrigger>
-          <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="costs">Item costs</TabsTrigger>
-          <TabsTrigger value="items">Item sales</TabsTrigger>
+          <TabsTrigger value="prices">Menu prices</TabsTrigger>
           <TabsTrigger value="targets">Targets</TabsTrigger>
           <TabsTrigger value="clear" className="text-destructive data-[state=active]:text-destructive">Clear month</TabsTrigger>
         </TabsList>
         <TabsContent value="daily"><DailySalesForm /></TabsContent>
-        <TabsContent value="financials"><FinancialsForm /></TabsContent>
         <TabsContent value="costs"><ItemCostsForm /></TabsContent>
-        <TabsContent value="items"><ItemSalesForm /></TabsContent>
+        <TabsContent value="prices"><MenuPricesForm /></TabsContent>
         <TabsContent value="targets"><TargetsForm /></TabsContent>
         <TabsContent value="clear"><ClearMonthForm /></TabsContent>
       </Tabs>
@@ -124,71 +121,54 @@ function DailySalesForm() {
   );
 }
 
-/* ---------- Monthly financials ---------- */
-function FinancialsForm() {
-  const [month, setMonth] = useState(currentMonth());
+/* ---------- Menu prices ---------- */
+function MenuPricesForm() {
+  const [item, setItem] = useState("");
+  const [mode, setMode] = useState<"existing" | "new">("existing");
   const [platform, setPlatform] = useState<Platform>("Talabat");
-  const [gross, setGross] = useState("");
-  const [payout, setPayout] = useState("");
-  const [cogs, setCogs] = useState("");
+  const [price, setPrice] = useState("");
   const invalidate = useInvalidateAll();
 
-  const filter = useListFilter();
-  const { data: rows = [] } = useQuery({
-    queryKey: ["entry_financials"],
+  const { data: costRows = [] } = useQuery({
+    queryKey: ["entry_costs_names"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("monthly_financials").select("*").order("month", { ascending: false }).limit(1000);
+      const { data, error } = await supabase.from("item_costs").select("item_name").order("item_name");
       if (error) throw error;
       return data ?? [];
     },
   });
-  const months = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.month))).sort().reverse(),
-    [rows],
-  );
-  const filtered = applyListFilter(rows, filter, (r) => r.month);
 
-  // COGS is derived live (item sales × versioned costs) — the same path as the
-  // Financials page / Overview — not the stored monthly_financials.cogs column.
-  const { data: cogsData } = useQuery({
-    queryKey: ["entry_financials_cogs"],
+  const { data: priceRows = [] } = useQuery({
+    queryKey: ["entry_item_prices"],
     queryFn: async () => {
-      const [items, costs] = await Promise.all([
-        supabase.from("monthly_item_sales").select("month,platform,item_name,units"),
-        supabase.from("item_costs").select("item_name,cost_exvat,effective_from"),
-      ]);
-      return {
-        itemSales: (items.data ?? []).map((r) => ({
-          month: r.month,
-          platform: r.platform as string,
-          item: r.item_name,
-          units: r.units,
-        })),
-        costs: (costs.data ?? []).map((r) => ({
-          item: r.item_name,
-          cost: Number(r.cost_exvat),
-          effective_from: r.effective_from,
-        })),
-      };
+      const { data, error } = await (supabase.from as any)("item_prices").select("*").order("item_name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; item_name: string; platform: string; price_incl_vat: number }[];
     },
   });
 
+  const itemNames = useMemo(
+    () => Array.from(new Set(costRows.map((r: { item_name: string }) => r.item_name))).sort() as string[],
+    [costRows],
+  );
+
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("monthly_financials").upsert(
-        { month, platform, gross_sales: Number(gross), actual_payout: Number(payout), cogs: Number(cogs) || 0 },
-        { onConflict: "month,platform" },
+      const name = item.trim();
+      if (!name) throw new Error("Item name is required");
+      const { error } = await (supabase.from as any)("item_prices").upsert(
+        { item_name: name, platform, price_incl_vat: Number(price) },
+        { onConflict: "item_name,platform" },
       );
       if (error) throw error;
-      await logImport({ platform, report_type: "invoice" });
     },
-    onSuccess: () => { toast.success("Saved"); setGross(""); setPayout(""); setCogs(""); invalidate(); },
+    onSuccess: () => { toast.success("Price saved"); setPrice(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const del = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("monthly_financials").delete().eq("id", id);
+      const { error } = await (supabase.from as any)("item_prices").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
@@ -198,25 +178,36 @@ function FinancialsForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
-        <form className="grid gap-4 md:grid-cols-6" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
+        <p className="text-xs text-muted-foreground mb-3">Listed price the customer sees in the app (incl VAT). Saving again overwrites the prior price for that item + platform.</p>
+        <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+          <Field label="Item name">
+            {mode === "existing" ? (
+              <Select value={item} onValueChange={(v) => { if (v === "__new__") { setMode("new"); setItem(""); } else setItem(v); }}>
+                <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+                <SelectContent>
+                  {itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  <SelectItem value="__new__" className="text-primary">+ Add new item</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex gap-2">
+                <Input value={item} onChange={(e) => setItem(e.target.value)} required placeholder="New item name" autoFocus />
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode("existing"); setItem(""); }}>Cancel</Button>
+              </div>
+            )}
+          </Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
-          <Field label="Gross sales"><Input type="number" step="0.001" value={gross} onChange={(e) => setGross(e.target.value)} required /></Field>
-          <Field label="Actual payout"><Input type="number" step="0.001" value={payout} onChange={(e) => setPayout(e.target.value)} required /></Field>
-          <Field label="COGS override (optional)"><Input type="number" step="0.001" value={cogs} onChange={(e) => setCogs(e.target.value)} placeholder="auto" /></Field>
+          <Field label="Price (incl VAT, JOD)"><Input type="number" step="0.001" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
       <RecentTable
-        title="Financials"
-        right={<ListFilterBar f={filter} months={months} />}
-        headers={["Month", "Platform", "Gross", "Payout", "COGS", ""]}
-        rows={filtered.map((r) => [
-          r.month,
+        title="Menu prices"
+        headers={["Item", "Platform", "Price (incl VAT)", ""]}
+        rows={priceRows.map((r) => [
+          r.item_name,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
-          fmtJOD(Number(r.gross_sales)),
-          fmtJOD(Number(r.actual_payout)),
-          fmtJOD(cogsFor(cogsData?.itemSales ?? [], cogsData?.costs ?? [], r.month, [r.platform])),
+          fmtJOD(Number(r.price_incl_vat)),
           <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
         ])}
       />
@@ -344,78 +335,6 @@ function ItemCostsForm() {
             <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
           ];
         })}
-      />
-    </div>
-  );
-}
-
-/* ---------- Monthly item sales ---------- */
-function ItemSalesForm() {
-  const [month, setMonth] = useState(currentMonth());
-  const [platform, setPlatform] = useState<Platform>("Talabat");
-  const [item, setItem] = useState("");
-  const [units, setUnits] = useState("");
-  const invalidate = useInvalidateAll();
-
-  const filter = useListFilter();
-  const { data: rows = [] } = useQuery({
-    queryKey: ["entry_item_sales"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("monthly_item_sales").select("*").order("month", { ascending: false }).limit(2000);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const months = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.month))).sort().reverse(),
-    [rows],
-  );
-  const filtered = applyListFilter(rows, filter, (r) => r.month);
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("monthly_item_sales").upsert(
-        { month, platform, item_name: item.trim(), units: Number(units) },
-        { onConflict: "month,platform,item_name" },
-      );
-      if (error) throw error;
-      await logImport({ platform, report_type: "popular_dishes" });
-    },
-    onSuccess: () => { toast.success("Saved"); setItem(""); setUnits(""); invalidate(); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("monthly_item_sales").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success("Deleted"); invalidate(); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <div className="space-y-6 mt-4">
-      <Card className="p-5">
-        <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
-          <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
-          <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
-          <Field label="Item"><Input value={item} onChange={(e) => setItem(e.target.value)} required /></Field>
-          <Field label="Units"><Input type="number" min="0" step="1" value={units} onChange={(e) => setUnits(e.target.value)} required /></Field>
-          <SubmitBtn pending={save.isPending} />
-        </form>
-      </Card>
-      <RecentTable
-        title="Item sales"
-        right={<ListFilterBar f={filter} months={months} />}
-        headers={["Month", "Platform", "Item", "Units", ""]}
-        rows={filtered.map((r) => [
-          r.month,
-          <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
-          r.item_name,
-          fmtInt(r.units),
-          <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
-        ])}
       />
     </div>
   );
