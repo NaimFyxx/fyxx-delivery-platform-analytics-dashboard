@@ -515,12 +515,12 @@ function PublicDashboard() {
                     label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }}
                   />
                   {/* Three clearly distinct colors: charcoal / taupe / green */}
-                  <Line type="monotone" dataKey="prod" name="Product margin" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="comm" name="After commission" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  {showTrailing && <Line type="monotone" dataKey="prodTrail" name="Product 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showTrailing && <Line type="monotone" dataKey="commTrail" name="After commission 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showTrailing && <Line type="monotone" dataKey="netTrail" name="Net 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  <Line isAnimationActive={false} type="monotone" dataKey="prod" name="Product margin" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="comm" name="After commission" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="prodTrail" name="Product 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="commTrail" name="After commission 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="netTrail" name="Net 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -550,10 +550,10 @@ function PublicDashboard() {
                   <YAxis yAxisId="sales" orientation="right" stroke="#C8B89B" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
                   <Tooltip content={<OrderVolumeTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line yAxisId="orders" type="monotone" dataKey="ordersAvg" name="Avg orders/day" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
-                  <Line yAxisId="sales" type="monotone" dataKey="salesAvg" name="Avg JOD/day" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
-                  {showAvgTrailing && <Line yAxisId="orders" type="monotone" dataKey="ordersTrail" name="Orders 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showAvgTrailing && <Line yAxisId="sales" type="monotone" dataKey="salesTrail" name="JOD 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  <Line isAnimationActive={false} yAxisId="orders" type="monotone" dataKey="ordersAvg" name="Avg orders/day" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  <Line isAnimationActive={false} yAxisId="sales" type="monotone" dataKey="salesAvg" name="Avg JOD/day" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  {showAvgTrailing && <Line isAnimationActive={false} yAxisId="orders" type="monotone" dataKey="ordersTrail" name="Orders 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showAvgTrailing && <Line isAnimationActive={false} yAxisId="sales" type="monotone" dataKey="salesTrail" name="JOD 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
