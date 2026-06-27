@@ -47,7 +47,7 @@ export const Route = createFileRoute("/insights")({
   component: InsightsPage,
 });
 
-type SortKey = "item" | "units" | "revenue" | "avgPrice" | "cogs" | "cost" | "margin" | "netMargin";
+type SortKey = "item" | "units" | "revenue" | "avgPrice" | "cogs" | "cost" | "margin" | "commMargin" | "netMargin";
 
 function InsightsPage() {
   const nav = useNavigate();
@@ -130,7 +130,7 @@ function InsightsPage() {
     if (!data) return [];
     const map = new Map<
       string,
-      { item: string; units: number; revenue: number; cogs: number; lastCost: number | null; netPayout: number; netProfit: number }
+      { item: string; units: number; revenue: number; cogs: number; lastCost: number | null; netPayout: number; netProfit: number; commPayout: number }
     >();
     for (const s of data.itemSales) {
       if (!rangeMonths.includes(s.month)) continue;
@@ -145,6 +145,7 @@ function InsightsPage() {
         lastCost: null,
         netPayout: 0,
         netProfit: 0,
+        commPayout: 0,
       };
       row.units += s.units;
       const itemRevenue = s.revenue ?? 0;
@@ -154,14 +155,16 @@ function InsightsPage() {
         row.cogs += itemCogs;
         row.lastCost = c;
       }
-      // Allocate this month-platform's payout to the item by revenue share (Zeid's formula).
-      // itemPayout = (itemRevenue / monthGross) × monthPayout — scales with order value.
+      // Allocate payout (and payout+discount) to the item by revenue share (Zeid's formula).
       // Guard: skip if monthGross ≤ 0 or item has no revenue (avoids nonsense allocations).
       const finRow = data.financials.find((f) => f.month === s.month && f.platform === s.platform);
       if (finRow && finRow.gross > 0 && itemRevenue > 0) {
-        const itemPayout = (itemRevenue / finRow.gross) * finRow.payout;
+        const share = itemRevenue / finRow.gross;
+        const itemPayout = share * finRow.payout;
         row.netPayout += exVat(itemPayout);
         row.netProfit += exVat(itemPayout) - itemCogs;
+        // Commission payout: payout + discount (promos added back = only fixed platform cut)
+        row.commPayout += exVat(share * (finRow.payout + finRow.discount));
       }
       map.set(s.item, row);
     }
@@ -169,6 +172,7 @@ function InsightsPage() {
       ...r,
       margin:
         r.revenue > 0 ? ((r.revenue / (1 + 0.16) - r.cogs) / (r.revenue / (1 + 0.16))) * 100 : 0,
+      commMargin: r.commPayout > 0 ? ((r.commPayout - r.cogs) / r.commPayout) * 100 : null,
       netMargin: r.netPayout > 0 ? (r.netProfit / r.netPayout) * 100 : null,
       avgPrice: r.units > 0 ? r.revenue / r.units : null,
     }));
@@ -180,6 +184,7 @@ function InsightsPage() {
       if (sortBy === "avgPrice") return ((a.avgPrice ?? 0) - (b.avgPrice ?? 0)) * dir;
       if (sortBy === "cogs") return (a.cogs - b.cogs) * dir;
       if (sortBy === "margin") return (a.margin - b.margin) * dir;
+      if (sortBy === "commMargin") return ((a.commMargin ?? -Infinity) - (b.commMargin ?? -Infinity)) * dir;
       if (sortBy === "netMargin") return ((a.netMargin ?? -Infinity) - (b.netMargin ?? -Infinity)) * dir;
       return ((a.lastCost ?? 0) - (b.lastCost ?? 0)) * dir;
     });
@@ -527,6 +532,18 @@ function InsightsPage() {
                     <ThSort label="Product margin %" col="margin" sortBy={sortBy} sortDir={sortDir} onSort={(c) => toggleSort(c, sortBy, sortDir, setSortBy, setSortDir)} />
                     <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
                       <button
+                        onClick={() => toggleSort("commMargin", sortBy, sortDir, setSortBy, setSortDir)}
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                        title="Margin after the platform's commission & fixed fees only — promos/discounts added back so it isn't distorted by inconsistent promo spend. Ex-VAT, allocated by revenue share (Zeid's method)."
+                      >
+                        Margin after commission %
+                        <span className="text-[9px]" style={{ color: sortBy === "commMargin" ? "var(--primary)" : "transparent" }}>
+                          {sortDir === "asc" ? "▲" : "▼"}
+                        </span>
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
+                      <button
                         onClick={() => toggleSort("netMargin", sortBy, sortDir, setSortBy, setSortDir)}
                         className="inline-flex items-center gap-1 hover:text-foreground"
                         title="Zeid's net margin: ex-VAT payout − COGS, over ex-VAT payout. Platform fees are per order, so each month's payout is allocated to items by revenue share."
@@ -558,6 +575,9 @@ function InsightsPage() {
                       </td>
                       <td className="px-3 py-2 text-right text-num" style={{ color: r.revenue > 0 && r.cogs > 0 ? r.margin >= 45 ? "var(--careem)" : "#f5b400" : "var(--muted-foreground)" }}>
                         {r.revenue > 0 && r.cogs > 0 ? `${r.margin.toFixed(1)}%` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.commMargin != null ? r.commMargin >= 30 ? "var(--careem)" : r.commMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
+                        {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "—"}
                       </td>
                       <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.netMargin != null ? r.netMargin >= 30 ? "var(--careem)" : r.netMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
                         {r.netMargin != null ? `${r.netMargin.toFixed(1)}%` : "—"}

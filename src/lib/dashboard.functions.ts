@@ -23,7 +23,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       .order("date"),
     supabaseAdmin
       .from("monthly_financials")
-      .select("month,platform,gross_sales,actual_payout,cogs"),
+      .select("month,platform,gross_sales,actual_payout,cogs,discount"),
     supabaseAdmin
       .from("item_costs")
       .select("item_name,cost_exvat,effective_from")
@@ -63,6 +63,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       platform: r.platform as string,
       gross: Number(r.gross_sales),
       payout: Number(r.actual_payout),
+      discount: Number(r.discount ?? 0),
       cogsManual: Number(r.cogs),
     })),
     costs: (costs.data ?? []).map((r) => ({

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { MonthPicker } from "@/components/fyxx/date-picker";
-import { fmtJOD, fmtInt, platformBg, type Platform } from "@/lib/fyxx";
+import { fmtJOD, fmtInt, platformBg, exVat, type Platform } from "@/lib/fyxx";
 import { costAsOf, normalizeItemName, canonicalItemName, type CostRow } from "@/lib/costs";
 import {
   Segmented,
@@ -119,6 +119,26 @@ function Items() {
     },
   });
 
+  const { data: financials = [] } = useQuery({
+    queryKey: ["monthly_financials", rangeMonths],
+    queryFn: async () => {
+      if (!rangeMonths.length) return [];
+      const { data, error } = await supabase
+        .from("monthly_financials")
+        .select("month,platform,gross_sales,actual_payout,discount")
+        .in("month", rangeMonths);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        month: r.month,
+        platform: r.platform as string,
+        gross: Number(r.gross_sales),
+        payout: Number(r.actual_payout),
+        discount: Number(r.discount ?? 0),
+      }));
+    },
+    enabled: rangeMonths.length > 0,
+  });
+
   // Map raw cost rows to the CostRow shape that costAsOf (from costs.ts) expects
   const costRows: CostRow[] = useMemo(
     () => costs.map((c) => ({ item: c.item_name, cost: Number(c.cost_exvat), effective_from: c.effective_from })),
@@ -127,14 +147,14 @@ function Items() {
 
   const aggregated = useMemo(() => {
     type PerPlatform = { units: number; revenue: number };
-    // Key by normalizeItemName so "(12pcs)" and base spelling merge into one row
     const map = new Map<string, {
-      item: string;        // shortest seen spelling for display
+      item: string;
       units: number;
       platforms: Set<string>;
       talabat: PerPlatform;
       careem: PerPlatform;
       totalCogs: number;
+      commPayout: number;
     }>();
 
     const activePlatforms = platform === "all" ? ["Talabat", "Careem"] : [platform];
@@ -148,6 +168,7 @@ function Items() {
           talabat: { units: 0, revenue: 0 },
           careem: { units: 0, revenue: 0 },
           totalCogs: 0,
+          commPayout: 0,
         });
       }
       const e = map.get(canonKey)!;
@@ -164,17 +185,23 @@ function Items() {
       }
       e.units += s.units;
       e.platforms.add(s.platform);
+      const itemRevenue = Number((s as any).revenue_jod ?? 0);
       if (s.platform === "Talabat") {
         e.talabat.units += s.units;
-        e.talabat.revenue += Number((s as any).revenue_jod ?? 0);
+        e.talabat.revenue += itemRevenue;
       } else if (s.platform === "Careem") {
         e.careem.units += s.units;
-        e.careem.revenue += Number((s as any).revenue_jod ?? 0);
+        e.careem.revenue += itemRevenue;
       }
       // Per-month cost — pass through canonical key so alias variants resolve correctly
       const asOf = `${s.month}-28`;
       const c = costAsOf(costRows, canonicalItemName(s.item_name), asOf);
       if (c != null) e.totalCogs += s.units * c;
+      // Allocate (payout + discount) by revenue share — same method as Insights page
+      const finRow = financials.find((f) => f.month === s.month && f.platform === s.platform);
+      if (finRow && finRow.gross > 0 && itemRevenue > 0) {
+        e.commPayout += exVat((itemRevenue / finRow.gross) * (finRow.payout + finRow.discount));
+      }
     }
 
     return Array.from(map.values())
@@ -185,9 +212,10 @@ function Items() {
         cost: costAsOf(costRows, canonicalItemName(r.item), latestMonthEnd),
         listPriceTalabat: priceAsOf(prices, r.item, "Talabat", latestMonthEnd),
         listPriceCareem: priceAsOf(prices, r.item, "Careem", latestMonthEnd),
+        marginAfterComm: r.commPayout > 0 ? ((r.commPayout - r.totalCogs) / r.commPayout) * 100 : null,
       }))
       .sort((a, b) => b.units - a.units);
-  }, [sales, costRows, prices, platform, q, latestMonthEnd]);
+  }, [sales, costRows, prices, financials, platform, q, latestMonthEnd]);
 
   const rangeLabel = useMemo(() => {
     if (range === "this") return monthLabel(currentMonthStr);
@@ -250,12 +278,15 @@ function Items() {
               <TableHead className="text-right">Careem — sell price</TableHead>
               <TableHead className="text-right">Unit cost (ex-VAT)</TableHead>
               <TableHead className="text-right">Total COGS</TableHead>
+              <TableHead className="text-right" title="Margin after the platform's commission & fixed fees only — promos/discounts added back so it isn't distorted by inconsistent promo spend. Ex-VAT, allocated by revenue share (Zeid's method).">
+                Margin after commission %
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {aggregated.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-12">
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-12">
                   No item sales for {rangeLabel}.
                 </TableCell>
               </TableRow>
@@ -292,6 +323,16 @@ function Items() {
                   {r.totalCogs === 0 && r.cost == null
                     ? <span className="text-muted-foreground">—</span>
                     : fmtJOD(r.totalCogs)}
+                </TableCell>
+                <TableCell
+                  className="text-right text-num font-semibold"
+                  style={{
+                    color: r.marginAfterComm != null
+                      ? r.marginAfterComm >= 0 ? "var(--careem)" : "var(--destructive)"
+                      : "var(--muted-foreground)",
+                  }}
+                >
+                  {r.marginAfterComm != null ? `${r.marginAfterComm.toFixed(1)}%` : "—"}
                 </TableCell>
               </TableRow>
             ))}
