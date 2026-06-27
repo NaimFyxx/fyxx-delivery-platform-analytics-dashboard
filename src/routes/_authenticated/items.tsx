@@ -112,9 +112,9 @@ function Items() {
   const { data: prices = [] } = useQuery({
     queryKey: ["item_prices"],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("item_prices").select("*");
+      const { data, error } = await supabase.from("item_prices").select("*");
       if (error) throw error;
-      return (data ?? []) as { item_name: string; platform: string; price_incl_vat: number; effective_from?: string }[];
+      return data ?? [];
     },
   });
 

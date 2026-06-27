@@ -143,9 +143,9 @@ function MenuPricesForm() {
   const { data: priceRows = [] } = useQuery({
     queryKey: ["entry_item_prices"],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("item_prices").select("*").order("effective_from", { ascending: false }).limit(1000);
+      const { data, error } = await supabase.from("item_prices").select("*").order("effective_from", { ascending: false }).limit(1000);
       if (error) throw error;
-      return (data ?? []) as { id: string; item_name: string; platform: string; price_incl_vat: number; effective_from: string }[];
+      return data ?? [];
     },
   });
 
@@ -173,7 +173,7 @@ function MenuPricesForm() {
     mutationFn: async () => {
       const name = item.trim();
       if (!name) throw new Error("Item name is required");
-      const { error } = await (supabase.from as any)("item_prices").insert({
+      const { error } = await supabase.from("item_prices").insert({
         item_name: name, platform, price_incl_vat: Number(price), effective_from: from,
       });
       if (error) throw error;
@@ -184,7 +184,7 @@ function MenuPricesForm() {
 
   const del = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase.from as any)("item_prices").delete().eq("id", id);
+      const { error } = await supabase.from("item_prices").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
