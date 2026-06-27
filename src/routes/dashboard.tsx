@@ -194,35 +194,70 @@ function PublicDashboard() {
     [monthAggs],
   );
 
-  // Avg orders/day per month — distinct dates with any orders as denominator.
-  const avgOrdersTrend = useMemo(() => {
-    if (!data) return [];
-    return monthAggs.map((a, i, arr) => {
-      const activeDaysMonth = new Set(
+  // Shared active-days-per-month helper (orders denominator, per range).
+  const activeDaysPerMonth = useMemo(() => {
+    if (!data) return new Map<string, number>();
+    const m = new Map<string, number>();
+    for (const mo of monthAggs) {
+      m.set(mo.month, new Set(
         data.daily
-          .filter((d) => monthOfDate(d.date) === a.month && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
+          .filter((d) => monthOfDate(d.date) === mo.month && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
           .map((d) => d.date),
-      ).size;
-      const avg = activeDaysMonth > 0 ? a.orders / activeDaysMonth : null;
-      // 3-month trailing avg
+      ).size);
+    }
+    return m;
+  }, [data, monthAggs, platforms]);
+
+  // Avg orders/day per month with MoM % change.
+  const avgOrdersTrend = useMemo(() => {
+    return monthAggs.map((a, i, arr) => {
+      const days = activeDaysPerMonth.get(a.month) ?? 0;
+      const avg = days > 0 ? a.orders / days : null;
+      const prevA = i > 0 ? arr[i - 1] : null;
+      const prevDays = prevA ? (activeDaysPerMonth.get(prevA.month) ?? 0) : 0;
+      const prevAvg = prevA && prevDays > 0 ? prevA.orders / prevDays : null;
+      const momPct = avg != null && prevAvg != null && prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : null;
       const win = arr.slice(Math.max(0, i - 2), i + 1);
       const winAvgs = win.map((w) => {
-        const days = new Set(
-          data.daily
-            .filter((d) => monthOfDate(d.date) === w.month && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
-            .map((d) => d.date),
-        ).size;
-        return days > 0 ? w.orders / days : null;
+        const d = activeDaysPerMonth.get(w.month) ?? 0;
+        return d > 0 ? w.orders / d : null;
       }).filter((v): v is number => v !== null);
       return {
         label: monthLabel(a.month),
+        prevLabel: prevA ? monthLabel(prevA.month) : null,
         avg,
+        momPct,
         trail: win.length >= 2 && winAvgs.length >= 2 ? winAvgs.reduce((s, v) => s + v, 0) / winAvgs.length : null,
       };
     });
-  }, [data, monthAggs, platforms]);
+  }, [monthAggs, activeDaysPerMonth]);
+
+  // Avg gross sales/day per month with MoM % change.
+  const avgSalesTrend = useMemo(() => {
+    return monthAggs.map((a, i, arr) => {
+      const days = activeDaysPerMonth.get(a.month) ?? 0;
+      const avg = days > 0 ? a.gross / days : null;
+      const prevA = i > 0 ? arr[i - 1] : null;
+      const prevDays = prevA ? (activeDaysPerMonth.get(prevA.month) ?? 0) : 0;
+      const prevAvg = prevA && prevDays > 0 ? prevA.gross / prevDays : null;
+      const momPct = avg != null && prevAvg != null && prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : null;
+      const win = arr.slice(Math.max(0, i - 2), i + 1);
+      const winAvgs = win.map((w) => {
+        const d = activeDaysPerMonth.get(w.month) ?? 0;
+        return d > 0 ? w.gross / d : null;
+      }).filter((v): v is number => v !== null);
+      return {
+        label: monthLabel(a.month),
+        prevLabel: prevA ? monthLabel(prevA.month) : null,
+        avg,
+        momPct,
+        trail: win.length >= 2 && winAvgs.length >= 2 ? winAvgs.reduce((s, v) => s + v, 0) / winAvgs.length : null,
+      };
+    });
+  }, [monthAggs, activeDaysPerMonth]);
 
   const [showAvgOrdersTrailing, setShowAvgOrdersTrailing] = useState(false);
+  const [showAvgSalesTrailing, setShowAvgSalesTrailing] = useState(false);
 
   // --- Pace tracker: always current month, ignores range filter ---
   // Always shows the current month, but respects the platform filter
@@ -260,9 +295,29 @@ function PublicDashboard() {
     const proRated = totalTarget * (dayOfMonth / daysInMonth);
     const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
 
+    // Latest daily date per platform for current month → take the earliest (most stale).
+    const latestByPlatform = (["Talabat", "Careem"] as const).map((p) => {
+      const dates = data.daily
+        .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
+        .map((d) => d.date);
+      return { platform: p, latest: dates.length ? dates.sort().at(-1)! : null };
+    }).filter((x) => x.latest !== null) as { platform: "Talabat" | "Careem"; latest: string }[];
+    const dataThroughDate = latestByPlatform.length
+      ? latestByPlatform.reduce((min, x) => (x.latest < min ? x.latest : min), latestByPlatform[0].latest)
+      : null;
+    const dataThroughLabel = dataThroughDate
+      ? new Date(dataThroughDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+      : null;
+    const dataThroughStale = dataThroughDate !== null && dataThroughDate < today;
+    const perPlatformThrough = latestByPlatform.map((x) => ({
+      platform: x.platform,
+      label: new Date(x.latest + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    }));
+
     return {
       rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
       dayOfMonth, daysInMonth, workingDay,
+      dataThroughLabel, dataThroughStale, perPlatformThrough,
     };
   }, [data, currentMonth, today]);
 
@@ -504,40 +559,54 @@ function PublicDashboard() {
         {avgOrdersTrend.length >= 2 && (
           <>
             <SectionLabel>Order Volume Trend · Monthly</SectionLabel>
-            <ChartCard
-              title="Avg Orders / Day"
-              sub="Monthly average daily order count — active days only (days with at least one order), matching the avg/day KPI sub-stat"
-              action={
-                avgOrdersTrend.some((d) => d.trail !== null) ? (
-                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      className="accent-primary"
-                      checked={showAvgOrdersTrailing}
-                      onChange={(e) => setShowAvgOrdersTrailing(e.target.checked)}
-                    />
-                    3m trailing avg
-                  </label>
-                ) : null
-              }
-            >
-              <ResponsiveContainer>
-                <LineChart data={avgOrdersTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                  <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
-                  <Tooltip
-                    {...tooltipStyle}
-                    formatter={(v: number, name: string) => [`${v.toFixed(1)} orders/day`, name === "trail" ? "3m trailing avg" : "Avg orders/day"]}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="avg" name="Avg orders/day" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)" }} activeDot={{ r: 5 }} connectNulls={false} />
-                  {showAvgOrdersTrailing && (
-                    <Line type="monotone" dataKey="trail" name="3m trailing avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+              <ChartCard
+                title="Avg Orders / Day"
+                sub="Active days = days with ≥1 order — matches the KPI avg/day sub-stat"
+                action={
+                  avgOrdersTrend.some((d) => d.trail !== null) ? (
+                    <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                      <input type="checkbox" className="accent-primary" checked={showAvgOrdersTrailing} onChange={(e) => setShowAvgOrdersTrailing(e.target.checked)} />
+                      3m avg
+                    </label>
+                  ) : null
+                }
+              >
+                <ResponsiveContainer>
+                  <LineChart data={avgOrdersTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                    <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
+                    <Tooltip content={<AvgDayTooltip unit="orders/day" fmt={(v) => v.toFixed(1)} />} />
+                    <Line type="monotone" dataKey="avg" name="Avg orders/day" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)" }} activeDot={{ r: 5 }} connectNulls={false} />
+                    {showAvgOrdersTrailing && <Line type="monotone" dataKey="trail" name="3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartCard>
+              <ChartCard
+                title="Avg Sales / Day (JOD)"
+                sub="Active days = days with ≥1 order — matches the KPI avg JOD/day sub-stat"
+                action={
+                  avgSalesTrend.some((d) => d.trail !== null) ? (
+                    <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                      <input type="checkbox" className="accent-primary" checked={showAvgSalesTrailing} onChange={(e) => setShowAvgSalesTrailing(e.target.checked)} />
+                      3m avg
+                    </label>
+                  ) : null
+                }
+              >
+                <ResponsiveContainer>
+                  <LineChart data={avgSalesTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                    <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
+                    <Tooltip content={<AvgDayTooltip unit="JOD/day" fmt={(v) => `${Math.round(v)}`} />} />
+                    <Line type="monotone" dataKey="avg" name="Avg sales/day" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B" }} activeDot={{ r: 5 }} connectNulls={false} />
+                    {showAvgSalesTrailing && <Line type="monotone" dataKey="trail" name="3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartCard>
+            </div>
           </>
         )}
 
@@ -754,7 +823,39 @@ type PaceData = {
   totalSales: number; totalTarget: number; totalAchievement: number;
   proRated: number; proRatedAch: number;
   dayOfMonth: number; daysInMonth: number; workingDay: number;
+  dataThroughLabel: string | null;
+  dataThroughStale: boolean;
+  perPlatformThrough: { platform: "Talabat" | "Careem"; label: string }[];
 };
+
+function AvgDayTooltip({ active, payload, unit, fmt }: {
+  active?: boolean;
+  payload?: { value: number; name: string; payload: { label: string; prevLabel: string | null; momPct: number | null } }[];
+  label?: string;
+  unit: string;
+  fmt: (v: number) => string;
+}) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0];
+  const { label, prevLabel, momPct } = p.payload;
+  const isTrail = p.name.includes("avg") && payload.length > 1;
+  const mainEntry = payload.find((e) => e.name !== "3m avg") ?? p;
+  return (
+    <div style={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, padding: "8px 12px", lineHeight: 1.6 }}>
+      <div style={{ color: "var(--foreground)", fontWeight: 600 }}>{label}</div>
+      {payload.map((e) => (
+        <div key={e.name} style={{ color: "var(--muted-foreground)" }}>
+          {e.name}: <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{fmt(e.value)} {unit}</span>
+        </div>
+      ))}
+      {momPct != null && !isTrail && (
+        <div style={{ marginTop: 2, fontWeight: 600, color: momPct >= 0 ? "var(--careem)" : "var(--destructive)" }}>
+          {momPct >= 0 ? "▲" : "▼"} {momPct >= 0 ? "+" : ""}{Math.round(momPct)}% vs {prevLabel}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PaceTracker({ pace, currentMonth }: {
   pace: PaceData | null; currentMonth: string;
@@ -785,6 +886,15 @@ function PaceTracker({ pace, currentMonth }: {
             <span className="text-muted-foreground">Day</span>
             <span style={{ color: "var(--primary)" }}>{pace.dayOfMonth}<span className="text-muted-foreground">/{pace.daysInMonth}</span></span>
           </span>
+          {pace.dataThroughLabel && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border"
+              title={pace.perPlatformThrough.map((x) => `${x.platform}: through ${x.label}`).join(" · ")}
+              style={{ color: pace.dataThroughStale ? "#f5b400" : "var(--muted-foreground)" }}
+            >
+              data through {pace.dataThroughLabel}
+            </span>
+          )}
         </div>
         <div className="text-right leading-none">
           <span className="font-display text-[26px] font-bold align-middle"
