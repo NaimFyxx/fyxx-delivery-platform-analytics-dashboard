@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import {
-  Header, PaceTracker, Kpi,
-  computePace, computeKpis, cogsFor,
+  Header, PaceTracker,
+  computePace,
   monthOfDate,
 } from "./dashboard";
 
@@ -41,32 +41,6 @@ function PaceLandingPage() {
   const lastDailyDate = data?.daily.at(-1)?.date ?? null;
 
   const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
-
-  const totals = useMemo(() => {
-    if (!data) return { gross: 0, payout: 0, cogs: 0, orders: 0 };
-    const months = Array.from(new Set([
-      ...data.financials.map((f) => f.month),
-      ...data.daily.map((d) => d.date.slice(0, 7)),
-    ]));
-    return months.reduce((acc, m) => {
-      const finRows = data.financials.filter((f) => f.month === m);
-      const finGross = finRows.reduce((s, r) => s + r.gross, 0);
-      const payout = finRows.reduce((s, r) => s + r.payout, 0);
-      const dailyRows = data.daily.filter((d) => d.date.slice(0, 7) === m);
-      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
-      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
-      const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, ["Talabat", "Careem"]);
-      return { gross: acc.gross + gross, payout: acc.payout + payout, cogs: acc.cogs + cogs, orders: acc.orders + orders };
-    }, { gross: 0, payout: 0, cogs: 0, orders: 0 });
-  }, [data]);
-
-  const kpis = computeKpis(totals);
-
-  const activeDays = useMemo(() => {
-    if (!data) return 1;
-    return Math.max(1, new Set(data.daily.map((d) => d.date)).size);
-  }, [data]);
 
   function handleViewDashboards() {
     if (localStorage.getItem("tgr_dash_unlock") === "1") {
@@ -105,45 +79,6 @@ function PaceLandingPage() {
       <Header today={today} lastDailyDate={lastDailyDate} />
       <div className="px-4 md:px-7 pt-5 md:pt-7 pb-12 max-w-5xl mx-auto">
         <PaceTracker pace={pace} currentMonth={currentMonth} />
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-6">
-          <Kpi
-            label="Sales (incl VAT)"
-            value={`${Math.round(kpis.gross).toLocaleString()}`}
-            unit="JOD"
-            delta={null}
-            prior="all-time"
-            sub={`avg ${Math.round(kpis.gross / activeDays).toLocaleString()} JOD/day`}
-          />
-          <Kpi
-            label="Avg Basket (AOV)"
-            value={kpis.aov ? kpis.aov.toFixed(2) : "—"}
-            unit="JOD"
-            delta={null}
-            prior="sales ÷ orders"
-            sub={`avg ${(kpis.orders / activeDays).toFixed(1)} orders/day`}
-          />
-          <Kpi
-            label="Product Margin"
-            value={kpis.prodMargin.toFixed(1)}
-            unit="%"
-            delta={null}
-            prior="on menu price exVAT"
-          />
-          <Kpi
-            label="Net Margin · after commission"
-            value={kpis.netMargin.toFixed(1)}
-            unit="%"
-            delta={null}
-            prior="on payout exVAT"
-          />
-          <Kpi
-            label="Net Profit Kept"
-            value={`${Math.round(kpis.netProfit).toLocaleString()}`}
-            unit="JOD"
-            delta={null}
-            prior="payout exVAT − cost"
-          />
-        </div>
 
         <div className="flex flex-col items-center gap-3 pt-2">
           <button
