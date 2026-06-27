@@ -119,6 +119,36 @@ export type Database = {
         }
         Relationships: []
       }
+      item_prices: {
+        Row: {
+          created_at: string
+          effective_from: string
+          id: string
+          item_name: string
+          platform: string
+          price_incl_vat: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string
+          id?: string
+          item_name: string
+          platform: string
+          price_incl_vat: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          id?: string
+          item_name?: string
+          platform?: string
+          price_incl_vat?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       monthly_adjustments: {
         Row: {
           amount: number
