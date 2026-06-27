@@ -4,10 +4,14 @@ export const VAT_RATE = 0.16;
 export const PLATFORMS = ["Talabat", "Careem"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+/** Precise money: "JOD 1,234.50" — used in admin tables (Financials, etc.) */
 export const fmtJOD = (n: number) =>
   new Intl.NumberFormat("en-JO", { style: "currency", currency: "JOD", maximumFractionDigits: 2 }).format(n);
+/** Rounded money, suffix style: "1,234 JOD" — used in KPI cards and charts */
+export const fmtJOD0 = (n: number) => `${Math.round(n).toLocaleString()} JOD`;
 export const fmtInt = (n: number) =>
   new Intl.NumberFormat("en-JO").format(Math.round(n));
+/** Input is a fraction 0–1 (e.g. 0.72), returns "72.0%". Do NOT pass an already-percent number. */
 export const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 export const exVat = (gross: number) => gross / (1 + VAT_RATE);

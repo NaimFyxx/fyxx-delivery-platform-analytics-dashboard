@@ -1,7 +1,5 @@
 import { costAsOf, canonicalItemName, normalizeItemName, priceAsOf, type CostRow } from "./costs";
-
-const VAT = 0.16;
-const exVat = (v: number) => v / (1 + VAT);
+import { exVat } from "./fyxx";
 
 export interface AggItem {
   item: string;

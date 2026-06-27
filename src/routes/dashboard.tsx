@@ -16,8 +16,10 @@ import {
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { cogsFor } from "@/lib/costs";
+import { exVat, fmtJOD0, fmtInt } from "@/lib/fyxx";
 // Re-exported so other routes (e.g. /insights) keep importing it from here.
 export { costAsOf, cogsFor } from "@/lib/costs";
+export { exVat } from "@/lib/fyxx";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -31,11 +33,6 @@ export const Route = createFileRoute("/dashboard")({
   }),
   component: PublicDashboard,
 });
-
-export const VAT = 0.16;
-export const exVat = (v: number) => v / (1 + VAT);
-const fmtJOD = (n: number) => `${Math.round(n).toLocaleString()} JOD`;
-const fmtPct = (n: number) => `${n.toFixed(1)}%`;
 
 export type RangeKey = "this" | "last" | "custom" | "all";
 export type PlatformKey = "All" | "Talabat" | "Careem";
@@ -417,10 +414,10 @@ function PublicDashboard() {
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
-          <Kpi label="Sales (incl VAT)" value={`${Math.round(kpis.gross).toLocaleString()}`} unit="JOD"
+          <Kpi label="Sales (incl VAT)" value={fmtInt(kpis.gross)} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
-               prior={priorKpis ? `Prior: ${Math.round(priorKpis.gross).toLocaleString()} JOD` : platformContext(platform)}
-               sub={`avg ${Math.round(kpis.gross / activeDays).toLocaleString()} JOD/day`}
+               prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.gross)}` : platformContext(platform)}
+               sub={`avg ${fmtJOD0(kpis.gross / activeDays)}/day`}
                infoId="sales_incl_vat" />
           <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "—"} unit="JOD"
                delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
@@ -435,9 +432,9 @@ function PublicDashboard() {
                delta={priorKpis ? ptDelta(kpis.netMargin, priorKpis.netMargin) : null}
                prior={priorKpis ? `Prior: ${priorKpis.netMargin.toFixed(1)}%` : "on payout exVAT"}
                infoId="net_margin" />
-          <Kpi label="Net Profit Kept" value={`${Math.round(kpis.netProfit).toLocaleString()}`} unit="JOD"
+          <Kpi label="Net Profit Kept" value={fmtInt(kpis.netProfit)} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.netProfit, priorKpis.netProfit) : null}
-               prior={priorKpis ? `Prior: ${Math.round(priorKpis.netProfit).toLocaleString()} JOD` : "payout exVAT − cost"}
+               prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.netProfit)}` : "payout exVAT − cost"}
                infoId="net_profit_kept" />
         </div>
 
@@ -448,7 +445,7 @@ function PublicDashboard() {
               <CartesianGrid stroke="var(--border)" vertical={false} />
               <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
               <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip {...tooltipStyle} formatter={(v: number) => `${Math.round(v)} JOD`} />
+              <Tooltip {...tooltipStyle} formatter={(v: number) => fmtJOD0(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               {platforms.includes("Talabat") && <Bar dataKey="Talabat" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--talabat)" radius={[3, 3, 0, 0]} />}
               {platforms.includes("Careem") && <Bar dataKey="Careem" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--careem)" radius={[3, 3, 0, 0]} />}
@@ -556,7 +553,7 @@ function PublicDashboard() {
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => `${Math.round(v)} JOD`} />
+                <Tooltip {...tooltipStyle} formatter={(v: number) => fmtJOD0(v)} />
                 <Bar dataKey="profit" fill="rgba(63,209,122,0.8)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -968,8 +965,8 @@ export function PaceTracker({ pace, currentMonth }: {
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Careem") }} />
           <span className="text-muted-foreground">Careem</span>
-          <span className="text-num font-semibold">{Math.round(careem?.sales ?? 0).toLocaleString()}</span>
-          <span className="text-muted-foreground">/ {Math.round(careem?.target ?? 0).toLocaleString()} JOD</span>
+          <span className="text-num font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
+          <span className="text-muted-foreground">/ {fmtJOD0(careem?.target ?? 0)}</span>
           <span className="text-num font-semibold" style={{ color: pctColor(careem?.achievement ?? 0) }}>
             {careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "—"}
           </span>
@@ -978,15 +975,15 @@ export function PaceTracker({ pace, currentMonth }: {
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor("Talabat") }} />
           <span className="text-muted-foreground">Talabat</span>
-          <span className="text-num font-semibold">{Math.round(talabat?.sales ?? 0).toLocaleString()}</span>
-          <span className="text-muted-foreground">/ {Math.round(talabat?.target ?? 0).toLocaleString()} JOD</span>
+          <span className="text-num font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
+          <span className="text-muted-foreground">/ {fmtJOD0(talabat?.target ?? 0)}</span>
           <span className="text-num font-semibold" style={{ color: pctColor(talabat?.achievement ?? 0) }}>
             {talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "—"}
           </span>
           <InfoTip id="target_pct" side="top" />
         </span>
         <span className="ml-auto text-muted-foreground text-num">
-          Combined <span className="text-foreground font-semibold">{Math.round(pace.totalSales).toLocaleString()}</span> / {Math.round(pace.totalTarget).toLocaleString()} JOD
+          Combined <span className="text-foreground font-semibold">{fmtInt(pace.totalSales)}</span> / {fmtJOD0(pace.totalTarget)}
         </span>
       </div>
     </div>
