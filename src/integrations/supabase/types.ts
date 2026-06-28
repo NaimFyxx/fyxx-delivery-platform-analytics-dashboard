@@ -92,6 +92,27 @@ export type Database = {
         }
         Relationships: []
       }
+      item_aliases: {
+        Row: {
+          canonical_name: string
+          created_at: string | null
+          id: string
+          raw_name: string
+        }
+        Insert: {
+          canonical_name: string
+          created_at?: string | null
+          id?: string
+          raw_name: string
+        }
+        Update: {
+          canonical_name?: string
+          created_at?: string | null
+          id?: string
+          raw_name?: string
+        }
+        Relationships: []
+      }
       item_costs: {
         Row: {
           cost_exvat: number
