@@ -732,8 +732,7 @@ function CsvFlow({
       const resolvedLog: string[] = [];
       for (const [rawName, res] of resolutionEntries) {
         if (res.kind === "merge") {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error } = await (supabase as any).from("item_aliases").upsert(
+          const { error } = await supabase.from("item_aliases").upsert(
             { raw_name: rawName, canonical_name: res.canonical },
             { onConflict: "raw_name" },
           );
@@ -1788,13 +1787,12 @@ async function loadRecognitionData(month: string): Promise<{
     const [y, m] = month.split("-").map(Number);
     return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
   })();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [{ data: costs }, { data: aliasRows }] = await Promise.all([
     supabase.from("item_costs").select("item_name,effective_from"),
-    (supabase as any).from("item_aliases").select("raw_name,canonical_name"),
+    supabase.from("item_aliases").select("raw_name,canonical_name"),
   ]);
   const dbAliases: DbAliasMap = {};
-  for (const a of (aliasRows ?? []) as { raw_name: string; canonical_name: string }[]) {
+  for (const a of aliasRows ?? []) {
     dbAliases[normalizeItemName(a.raw_name)] = normalizeItemName(a.canonical_name);
   }
   const knownCanonicals = new Set(
