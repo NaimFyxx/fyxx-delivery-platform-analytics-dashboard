@@ -641,7 +641,7 @@ function CsvFlow({
       const built = await buildPreviewForReport(
         report, platform, chosenMonth ?? checklistMonth, m, hdrs, rows,
       );
-      built.fileMonth = chosenMonth ?? undefined;
+      built.fileMonth = chosenMonth ?? checklistMonth;
       // Only warn when we actually know the file's month AND it differs from the panel.
       if (chosenMonth && chosenMonth !== checklistMonth) {
         const fmtMonth = (mo: string) => {
