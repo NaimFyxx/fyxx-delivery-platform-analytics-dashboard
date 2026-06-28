@@ -1,4 +1,4 @@
-import { costAsOf, canonicalItemName, normalizeItemName, priceAsOf, type CostRow } from "./costs";
+import { costAsOf, canonicalItemName, normalizeItemName, priceAsOf, type CostRow, type DbAliasMap } from "./costs";
 import { exVat } from "./fyxx";
 
 export interface AggItem {
@@ -23,8 +23,9 @@ export function aggregateItems(args: {
   financials: { month: string; platform: string; gross: number; payout: number; discount: number }[];
   rangeMonths: string[];
   platforms: string[];
+  dbAliases?: DbAliasMap;
 }): AggItem[] {
-  const { itemSales, costs, prices, financials, rangeMonths, platforms } = args;
+  const { itemSales, costs, prices, financials, rangeMonths, platforms, dbAliases } = args;
   const lastMonthEnd = rangeMonths.length ? `${rangeMonths[rangeMonths.length - 1]}-28` : "9999-12-31";
 
   type Row = {
@@ -46,7 +47,7 @@ export function aggregateItems(args: {
     if (!rangeMonths.includes(s.month)) continue;
     if (!platforms.includes(s.platform)) continue;
 
-    const canonKey = canonicalItemName(s.item);
+    const canonKey = canonicalItemName(s.item, dbAliases);
     if (!map.has(canonKey)) {
       map.set(canonKey, {
         item: s.item,
@@ -83,7 +84,7 @@ export function aggregateItems(args: {
     row.perPlatform[s.platform].revenue += s.revenue;
 
     const asOf = `${s.month}-28`;
-    const c = costAsOf(costs, canonicalItemName(s.item), asOf);
+    const c = costAsOf(costs, canonicalItemName(s.item, dbAliases), asOf, dbAliases);
     const itemCogs = c != null ? s.units * c : 0;
     if (c != null) {
       row.cogs += itemCogs;
@@ -114,7 +115,7 @@ export function aggregateItems(args: {
       avgPrice: r.units > 0 ? r.revenue / r.units : null,
       perPlatform: r.perPlatform,
       listPrice: Object.fromEntries(
-        knownPlatforms.map((p) => [p, priceAsOf(prices, r.item, p, lastMonthEnd)]),
+        knownPlatforms.map((p) => [p, priceAsOf(prices, r.item, p, lastMonthEnd, dbAliases)]),
       ) as Record<string, number | null>,
       productMargin: r.revenue > 0 ? ((exVat(r.revenue) - r.cogs) / exVat(r.revenue)) * 100 : null,
       commMargin: r.commPayout > 0 ? ((r.commPayout - r.cogs) / r.commPayout) * 100 : null,

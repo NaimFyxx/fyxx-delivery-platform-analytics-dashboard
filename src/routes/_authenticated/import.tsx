@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
@@ -41,6 +41,7 @@ import {
   Circle,
 } from "lucide-react";
 import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
+import { canonicalItemName, normalizeItemName, type DbAliasMap } from "@/lib/costs";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import {
   REPORTS,
@@ -111,7 +112,21 @@ type Preview = {
   /** Non-blocking warnings (shown prominently but don't disable Confirm). */
   warnings?: string[];
   rowFlags: boolean[]; // exists? per preview row
+  /** Items whose canonical name has no cost row — must be resolved before Confirm. */
+  unrecognizedItems?: UnrecognizedItem[];
+  /** All known product canonical names (for merge dropdown). */
+  knownProducts?: string[];
 };
+
+type UnrecognizedItem = {
+  rawName: string;
+  units: number;
+  revenue: number;
+};
+
+type Resolution =
+  | { kind: "merge"; canonical: string }
+  | { kind: "create"; cost: string; talabatRsp: string; careemRsp: string; effectiveFrom: string };
 
 /** What has actually been imported for a month — based on the MEANINGFUL signal per slot,
  *  not mere row existence (Plus files write daily_sales rows with sales=0; Adjustments writes a
@@ -584,6 +599,7 @@ function CsvFlow({
   const [preview, setPreview] = useState<Preview | null>(null);
   const [building, setBuilding] = useState(false);
   const [confirmChecked, setConfirmChecked] = useState(false);
+  const [resolutions, setResolutions] = useState<Record<string, Resolution>>({});
   // Required fields whose expected header wasn't found — the ONLY thing the user maps by hand.
   const [manualFields, setManualFields] = useState<FieldDef[]>([]);
 
@@ -594,6 +610,7 @@ function CsvFlow({
     rows: Record<string, string>[],
   ): Promise<boolean> {
     setPreview(null);
+    setResolutions({});
     try {
       if (!report.positional) saveMapping(report.id, m);
       let chosenMonth: string | null = null;
@@ -709,6 +726,59 @@ function CsvFlow({
   const importMut = useMutation({
     mutationFn: async () => {
       if (!preview) return;
+
+      // 1. Apply resolutions before writing sales rows.
+      const resolutionEntries = Object.entries(resolutions);
+      const resolvedLog: string[] = [];
+      for (const [rawName, res] of resolutionEntries) {
+        if (res.kind === "merge") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error } = await (supabase as any).from("item_aliases").upsert(
+            { raw_name: rawName, canonical_name: res.canonical },
+            { onConflict: "raw_name" },
+          );
+          if (error) throw error;
+          resolvedLog.push(`merged: "${rawName}" → "${res.canonical}"`);
+        } else {
+          const effectiveFrom = res.effectiveFrom;
+          const { error: costErr } = await supabase.from("item_costs").insert({
+            item_name: rawName,
+            cost_exvat: parseFloat(res.cost),
+            effective_from: effectiveFrom,
+          });
+          if (costErr) throw costErr;
+          if (res.talabatRsp) {
+            const { error } = await supabase.from("item_prices").insert({
+              item_name: rawName,
+              platform: "Talabat",
+              price_incl_vat: parseFloat(res.talabatRsp),
+              effective_from: effectiveFrom,
+            });
+            if (error) throw error;
+          }
+          if (res.careemRsp) {
+            const { error } = await supabase.from("item_prices").insert({
+              item_name: rawName,
+              platform: "Careem",
+              price_incl_vat: parseFloat(res.careemRsp),
+              effective_from: effectiveFrom,
+            });
+            if (error) throw error;
+          }
+          resolvedLog.push(`created: "${rawName}"`);
+        }
+      }
+
+      // Patch item_name in monthly_item_sales rows for merged items.
+      for (const g of preview.upserts) {
+        if (g.table === "monthly_item_sales") {
+          for (const row of g.rows) {
+            const res = resolutions[row.item_name as string];
+            if (res?.kind === "merge") row.item_name = res.canonical;
+          }
+        }
+      }
+
       for (const g of preview.upserts) {
         if (g.replace) {
           // Delete the existing (platform, month) slice before inserting fresh rows so that
@@ -740,10 +810,13 @@ function CsvFlow({
         );
       }
       const totalRows = preview.upserts.reduce((s, g) => s + g.rows.length, 0);
+      const logNote = resolvedLog.length
+        ? `${file?.name ?? "csv"} | resolutions: ${resolvedLog.join("; ")}`
+        : (file?.name ?? "csv");
       await supabase.from("import_log").insert({
         platform,
         report_type: report.id,
-        file_name: file?.name ?? "csv",
+        file_name: logNote,
         rows_imported: totalRows,
         status: "success",
       });
@@ -755,6 +828,7 @@ function CsvFlow({
       setHeaders([]);
       setRawRows([]);
       setPreview(null);
+      setResolutions({});
       qc.invalidateQueries();
       onDone();
     },
@@ -965,6 +1039,16 @@ function CsvFlow({
             </div>
           )}
 
+          {preview.unrecognizedItems && preview.unrecognizedItems.length > 0 && (
+            <UnrecognizedPanel
+              items={preview.unrecognizedItems}
+              knownProducts={preview.knownProducts ?? []}
+              month={preview.fileMonth ?? ""}
+              resolutions={resolutions}
+              setResolutions={setResolutions}
+            />
+          )}
+
           {preview.requireConfirm && (
             <label className="flex items-start gap-2.5 cursor-pointer select-none rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs">
               <input
@@ -992,7 +1076,8 @@ function CsvFlow({
                 importMut.isPending ||
                 preview.upserts.every((g) => g.rows.length === 0) ||
                 !!preview.blockReason ||
-                (!!preview.requireConfirm && !confirmChecked)
+                (!!preview.requireConfirm && !confirmChecked) ||
+                (preview.unrecognizedItems?.some((u) => !resolutions[u.rawName]) ?? false)
               }
               className="bg-gradient-primary text-primary-foreground"
             >
@@ -1013,6 +1098,209 @@ function CsvFlow({
         </Card>
       )}
     </>
+  );
+}
+
+/* =========================================================================
+   Unrecognized products resolution panel (shown in Step 4 for item imports)
+   ========================================================================= */
+
+function UnrecognizedPanel({
+  items,
+  knownProducts,
+  month,
+  resolutions,
+  setResolutions,
+}: {
+  items: UnrecognizedItem[];
+  knownProducts: string[];
+  month: string;
+  resolutions: Record<string, Resolution>;
+  setResolutions: Dispatch<SetStateAction<Record<string, Resolution>>>;
+}) {
+  const effectiveFrom = month ? `${month}-01` : currentMonth() + "-01";
+  const unresolvedCount = items.filter((u) => !resolutions[u.rawName]).length;
+
+  return (
+    <div className="rounded-md border border-amber-500/40 bg-amber-500/8 p-4 space-y-3">
+      <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+        <AlertCircle className="size-4 shrink-0" />
+        {unresolvedCount > 0
+          ? `${unresolvedCount} unrecognized product${unresolvedCount > 1 ? "s" : ""} — resolve before confirming`
+          : "All products resolved"}
+      </div>
+      <div className="space-y-2">
+        {items.map((u) => (
+          <UnrecognizedRow
+            key={u.rawName}
+            item={u}
+            knownProducts={knownProducts}
+            effectiveFrom={effectiveFrom}
+            resolution={resolutions[u.rawName]}
+            onSet={(res) =>
+              setResolutions((prev) => ({ ...prev, [u.rawName]: res }))
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UnrecognizedRow({
+  item,
+  knownProducts,
+  effectiveFrom,
+  resolution,
+  onSet,
+}: {
+  item: UnrecognizedItem;
+  knownProducts: string[];
+  effectiveFrom: string;
+  resolution: Resolution | undefined;
+  onSet: (r: Resolution) => void;
+}) {
+  const [mode, setMode] = useState<"merge" | "create" | null>(
+    resolution?.kind ?? null,
+  );
+  const suggestion = suggestMatch(item.rawName, knownProducts);
+
+  const [mergeCanonical, setMergeCanonical] = useState<string>(
+    resolution?.kind === "merge" ? resolution.canonical : (suggestion ?? ""),
+  );
+  const [cost, setCost] = useState(resolution?.kind === "create" ? resolution.cost : "");
+  const [talabatRsp, setTalabatRsp] = useState(resolution?.kind === "create" ? resolution.talabatRsp : "");
+  const [careemRsp, setCareemRsp] = useState(resolution?.kind === "create" ? resolution.careemRsp : "");
+
+  const isResolved =
+    (mode === "merge" && !!mergeCanonical) ||
+    (mode === "create" && !!cost && (!!talabatRsp || !!careemRsp));
+
+  function commit() {
+    if (!mode) return;
+    if (mode === "merge" && mergeCanonical) {
+      onSet({ kind: "merge", canonical: mergeCanonical });
+    } else if (mode === "create" && cost) {
+      onSet({ kind: "create", cost, talabatRsp, careemRsp, effectiveFrom });
+    }
+  }
+
+  return (
+    <div
+      className={`rounded border text-xs p-3 space-y-2 ${
+        isResolved
+          ? "border-success/40 bg-success/8"
+          : "border-border bg-card"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-mono text-[11px] bg-muted/60 rounded px-1.5 py-0.5">
+          {item.rawName}
+        </span>
+        <span className="text-muted-foreground">
+          {fmtInt(item.units)} units · {fmtJOD(item.revenue)}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          className={`px-2 py-1 rounded-full border text-[11px] font-medium transition-colors ${
+            mode === "merge"
+              ? "border-primary bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/50"
+          }`}
+          onClick={() => { setMode("merge"); commit(); }}
+        >
+          Merge into existing
+        </button>
+        <button
+          className={`px-2 py-1 rounded-full border text-[11px] font-medium transition-colors ${
+            mode === "create"
+              ? "border-primary bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:border-primary/50"
+          }`}
+          onClick={() => setMode("create")}
+        >
+          Create new
+        </button>
+      </div>
+
+      {mode === "merge" && (
+        <div className="space-y-1.5">
+          {suggestion && (
+            <div className="text-muted-foreground">
+              Did you mean:{" "}
+              <button
+                className="underline text-primary"
+                onClick={() => {
+                  setMergeCanonical(suggestion);
+                  onSet({ kind: "merge", canonical: suggestion });
+                }}
+              >
+                {suggestion}
+              </button>
+              ?
+            </div>
+          )}
+          <select
+            className="w-full border border-border rounded px-2 py-1 bg-background text-[11px]"
+            value={mergeCanonical}
+            onChange={(e) => {
+              setMergeCanonical(e.target.value);
+              if (e.target.value) onSet({ kind: "merge", canonical: e.target.value });
+            }}
+          >
+            <option value="">-- choose canonical product --</option>
+            {knownProducts.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {mode === "create" && (
+        <div className="grid grid-cols-3 gap-2">
+          <label className="space-y-0.5">
+            <span className="text-muted-foreground">Cost ex-VAT (JOD) *</span>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              className="w-full border border-border rounded px-2 py-1 bg-background text-[11px]"
+              value={cost}
+              onChange={(e) => { setCost(e.target.value); }}
+              onBlur={commit}
+            />
+          </label>
+          <label className="space-y-0.5">
+            <span className="text-muted-foreground">Talabat RSP (incl. VAT)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              className="w-full border border-border rounded px-2 py-1 bg-background text-[11px]"
+              value={talabatRsp}
+              onChange={(e) => { setTalabatRsp(e.target.value); }}
+              onBlur={commit}
+            />
+          </label>
+          <label className="space-y-0.5">
+            <span className="text-muted-foreground">Careem RSP (incl. VAT)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              className="w-full border border-border rounded px-2 py-1 bg-background text-[11px]"
+              value={careemRsp}
+              onChange={(e) => { setCareemRsp(e.target.value); }}
+              onBlur={commit}
+            />
+          </label>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1461,6 +1749,69 @@ async function buildCareemOrders(
   };
 }
 
+/** Simple Levenshtein distance for close-match suggestions. */
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+  return dp[m][n];
+}
+
+/** Return the best matching known product for an unrecognized raw name, or null. */
+function suggestMatch(rawName: string, knownProducts: string[]): string | null {
+  const norm = normalizeItemName(rawName);
+  for (const k of knownProducts) {
+    const kn = normalizeItemName(k);
+    if (norm.includes(kn) || kn.includes(norm)) return k;
+  }
+  let best: string | null = null, bestDist = 3;
+  for (const k of knownProducts) {
+    const d = levenshtein(norm, normalizeItemName(k));
+    if (d < bestDist) { bestDist = d; best = k; }
+  }
+  return best;
+}
+
+/** Load known costs + aliases, return recognition helpers. */
+async function loadRecognitionData(month: string): Promise<{
+  dbAliases: DbAliasMap;
+  isRecognized: (rawName: string) => boolean;
+  knownProducts: string[];
+}> {
+  const monthEnd = (() => {
+    const [y, m] = month.split("-").map(Number);
+    return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  })();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [{ data: costs }, { data: aliasRows }] = await Promise.all([
+    supabase.from("item_costs").select("item_name,effective_from"),
+    (supabase as any).from("item_aliases").select("raw_name,canonical_name"),
+  ]);
+  const dbAliases: DbAliasMap = {};
+  for (const a of (aliasRows ?? []) as { raw_name: string; canonical_name: string }[]) {
+    dbAliases[normalizeItemName(a.raw_name)] = normalizeItemName(a.canonical_name);
+  }
+  const knownCanonicals = new Set(
+    (costs ?? [])
+      .filter((c) => c.effective_from <= monthEnd)
+      .map((c) => canonicalItemName(c.item_name, dbAliases)),
+  );
+  const knownProducts = Array.from(
+    new Set((costs ?? []).map((c) => c.item_name)),
+  ).sort();
+  return {
+    dbAliases,
+    isRecognized: (rawName: string) => knownCanonicals.has(canonicalItemName(rawName, dbAliases)),
+    knownProducts,
+  };
+}
+
 async function buildTalabatItems(
   platform: Platform,
   month: string,
@@ -1469,6 +1820,8 @@ async function buildTalabatItems(
 ): Promise<Preview> {
   // Talabat "Sales by Menu Item" has no date columns — the user picks the month via the panel.
   // Full-month replace semantics: delete-then-insert the whole month's Talabat item rows.
+  const { isRecognized, knownProducts } = await loadRecognitionData(month);
+
   const grouped = new Map<string, { units: number; revenue: number }>();
   let skipped = 0;
   for (const r of rows) {
@@ -1490,11 +1843,13 @@ async function buildTalabatItems(
     (q: any) => q.eq("month", month),
   );
 
+  const unrecognizedItems: UnrecognizedItem[] = [];
   const opsRows: Record<string, unknown>[] = [];
   const previewRows: Array<Record<string, string | number>> = [];
   const rowFlags: boolean[] = [];
   const entries = Array.from(grouped.entries()).sort((a, b) => b[1].revenue - a[1].revenue);
   for (const [name, agg] of entries) {
+    if (!isRecognized(name)) unrecognizedItems.push({ rawName: name, units: agg.units, revenue: agg.revenue });
     rowFlags.push(existingSet.has(name));
     opsRows.push({ month, platform, item_name: name, units: Math.round(agg.units), revenue_jod: round3(agg.revenue) });
     previewRows.push({ Item: name, Units: fmtInt(agg.units), Revenue: fmtJOD(agg.revenue) });
@@ -1519,6 +1874,9 @@ async function buildTalabatItems(
     previewCols: ["Item", "Units", "Revenue"],
     previewRows,
     rowFlags,
+    fileMonth: month,
+    unrecognizedItems: unrecognizedItems.length ? unrecognizedItems : undefined,
+    knownProducts,
   };
 }
 
@@ -1543,6 +1901,8 @@ async function buildCareemItems(
   if (fromDateParsed && !fromDateParsed.endsWith("-01")) {
     blockReason = `Partial-month export — this file starts ${fromDateParsed}, not the 1st of ${month}. Item sales replace the whole month, so re-export with the date range starting on the 1st.`;
   }
+
+  const { isRecognized, knownProducts } = await loadRecognitionData(month);
 
   const hasRevenue = Boolean(m.revenue_jod);
   const grouped = new Map<string, { units: number; revenue: number }>();
@@ -1574,7 +1934,9 @@ async function buildCareemItems(
   const entries = Array.from(grouped.entries()).sort((a, b) =>
     hasRevenue ? b[1].revenue - a[1].revenue : b[1].units - a[1].units,
   );
+  const unrecognizedItems: UnrecognizedItem[] = [];
   for (const [name, agg] of entries) {
+    if (!isRecognized(name)) unrecognizedItems.push({ rawName: name, units: agg.units, revenue: agg.revenue });
     rowFlags.push(existingSet.has(name));
     opsRows.push({
       month,
@@ -1608,8 +1970,11 @@ async function buildCareemItems(
     previewCols: hasRevenue ? ["Item", "Units", "Revenue"] : ["Item", "Units"],
     previewRows,
     rowFlags,
+    fileMonth: month,
     blockReason,
     coverRange,
+    unrecognizedItems: unrecognizedItems.length ? unrecognizedItems : undefined,
+    knownProducts,
   };
 }
 

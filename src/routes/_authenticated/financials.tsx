@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { fmtJOD, fmtPct, exVat, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { cogsFor } from "@/lib/costs";
+import { loadDbAliases } from "@/lib/aliases";
 import { Segmented } from "../dashboard";
 
 export const Route = createFileRoute("/_authenticated/financials")({
@@ -51,6 +52,12 @@ function Financials() {
         })),
       };
     },
+  });
+
+  const { data: dbAliases = {} } = useQuery({
+    queryKey: ["item_aliases"],
+    queryFn: loadDbAliases,
+    staleTime: 60_000,
   });
 
   const [platformFilter, setPlatformFilter] = useState<PlatformKey>("All");
@@ -107,7 +114,7 @@ function Financials() {
               const discount = Number(r.discount ?? 0);
               const netSales = gross - discount;
               // COGS the Overview way: live from item sales × versioned costs (ex-VAT).
-              const cogs = cogsFor(data?.itemSales ?? [], data?.costs ?? [], r.month, [r.platform]);
+              const cogs = cogsFor(data?.itemSales ?? [], data?.costs ?? [], r.month, [r.platform], dbAliases);
               const net = exVat(gross);
               const payoutExVat = exVat(payout);
               // Margins are ex-VAT throughout (cost is ex-VAT; payout/gross are stripped).

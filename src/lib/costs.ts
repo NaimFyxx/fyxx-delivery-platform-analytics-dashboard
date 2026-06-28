@@ -46,12 +46,18 @@ const ALIASES: Record<string, string> = {
 };
 
 /**
- * Returns the canonical normalized name for an item, applying the alias map after
- * normalization so cross-platform spelling variants merge to the same key.
+ * DB-backed alias map: normalized raw_name → normalized canonical_name.
+ * Loaded at import/query time and passed in where needed.
  */
-export function canonicalItemName(s: string): string {
+export type DbAliasMap = Record<string, string>;
+
+/**
+ * Returns the canonical normalized name for an item.
+ * Checks dbAliases first (if provided), then the hardcoded ALIASES map.
+ */
+export function canonicalItemName(s: string, dbAliases?: DbAliasMap): string {
   const norm = normalizeItemName(s);
-  return ALIASES[norm] ?? norm;
+  return dbAliases?.[norm] ?? ALIASES[norm] ?? norm;
 }
 
 /** Base name with option/modifier decorations removed — any "(...)" or "[...]" group.
@@ -75,9 +81,11 @@ function decoredWords(s: string): string {
  *      (e.g. report "… [1 With Salad]" → the "(With Salad)" cost row)
  *   3. the bare base row (fallback when the report shows no option)
  */
-export function costAsOf(costs: CostRow[], item: string, asOfDate: string): number | null {
-  const q = normalizeItemName(item);
-  const qWords = decoredWords(item);
+export function costAsOf(costs: CostRow[], item: string, asOfDate: string, dbAliases?: DbAliasMap): number | null {
+  // Resolve through aliases first so a merged item finds its canonical cost row.
+  const resolved = canonicalItemName(item, dbAliases);
+  const q = normalizeItemName(resolved);
+  const qWords = decoredWords(resolved);
 
   const latest = (rows: CostRow[]): number | null => {
     let best: CostRow | null = null;
@@ -89,7 +97,7 @@ export function costAsOf(costs: CostRow[], item: string, asOfDate: string): numb
   };
 
   // 1. exact normalized match
-  const exact = latest(costs.filter((c) => normalizeItemName(c.item) === q));
+  const exact = latest(costs.filter((c) => normalizeItemName(canonicalItemName(c.item, dbAliases)) === q));
   if (exact != null) return exact;
 
   // 2 & 3. optioned-item matching against the shared base
@@ -124,11 +132,12 @@ export function priceAsOf(
   item: string,
   platform: string,
   asOf: string,
+  dbAliases?: DbAliasMap,
 ): number | null {
-  const canonItem = canonicalItemName(item);
+  const canonItem = canonicalItemName(item, dbAliases);
   let best: { price: number; from: string } | null = null;
   for (const p of prices) {
-    if (canonicalItemName(p.item_name) !== canonItem || p.platform !== platform) continue;
+    if (canonicalItemName(p.item_name, dbAliases) !== canonItem || p.platform !== platform) continue;
     const from = p.effective_from ?? "0000-01-01";
     if (from > asOf) continue;
     if (!best || from > best.from) best = { price: Number(p.price_incl_vat), from };
@@ -147,13 +156,14 @@ export function cogsFor(
   costs: CostRow[],
   month: string,
   platforms: string[],
+  dbAliases?: DbAliasMap,
 ): number {
   const asOf = lastDayOfMonth(month);
   let total = 0;
   for (const s of itemSales) {
     if (s.month !== month) continue;
     if (!platforms.includes(s.platform)) continue;
-    const c = costAsOf(costs, s.item, asOf);
+    const c = costAsOf(costs, s.item, asOf, dbAliases);
     if (c != null) total += s.units * c;
   }
   return total;

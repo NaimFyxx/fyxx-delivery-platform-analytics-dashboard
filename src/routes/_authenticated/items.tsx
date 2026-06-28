@@ -13,6 +13,7 @@ import { fmtJOD, fmtInt, platformBg, platformsFromFilter, type Platform, type Pl
 import { monthLabel, type RangeKey } from "@/lib/months";
 import { type CostRow } from "@/lib/costs";
 import { aggregateItems } from "@/lib/items";
+import { loadDbAliases } from "@/lib/aliases";
 import { Segmented } from "../dashboard";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 
@@ -98,6 +99,12 @@ function Items() {
     enabled: rangeMonths.length > 0,
   });
 
+  const { data: dbAliases = {} } = useQuery({
+    queryKey: ["item_aliases"],
+    queryFn: loadDbAliases,
+    staleTime: 60_000,
+  });
+
   const costRows: CostRow[] = useMemo(
     () => costs.map((c) => ({ item: c.item_name, cost: Number(c.cost_exvat), effective_from: c.effective_from })),
     [costs],
@@ -120,10 +127,11 @@ function Items() {
       financials,
       rangeMonths,
       platforms: activePlatforms,
+      dbAliases,
     })
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
       .sort((a, b) => b.units - a.units);
-  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, q]);
+  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, dbAliases, q]);
 
   const rangeLabel = useMemo(() => {
     if (!rangeMonths.length) return "All time";
