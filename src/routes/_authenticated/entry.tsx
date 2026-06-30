@@ -101,7 +101,7 @@ function DailySalesForm() {
           <Field label="Date"><DatePicker value={date} onChange={setDate} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Gross sales (JOD)"><Input type="number" step="0.001" min="0" value={sales} onChange={(e) => setSales(e.target.value)} required /></Field>
-          <Field label="Orders"><Input type="number" step="1" min="0" value={orders} onChange={(e) => setOrders(e.target.value)} required /></Field>
+          <Field label="Orders (optional)"><Input type="number" step="1" min="0" value={orders} onChange={(e) => setOrders(e.target.value)} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
