@@ -14,12 +14,17 @@ import { createServerFn } from "@tanstack/react-start";
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [daily, fin, costs, itemSales, targets, lastImport, allImports, custData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
         "date,platform,sales_jod,orders,cplus_sales_jod,cplus_orders,cplus_aov,pro_orders,pro_sales_jod",
       )
+      .order("date"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabaseAdmin as any)
+      .from("pace_daily")
+      .select("date,platform,sales_jod,orders")
       .order("date"),
     supabaseAdmin
       .from("monthly_financials")
@@ -47,6 +52,12 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   ]);
 
   return {
+    paceDaily: ((paceData.data ?? []) as { date: string; platform: string; sales_jod: number; orders: number | null }[]).map((r) => ({
+      date: r.date,
+      platform: r.platform as string,
+      sales: Number(r.sales_jod),
+      orders: r.orders,
+    })),
     daily: (daily.data ?? []).map((r) => ({
       date: r.date,
       platform: r.platform as string,

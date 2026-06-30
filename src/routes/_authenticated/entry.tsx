@@ -24,10 +24,10 @@ export const Route = createFileRoute("/_authenticated/entry")({
 function Entry() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader title="Data entry" description="Add or update daily sales, item costs, menu prices and targets. Financials and item sales are populated by CSV import." />
+      <PageHeader title="Data entry" description="Pace tracker entries feed the pace bar only — they are separate from imported data. Item costs, menu prices and targets are also entered here." />
       <Tabs defaultValue="daily">
         <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
-          <TabsTrigger value="daily">Daily sales</TabsTrigger>
+          <TabsTrigger value="daily">Pace tracker</TabsTrigger>
           <TabsTrigger value="costs">Item costs</TabsTrigger>
           <TabsTrigger value="prices">Menu prices</TabsTrigger>
           <TabsTrigger value="targets">Targets</TabsTrigger>
@@ -48,7 +48,7 @@ function useInvalidateAll() {
   return () => qc.invalidateQueries();
 }
 
-/* ---------- Daily sales ---------- */
+/* ---------- Pace tracker (manual daily sales — feeds pace bar only) ---------- */
 function DailySalesForm() {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
@@ -59,11 +59,12 @@ function DailySalesForm() {
 
   const filter = useListFilter();
   const { data: rows = [] } = useQuery({
-    queryKey: ["entry_daily"],
+    queryKey: ["entry_pace_daily"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("daily_sales").select("*").order("date", { ascending: false }).limit(1000);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).from("pace_daily").select("*").order("date", { ascending: false }).limit(1000);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as { id: string; date: string; platform: string; sales_jod: number; orders: number | null }[];
     },
   });
   const months = useMemo(
@@ -74,12 +75,12 @@ function DailySalesForm() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("daily_sales").upsert(
-        { date, platform, sales_jod: Number(sales), orders: Number(orders) },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from("pace_daily").upsert(
+        { date, platform, sales_jod: Number(sales), orders: orders ? Number(orders) : null },
         { onConflict: "date,platform" },
       );
       if (error) throw error;
-      await logImport({ platform, report_type: "performance" });
     },
     onSuccess: () => { toast.success("Saved"); setSales(""); setOrders(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -87,7 +88,8 @@ function DailySalesForm() {
 
   const del = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("daily_sales").delete().eq("id", id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from("pace_daily").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
@@ -97,6 +99,7 @@ function DailySalesForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
+        <p className="text-xs text-muted-foreground mb-3">These entries power the pace tracker only. Imported CSV data is stored separately and is not affected.</p>
         <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Date"><DatePicker value={date} onChange={setDate} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
@@ -106,14 +109,14 @@ function DailySalesForm() {
         </form>
       </Card>
       <RecentTable
-        title="Entries"
+        title="Pace entries"
         right={<ListFilterBar f={filter} months={months} />}
         headers={["Date", "Platform", "Sales", "Orders", ""]}
         rows={filtered.map((r) => [
           r.date,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           fmtJOD(Number(r.sales_jod)),
-          fmtInt(r.orders),
+          r.orders != null ? fmtInt(r.orders) : <span className="text-muted-foreground">—</span>,
           <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
         ])}
       />

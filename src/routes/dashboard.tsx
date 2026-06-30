@@ -731,7 +731,7 @@ export function computePace(data: DashboardData, currentMonth: string, today: st
   const daysInMonth = new Date(Date.UTC(y, mm, 0)).getUTCDate();
 
   const workingDates = new Set(
-    data.daily
+    data.paceDaily
       .filter((d) => monthOfDate(d.date) === currentMonth && d.date <= today)
       .map((d) => d.date),
   );
@@ -739,7 +739,7 @@ export function computePace(data: DashboardData, currentMonth: string, today: st
 
   const platformsOnSheet: ("Talabat" | "Careem")[] = ["Talabat", "Careem"];
   const rows = platformsOnSheet.map((p) => {
-    const sales = data.daily
+    const sales = data.paceDaily
       .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
       .reduce((s, d) => s + d.sales, 0);
     const target = data.targets
@@ -756,7 +756,7 @@ export function computePace(data: DashboardData, currentMonth: string, today: st
   const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
 
   const latestByPlatform = (["Talabat", "Careem"] as const).map((p) => {
-    const dates = data.daily
+    const dates = data.paceDaily
       .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
       .map((d) => d.date);
     return { platform: p, latest: dates.length ? dates.sort().at(-1)! : null };
