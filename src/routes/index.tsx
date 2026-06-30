@@ -8,6 +8,7 @@ import {
   Header, PaceTracker,
   computePace,
   monthOfDate,
+  lastDayOfMonth,
 } from "./dashboard";
 
 export const Route = createFileRoute("/")({
@@ -39,9 +40,25 @@ function PaceLandingPage() {
     return last ?? new Date().toISOString().slice(0, 10);
   }, [data]);
   const currentMonth = monthOfDate(today);
+
+  // Real calendar today (not data-derived) — a month only appears in history once it has ended.
+  const calendarToday = new Date().toISOString().slice(0, 10);
+  const calendarMonth = monthOfDate(calendarToday);
   const lastDailyDate = data?.daily.at(-1)?.date ?? null;
 
   const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
+
+  const completedMonths = useMemo(() => {
+    if (!data) return [];
+    const monthSet = new Set<string>();
+    data.targets.forEach((t) => monthSet.add(t.month));
+    data.daily.forEach((d) => monthSet.add(monthOfDate(d.date)));
+    return Array.from(monthSet)
+      .filter((m) => m < calendarMonth)
+      .sort()
+      .reverse()
+      .slice(0, 12);
+  }, [data, calendarMonth]);
 
   function handleViewDashboards() {
     if (localStorage.getItem(UNLOCK_KEY) === "1") {
@@ -94,6 +111,26 @@ function PaceLandingPage() {
           >
             Admin sign in
           </Link>
+        </div>
+
+        <div className="mt-10">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold">Pace History</h2>
+            <p className="text-xs text-muted-foreground">Final pace for completed months.</p>
+          </div>
+          {completedMonths.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No completed months yet.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {completedMonths.map((m) => (
+                <PaceTracker
+                  key={m}
+                  pace={computePace(data, m, lastDayOfMonth(m))}
+                  currentMonth={m}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
