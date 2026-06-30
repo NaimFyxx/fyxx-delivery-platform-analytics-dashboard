@@ -320,6 +320,33 @@ export type Database = {
         }
         Relationships: []
       }
+      pace_daily: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          orders: number | null
+          platform: Database["public"]["Enums"]["platform"]
+          sales_jod: number
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          orders?: number | null
+          platform: Database["public"]["Enums"]["platform"]
+          sales_jod?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          orders?: number | null
+          platform?: Database["public"]["Enums"]["platform"]
+          sales_jod?: number
+        }
+        Relationships: []
+      }
       platform_orders: {
         Row: {
           commission: number
