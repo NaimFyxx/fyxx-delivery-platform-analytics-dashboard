@@ -51,8 +51,8 @@ function PaceLandingPage() {
   const completedMonths = useMemo(() => {
     if (!data) return [];
     const monthSet = new Set<string>();
+    // Only months with a target set — pace history is actual-vs-target, so no target = nothing to show.
     data.targets.forEach((t) => monthSet.add(t.month));
-    data.daily.forEach((d) => monthSet.add(monthOfDate(d.date)));
     return Array.from(monthSet)
       .filter((m) => m < calendarMonth)
       .sort()
