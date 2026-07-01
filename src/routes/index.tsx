@@ -46,7 +46,7 @@ function PaceLandingPage() {
   const calendarMonth = monthOfDate(calendarToday);
   const lastDailyDate = data?.daily.at(-1)?.date ?? null;
 
-  const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
+  const pace = useMemo(() => data ? computePace(data, calendarMonth, calendarToday) : null, [data, calendarMonth, calendarToday]);
 
   const completedMonths = useMemo(() => {
     if (!data) return [];
@@ -96,7 +96,7 @@ function PaceLandingPage() {
     <div className="min-h-screen bg-background">
       <Header today={today} lastDailyDate={lastDailyDate} showNav={false} />
       <div className="px-4 md:px-7 pt-5 md:pt-7 pb-12 max-w-5xl mx-auto">
-        <PaceTracker pace={pace} currentMonth={currentMonth} />
+        <PaceTracker pace={pace} currentMonth={calendarMonth} />
 
         <div className="flex flex-col items-center gap-3 pt-2">
           <button

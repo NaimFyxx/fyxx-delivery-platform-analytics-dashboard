@@ -231,8 +231,10 @@ function PublicDashboard() {
 
   const [showAvgTrailing, setShowAvgTrailing] = useState(false);
 
-  // --- Pace tracker: always current month, ignores range filter ---
-  const pace = useMemo(() => data ? computePace(data, currentMonth, today) : null, [data, currentMonth, today]);
+  // --- Pace tracker: always the REAL current calendar month (not the latest-data month, not the range filter) ---
+  const paceToday = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const paceMonth = monthOfDate(paceToday);
+  const pace = useMemo(() => data ? computePace(data, paceMonth, paceToday) : null, [data, paceMonth, paceToday]);
 
   // Distinct dates with any data in range + platform filter (used for avg/day KPI sub-stats).
   const activeDays = useMemo(() => {
@@ -361,7 +363,7 @@ function PublicDashboard() {
         </div>
 
         {/* PACE TRACKER — always current month, always all platforms, ignores all filters */}
-        <PaceTracker pace={pace} currentMonth={currentMonth} />
+        <PaceTracker pace={pace} currentMonth={paceMonth} />
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
