@@ -61,10 +61,9 @@ function DailySalesForm() {
   const { data: rows = [] } = useQuery({
     queryKey: ["entry_pace_daily"],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any).from("pace_daily").select("*").order("date", { ascending: false }).limit(1000);
+      const { data, error } = await supabase.from("pace_daily").select("*").order("date", { ascending: false }).limit(1000);
       if (error) throw error;
-      return (data ?? []) as { id: string; date: string; platform: string; sales_jod: number; orders: number | null }[];
+      return data ?? [];
     },
   });
   const months = useMemo(
@@ -75,8 +74,7 @@ function DailySalesForm() {
 
   const save = useMutation({
     mutationFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).from("pace_daily").upsert(
+      const { error } = await supabase.from("pace_daily").upsert(
         { date, platform, sales_jod: Number(sales), orders: orders ? Number(orders) : null },
         { onConflict: "date,platform" },
       );
@@ -88,8 +86,7 @@ function DailySalesForm() {
 
   const del = useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).from("pace_daily").delete().eq("id", id);
+      const { error } = await supabase.from("pace_daily").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
