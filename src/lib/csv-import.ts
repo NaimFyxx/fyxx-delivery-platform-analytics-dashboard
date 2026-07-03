@@ -53,6 +53,7 @@ const T_REPORTS = "https://partner-app.talabat.com/report-builder/create/REPORTS
 const T_MENU_ITEM = "https://partner-app.talabat.com/reports/TB_JO;779776";
 const C_FINANCE = "https://app.careemnow.com/merchant/finances";
 const C_PERF = "https://app.careemnow.com/merchant/dashboard-analytics/business-performance";
+const C_CUSTOMER_INSIGHTS = "https://app.careemnow.com/merchant/dashboard-analytics/customer-insights";
 
 // Talabat report pages that accept ?from=&to= to pre-filter to a date range.
 const TALABAT_DATE_FILTERED = new Set<ReportId>([
@@ -395,14 +396,14 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     id: "careem:customers",
     platform: "Careem",
     label: "New, Retained & Reactivated Customers",
-    portalUrl: C_PERF,
-    portalLabel: "Open Sales Performance",
+    portalUrl: C_CUSTOMER_INSIGHTS,
+    portalLabel: "Open Customer Insights",
     portalSteps:
-      "Analytics & reports → Sales Performance → 'New, retained, reactivated' tab → set the toggle to ORDERS (not Sales) → set date range to a full calendar month → Export. ⚠ The SALES toggle exports only a date + overall-totals file with NO customer breakdown and will not import here — it MUST be the ORDERS view, which gives the new_user / reactivated_user / retained_user counts.",
+      "Analytics & reports → Customer Insights → 'No. of customers' card → 'New, retained, reactivated' tab → set date range to a full calendar month → Export. ⚠ The correct file has columns date, new_user, retained_user, reactivated_user. A date, overall file (from Sales Performance) is the WRONG export and will not import here — it has no per-segment breakdown.",
     table: "monthly_customers",
     monthSource: "from-rows",
     signature: ["Number of customers - New users|new_user", "Number of customers - Retained users|retained_user"],
-    hint: "Daily new / retained / reactivated customer counts — use the ORDERS toggle (NOT Sales). Aggregated to monthly totals on import. Basis = customers.",
+    hint: "Daily new / retained / reactivated customer counts from Customer Insights → 'No. of customers' card. The file must have date / new_user / retained_user / reactivated_user (a date, overall file is the wrong export). Aggregated to monthly totals on import. Basis = customers.",
     fields: [
       { key: "date",        label: "Date",             defaults: ["Date", "date"],                                                required: true },
       { key: "new_users",   label: "New users",        defaults: ["Number of customers - New users", "new_user"],                 required: true },
