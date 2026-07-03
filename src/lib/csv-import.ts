@@ -10,8 +10,7 @@ export type ReportId =
   | "careem:order_level" // C1 — one row per order (money + payout)
   | "careem:menu_item" // C2 — one row per item per period
   | "careem:adjustments" // C4 — monthly deductions (bank fee, Plus contribution)
-  | "careem:plus_orders" // Careem Plus skinny file — orders per day
-  | "careem:plus_sales" // Careem Plus skinny file — sales per day
+  | "careem:plus_customers" // Careem Plus customer counts per day (cplus / non_cplus)
   | "careem:customers"; // Careem new / retained / reactivated customer counts (daily → monthly)
 // NOTE: Talabat has no separate customers slot — the Performance import fills monthly_customers
 // (new / returning orders) in the same pass, since the Performance export carries those columns.
@@ -361,35 +360,24 @@ export const REPORTS: Record<ReportId, ReportDef> = {
       },
     ],
   },
-  "careem:plus_orders": {
-    id: "careem:plus_orders",
+  "careem:plus_customers": {
+    id: "careem:plus_customers",
     platform: "Careem",
-    label: "Careem Plus — Orders",
-    portalUrl: C_PERF,
-    portalLabel: "Open Sales Performance (Plus)",
+    label: "Careem Plus — Customers",
+    portalUrl: C_CUSTOMER_INSIGHTS,
+    portalLabel: "Open Customer Insights",
     portalSteps:
-      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → set the chart to ORDERS → Export.",
+      "Analytics & reports → Customer Insights → 'No. of customers' → 'Careem Plus, non Careem Plus' tab → set date range to a full calendar month → Export. The file has columns date, cplus, non_cplus (daily customer counts).",
     table: "daily_sales",
     monthSource: "from-rows",
-    positional: true,
-    signature: [],
-    hint: "Daily Careem Plus order counts. Same screen as Plus — Sales — just the other toggle.",
-    fields: [],
-  },
-  "careem:plus_sales": {
-    id: "careem:plus_sales",
-    platform: "Careem",
-    label: "Careem Plus — Sales",
-    portalUrl: C_PERF,
-    portalLabel: "Open Sales Performance (Plus)",
-    portalSteps:
-      "Analytics & reports → Sales Performance → 'Careem Plus / non-Careem Plus' segment → set the chart to SALES → Export.",
-    table: "daily_sales",
-    monthSource: "from-rows",
-    positional: true,
-    signature: [],
-    hint: "Daily Careem Plus sales (JOD). Same screen as Plus — Orders — just the other toggle.",
-    fields: [],
+    signature: ["date", "cplus", "non_cplus"],
+    hint: "Daily Careem Plus vs non-Plus customer counts (Careem exports no Plus sales/orders — only these counts). Written into daily_sales; powers the Careem+ customer-mix insight.",
+    fields: [
+      { key: "date", label: "Date", defaults: ["date", "Date"], required: true },
+      { key: "cplus_customers", label: "Careem Plus customers", defaults: ["cplus"], required: true },
+      { key: "non_cplus_customers", label: "Non-Plus customers", defaults: ["non_cplus"], required: true },
+    ],
+    optionalFields: [],
   },
 
   "careem:customers": {

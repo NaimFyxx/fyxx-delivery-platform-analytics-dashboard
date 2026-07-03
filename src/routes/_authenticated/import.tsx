@@ -145,7 +145,7 @@ function useImportStatus(month: string) {
         supabase.from("platform_orders").select("platform").gte("date", start).lt("date", next),
         supabase
           .from("daily_sales")
-          .select("platform,sales_jod,cplus_orders,cplus_sales_jod")
+          .select("platform,sales_jod,cplus_customers")
           .gte("date", start)
           .lt("date", next),
         supabase.from("monthly_item_sales").select("platform,revenue_jod").eq("month", month),
@@ -165,8 +165,7 @@ function useImportStatus(month: string) {
       const itemsReal = (p: Platform) => it.some((r) => r.platform === p && Number(r.revenue_jod) > 0);
       const finReal = (p: Platform) => fn.some((r) => r.platform === p && Number(r.gross_sales) > 0);
       const adjHas = (p: Platform) => aj.some((r) => r.platform === p);
-      const cplusO = dl.some((r) => r.platform === "Careem" && Number(r.cplus_orders) > 0);
-      const cplusS = dl.some((r) => r.platform === "Careem" && Number(r.cplus_sales_jod) > 0);
+      const cplusCust = dl.some((r) => r.platform === "Careem" && Number(r.cplus_customers) > 0);
       const custReal = (p: Platform) =>
         cu.some((r) => r.platform === p && (Number(r.new) > 0 || Number(r.returning) > 0));
       return {
@@ -177,8 +176,7 @@ function useImportStatus(month: string) {
           "careem:order_level": orderRows("Careem"),
           "careem:menu_item": itemsReal("Careem"),
           "careem:adjustments": adjHas("Careem"),
-          "careem:plus_orders": cplusO,
-          "careem:plus_sales": cplusS,
+          "careem:plus_customers": cplusCust,
           "careem:customers": custReal("Careem"),
         },
         platform: {
@@ -441,16 +439,6 @@ function Step2Report({
                   )}
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-1">{r.hint}</div>
-                {!imported && r.id === "careem:plus_orders" && (
-                  <div className="text-[10.5px] text-primary/70 mt-1.5">
-                    Tip: same export as Plus — Sales, just flip the toggle to ORDERS.
-                  </div>
-                )}
-                {!imported && r.id === "careem:plus_sales" && (
-                  <div className="text-[10.5px] text-primary/70 mt-1.5">
-                    Tip: same export as Plus — Orders, just flip the toggle to SALES.
-                  </div>
-                )}
               </button>
               <div className="flex items-center justify-between gap-2 mt-2 text-[10.5px]">
                 <span>
@@ -1455,9 +1443,8 @@ async function buildPreviewForReport(
       return buildCareemItems(platform, month, mapping, rows);
     case "careem:adjustments":
       return buildAdjustments(platform, mapping, rows);
-    case "careem:plus_orders":
-    case "careem:plus_sales":
-      return buildPlus(report, platform, headers, rows);
+    case "careem:plus_customers":
+      return buildPlusCustomers(platform, mapping, rows);
     case "careem:customers":
       return buildCareemCustomers(platform, month, mapping, rows);
     default:
@@ -2113,25 +2100,24 @@ async function buildAdjustments(
   };
 }
 
-async function buildPlus(
-  report: ReportDef,
+/** Careem Plus — Customers: daily cplus / non_cplus counts → daily_sales (by date). */
+async function buildPlusCustomers(
   platform: Platform,
-  headers: string[],
+  m: Mapping,
   rows: Record<string, string>[],
 ): Promise<Preview> {
-  const dateCol = headers[0],
-    valueCol = headers[1];
-  const isOrders = report.id === "careem:plus_orders";
-  const col = isOrders ? "cplus_orders" : "cplus_sales_jod";
-  const grouped = new Map<string, number>();
+  const grouped = new Map<string, { cplus: number; nonCplus: number }>();
   let skipped = 0;
   for (const r of rows) {
-    const date = parseDate(r[dateCol]);
+    const date = parseDate(r[m.date]);
     if (!date) {
       skipped++;
       continue;
     }
-    grouped.set(date, num(r[valueCol]));
+    grouped.set(date, {
+      cplus: Math.round(num(r[m.cplus_customers])),
+      nonCplus: Math.round(num(r[m.non_cplus_customers])),
+    });
   }
   const dates = Array.from(grouped.keys());
   const existingSet = await existingKeys("daily_sales", "date", platform, dates);
@@ -2139,27 +2125,25 @@ async function buildPlus(
   const opsRows: Record<string, unknown>[] = [];
   const previewRows: Array<Record<string, string | number>> = [];
   const rowFlags: boolean[] = [];
-  const label = isOrders ? "Plus orders" : "Plus sales";
   for (const [date, v] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
     rowFlags.push(existingSet.has(date));
-    opsRows.push({ date, platform, [col]: isOrders ? Math.round(v) : round3(v) });
-    previewRows.push({ Date: date, [label]: isOrders ? fmtInt(v) : fmtJOD(v) });
+    opsRows.push({
+      date,
+      platform,
+      cplus_customers: v.cplus,
+      non_cplus_customers: v.nonCplus,
+    });
+    previewRows.push({
+      Date: date,
+      "Plus customers": fmtInt(v.cplus),
+      "Regular customers": fmtInt(v.nonCplus),
+    });
   }
   const willUpdate = rowFlags.filter(Boolean).length;
-  const lowerValueCol = valueCol.toLowerCase();
-  const looksLikeOverall =
-    lowerValueCol.includes("overall") ||
-    (!lowerValueCol.includes("plus") && !lowerValueCol.includes("careem"));
-  const warnings: string[] = looksLikeOverall
-    ? [
-        `The value column is "${valueCol}" — this looks like the Overall line, not the Careem Plus segment. Select the "Careem Plus / non-Careem Plus" segment in Sales Performance before exporting.`,
-      ]
-    : [];
-  const allDates = Array.from(grouped.keys()).sort();
+  const allDates = dates.slice().sort();
   const coverRange = allDates.length > 0 ? `${allDates[0]} → ${allDates[allDates.length - 1]}` : undefined;
   const notes = [
-    `Value read from the 2nd column ("${valueCol}") — its header is ignored.`,
-    `Writes Careem Plus ${isOrders ? "orders" : "sales"} into daily_sales (loyalty), without touching the overall totals.`,
+    "Writes Careem Plus vs non-Plus customer counts into daily_sales (does not touch sales / orders totals).",
     skipped ? `${skipped} row(s) skipped (no valid date).` : "",
   ].filter(Boolean);
   return {
@@ -2168,10 +2152,9 @@ async function buildPlus(
     willUpdate,
     skipped,
     notes,
-    previewCols: ["Date", label],
+    previewCols: ["Date", "Plus customers", "Regular customers"],
     previewRows,
     rowFlags,
-    warnings,
     coverRange,
   };
 }

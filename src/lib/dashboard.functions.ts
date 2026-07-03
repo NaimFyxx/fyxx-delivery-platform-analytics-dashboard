@@ -18,7 +18,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     supabaseAdmin
       .from("daily_sales")
       .select(
-        "date,platform,sales_jod,orders,cplus_sales_jod,cplus_orders,cplus_aov,pro_orders,pro_sales_jod",
+        "date,platform,sales_jod,orders,cplus_sales_jod,cplus_orders,cplus_aov,cplus_customers,non_cplus_customers,pro_orders,pro_sales_jod",
       )
       .order("date"),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,6 +66,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       cplusSales: Number(r.cplus_sales_jod ?? 0),
       cplusOrders: Number(r.cplus_orders ?? 0),
       cplusAov: Number(r.cplus_aov ?? 0),
+      cplusCustomers: Number(r.cplus_customers ?? 0),
+      nonCplusCustomers: Number(r.non_cplus_customers ?? 0),
       proSales: Number(r.pro_sales_jod ?? 0),
       proOrders: Number(r.pro_orders ?? 0),
     })),

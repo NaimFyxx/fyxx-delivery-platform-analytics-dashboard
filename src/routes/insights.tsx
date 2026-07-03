@@ -110,16 +110,10 @@ function InsightsPage() {
     [items, anyRevenue],
   );
 
-  // --- Tiers: subscriber (Careem+ / Talabat Pro) vs regular over selected range ---
-  const careemTiers = useMemo(
-    () =>
-      buildTiers(
-        data?.daily,
-        "Careem",
-        rangeMonths,
-        (r) => r.cplusSales ?? 0,
-        (r) => r.cplusOrders ?? 0,
-      ),
+  // --- Tiers: Careem uses Plus customer counts (only Plus data Careem exports);
+  //     Talabat uses Pro sales/orders (which Talabat does export). ---
+  const careemMix = useMemo(
+    () => buildCustomerMix(data?.daily, "Careem", rangeMonths),
     [data, rangeMonths],
   );
   const talabatTiers = useMemo(
@@ -197,8 +191,7 @@ function InsightsPage() {
     const dailyTypes = [
       "talabat:performance",
       "careem:order_level",
-      "careem:plus_orders",
-      "careem:plus_sales",
+      "careem:plus_customers",
     ];
     const itemTypes = ["talabat:order_report", "careem:menu_item"];
     const finTypes = ["talabat:order_report", "careem:order_level", "careem:adjustments"];
@@ -271,16 +264,14 @@ function InsightsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
           <TierCard
             title="Careem+ vs Regular"
-            sub="Share of sales, orders & AOV for Careem subscribers"
+            sub="Plus vs regular customer mix (daily counts)"
             asOf={freshness.daily}
             bg="linear-gradient(135deg, #0a3d2b, #0f5c3e)"
           >
-            {!careemTiers ? (
-              <Empty text="No Careem data in this range." />
-            ) : !careemTiers.hasSub ? (
-              <Empty text="No Careem+ figures imported for this range. Import the Careem Plus — Orders and Sales files." />
+            {!careemMix || !careemMix.has ? (
+              <Empty text="Import the Careem Plus — Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
             ) : (
-              <TierBody t={careemTiers} subLabel="C+" colorVar="var(--careem)" barColor="#5fd0a3" />
+              <CustomerMixBody mix={careemMix} colorVar="var(--careem)" barColor="#5fd0a3" />
             )}
           </TierCard>
           <TierCard
@@ -655,11 +646,44 @@ type DailyRow = {
   date: string;
   sales: number;
   orders: number;
-  cplusSales?: number;
-  cplusOrders?: number;
+  cplusCustomers?: number;
+  nonCplusCustomers?: number;
   proSales?: number;
   proOrders?: number;
 };
+
+type CustomerMix = {
+  plus: number;
+  regular: number;
+  total: number;
+  plusPct: number;
+  regularPct: number;
+  has: boolean;
+};
+
+/** Careem Plus vs non-Plus customer counts summed over the selected months. */
+function buildCustomerMix(
+  daily: DailyRow[] | undefined,
+  platform: string,
+  rangeMonths: string[],
+): CustomerMix | null {
+  if (!daily) return null;
+  const rows = daily.filter(
+    (d) => d.platform === platform && rangeMonths.includes(monthOfDate(d.date)),
+  );
+  if (!rows.length) return null;
+  const plus = rows.reduce((s, r) => s + (r.cplusCustomers ?? 0), 0);
+  const regular = rows.reduce((s, r) => s + (r.nonCplusCustomers ?? 0), 0);
+  const total = plus + regular;
+  return {
+    plus,
+    regular,
+    total,
+    plusPct: total > 0 ? (plus / total) * 100 : 0,
+    regularPct: total > 0 ? (regular / total) * 100 : 0,
+    has: total > 0,
+  };
+}
 
 /** Build subscriber-vs-regular tier figures for one platform over the selected months. */
 function buildTiers(
@@ -725,6 +749,39 @@ function TierBody({
         <MiniStat label={`${subLabel} AOV`} value={t.subAov.toFixed(2)} unit="JOD" accentColor={colorVar} />
         <MiniStat label="Regular AOV" value={t.nonOrders > 0 ? t.regAov.toFixed(2) : "—"} unit={t.nonOrders > 0 ? "JOD" : ""} />
         <MiniStat label="Overall AOV" value={t.overallAov.toFixed(2)} unit="JOD" />
+      </div>
+    </div>
+  );
+}
+
+/** Careem Plus vs regular customer mix — counts + % share (Careem exports no Plus sales/orders). */
+function CustomerMixBody({
+  mix, colorVar, barColor,
+}: {
+  mix: CustomerMix; colorVar: string; barColor: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <ShareRow
+        label="Plus customers"
+        sub={mix.plus}
+        other={mix.regular}
+        pct={mix.plusPct}
+        unit="customers"
+        barColor={barColor}
+      />
+      <div className="grid grid-cols-2 gap-2 pt-2">
+        <MiniStat
+          label="Plus customers"
+          value={Math.round(mix.plus).toLocaleString()}
+          unit={`${mix.plusPct.toFixed(1)}%`}
+          accentColor={colorVar}
+        />
+        <MiniStat
+          label="Regular customers"
+          value={Math.round(mix.regular).toLocaleString()}
+          unit={`${mix.regularPct.toFixed(1)}%`}
+        />
       </div>
     </div>
   );

@@ -17,11 +17,13 @@ export type Database = {
       daily_sales: {
         Row: {
           cplus_aov: number
+          cplus_customers: number | null
           cplus_orders: number
           cplus_sales_jod: number
           created_at: string
           date: string
           id: string
+          non_cplus_customers: number | null
           orders: number
           platform: Database["public"]["Enums"]["platform"]
           pro_orders: number
@@ -31,11 +33,13 @@ export type Database = {
         }
         Insert: {
           cplus_aov?: number
+          cplus_customers?: number | null
           cplus_orders?: number
           cplus_sales_jod?: number
           created_at?: string
           date: string
           id?: string
+          non_cplus_customers?: number | null
           orders?: number
           platform: Database["public"]["Enums"]["platform"]
           pro_orders?: number
@@ -45,11 +49,13 @@ export type Database = {
         }
         Update: {
           cplus_aov?: number
+          cplus_customers?: number | null
           cplus_orders?: number
           cplus_sales_jod?: number
           created_at?: string
           date?: string
           id?: string
+          non_cplus_customers?: number | null
           orders?: number
           platform?: Database["public"]["Enums"]["platform"]
           pro_orders?: number
