@@ -404,13 +404,13 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     platform: "Talabat",
     label: "Sales, Customers & Operations",
     portalUrl: T_REPORTS,
-    portalLabel: "Open Report builder",
+    portalLabel: "Open Performance Report builder",
     portalSteps:
-      "Reports → Create a new report → Customers & Operations → set date range to a full calendar month → Create → download CSV from History. Look for columns: Orders from new customers, Orders from returning customers (the file contains many more columns — those two are all we need).",
+      "Same file as the Performance Report — just import that Performance CSV again into this slot (one file, two slots). The Performance export already contains the 'Orders from new customers' / 'Orders from returning customers' columns, which is all this slot needs.",
     table: "monthly_customers",
     monthSource: "from-rows",
     signature: ["Orders from new customers", "Orders from returning customers"],
-    hint: "Daily orders from new vs returning customers. Basis = orders (not customers — units differ from Careem). Aggregated to monthly totals on import.",
+    hint: "Same file as the Performance Report — re-import that Performance CSV here. It already carries daily orders from new vs returning customers. Basis = orders (not customers — units differ from Careem). Aggregated to monthly totals on import.",
     fields: [
       { key: "date", label: "Date", defaults: ["Date"], required: true },
       { key: "new_orders", label: "Orders from new customers", defaults: ["Orders from new customers"], required: true },
