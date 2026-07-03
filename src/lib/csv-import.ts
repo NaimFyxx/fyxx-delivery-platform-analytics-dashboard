@@ -12,8 +12,9 @@ export type ReportId =
   | "careem:adjustments" // C4 — monthly deductions (bank fee, Plus contribution)
   | "careem:plus_orders" // Careem Plus skinny file — orders per day
   | "careem:plus_sales" // Careem Plus skinny file — sales per day
-  | "careem:customers" // Careem new / retained / reactivated customer counts (daily → monthly)
-  | "talabat:customers"; // Talabat orders from new / returning customers (daily → monthly)
+  | "careem:customers"; // Careem new / retained / reactivated customer counts (daily → monthly)
+// NOTE: Talabat has no separate customers slot — the Performance import fills monthly_customers
+// (new / returning orders) in the same pass, since the Performance export carries those columns.
 
 export type MonthSource = "none" | "from-rows" | "from-columns";
 
@@ -57,7 +58,6 @@ const C_PERF = "https://app.careemnow.com/merchant/dashboard-analytics/business-
 const TALABAT_DATE_FILTERED = new Set<ReportId>([
   "talabat:menu_item",
   "talabat:performance",
-  "talabat:customers",
 ]);
 
 /** First and last calendar day (YYYY-MM-DD) of a "YYYY-MM" month. */
@@ -146,7 +146,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     table: "daily_sales",
     monthSource: "from-rows",
     signature: ["Date", "Gross Sales", "Successful Orders"],
-    hint: "One row per store per day — clean daily totals for the pace tracker. Also carries Talabat Pro orders / revenue.",
+    hint: "One row per store per day — daily totals (Talabat Pro too). Fills TWO slots in one import: Daily sales AND Customers (it also carries new / returning customer orders), so you never re-import it.",
     fields: [
       { key: "date", label: "Date", defaults: ["Date"], required: true },
       { key: "sales_jod", label: "Gross Sales", defaults: ["Gross Sales"], required: true },
@@ -170,6 +170,19 @@ export const REPORTS: Record<ReportId, ReportDef> = {
         key: "pro_sales",
         label: "Pro Revenue (loyalty)",
         defaults: ["Pro Revenue"],
+        required: false,
+      },
+      // Customer columns carried by the same Performance export → monthly_customers (basis = orders).
+      {
+        key: "new_orders",
+        label: "Orders from new customers",
+        defaults: ["Orders from new customers"],
+        required: false,
+      },
+      {
+        key: "returning_orders",
+        label: "Orders from returning customers",
+        defaults: ["Orders from returning customers"],
         required: false,
       },
     ],
@@ -399,25 +412,6 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     optionalFields: [],
   },
 
-  "talabat:customers": {
-    id: "talabat:customers",
-    platform: "Talabat",
-    label: "Sales, Customers & Operations",
-    portalUrl: T_REPORTS,
-    portalLabel: "Open Performance Report builder",
-    portalSteps:
-      "Same file as the Performance Report — just import that Performance CSV again into this slot (one file, two slots). The Performance export already contains the 'Orders from new customers' / 'Orders from returning customers' columns, which is all this slot needs.",
-    table: "monthly_customers",
-    monthSource: "from-rows",
-    signature: ["Orders from new customers", "Orders from returning customers"],
-    hint: "Same file as the Performance Report — re-import that Performance CSV here. It already carries daily orders from new vs returning customers. Basis = orders (not customers — units differ from Careem). Aggregated to monthly totals on import.",
-    fields: [
-      { key: "date", label: "Date", defaults: ["Date"], required: true },
-      { key: "new_orders", label: "Orders from new customers", defaults: ["Orders from new customers"], required: true },
-      { key: "returning_orders", label: "Orders from returning customers", defaults: ["Orders from returning customers"], required: true },
-    ],
-    optionalFields: [],
-  },
 };
 
 export function reportsForPlatform(p: Platform): ReportDef[] {

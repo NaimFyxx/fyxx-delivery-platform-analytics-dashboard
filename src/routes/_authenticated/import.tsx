@@ -174,7 +174,6 @@ function useImportStatus(month: string) {
           "talabat:order_report": orderRows("Talabat"),
           "talabat:performance": dailyReal("Talabat"),
           "talabat:menu_item": itemsReal("Talabat"),
-          "talabat:customers": custReal("Talabat"),
           "careem:order_level": orderRows("Careem"),
           "careem:menu_item": itemsReal("Careem"),
           "careem:adjustments": adjHas("Careem"),
@@ -507,7 +506,7 @@ function CompletenessPanel({
       { label: "Daily sales (Performance)", key: "daily" },
       { label: "Items (Sales by Menu Item)", key: "items" },
       { label: "Financials (Order Report)", key: "financials" },
-      { label: "Customers (Sales, Customers & Ops)", key: "customers" },
+      { label: "Customers (from Performance)", key: "customers" },
     ],
     Careem: [
       { label: "Daily sales (Order Level)", key: "daily" },
@@ -1461,8 +1460,6 @@ async function buildPreviewForReport(
       return buildPlus(report, platform, headers, rows);
     case "careem:customers":
       return buildCareemCustomers(platform, month, mapping, rows);
-    case "talabat:customers":
-      return buildTalabatCustomers(platform, month, mapping, rows);
     default:
       throw new Error(`No builder for ${report.id}`);
   }
@@ -1632,16 +1629,61 @@ async function buildPerformance(
     }
     previewRows.push(row);
   }
+  // Same Performance file also carries new / returning customer orders → monthly_customers.
+  // Aggregate per month (basis = orders) so Daily sales AND Customers land in one import.
+  const hasCust = !!(m.new_orders && m.returning_orders);
+  const custByMonth = new Map<string, { newOrders: number; returningOrders: number }>();
+  if (hasCust) {
+    for (const r of rows) {
+      const date = parseDate(r[m.date]);
+      if (!date) continue;
+      const mo = dateToMonth(date);
+      const cur = custByMonth.get(mo) ?? { newOrders: 0, returningOrders: 0 };
+      cur.newOrders += num(r[m.new_orders]);
+      cur.returningOrders += num(r[m.returning_orders]);
+      custByMonth.set(mo, cur);
+    }
+  }
+  const custMonths = Array.from(custByMonth.keys()).sort();
+  const custRows: Record<string, unknown>[] = custMonths.map((mo) => {
+    const g = custByMonth.get(mo)!;
+    const overall = g.newOrders + g.returningOrders;
+    return {
+      month: mo,
+      platform,
+      basis: "orders",
+      new: Math.round(g.newOrders),
+      reactivated: 0,
+      returning: Math.round(g.returningOrders),
+      overall: Math.round(overall),
+    };
+  });
+
+  const upserts: UpsertGroup[] = [
+    { table: "daily_sales", onConflict: "date,platform", rows: opsRows },
+  ];
+  if (custRows.length) {
+    upserts.push({
+      table: "monthly_customers",
+      onConflict: "month,platform",
+      rows: custRows,
+      replace: { column: "month", values: custMonths, match: { platform } },
+    });
+  }
+
   const willUpdate = rowFlags.filter(Boolean).length;
   const notes = [
     `Platform set to ${platform}.`,
     hasPro
       ? "Talabat Pro orders / revenue will be stored alongside the daily totals."
       : "No Pro columns mapped — Pro tier panel stays empty for these days.",
+    custRows.length
+      ? `Also fills Customers: ${custRows.length} month(s) of new vs returning orders → monthly_customers (basis = orders).`
+      : "No new/returning customer columns found — Customers slot stays empty for this month.",
     skipped ? `${skipped} row(s) skipped (no valid date).` : "",
   ].filter(Boolean);
   return {
-    upserts: [{ table: "daily_sales", onConflict: "date,platform", rows: opsRows }],
+    upserts,
     willAdd: rowFlags.length - willUpdate,
     willUpdate,
     skipped,
@@ -2202,73 +2244,6 @@ async function buildCareemCustomers(
       skipped ? `${skipped} row(s) skipped (no valid date).` : "",
     ].filter(Boolean),
     previewCols: ["Month", "New", "Reactivated", "Retained", "Returning (total)", "Repeat rate"],
-    previewRows,
-    rowFlags: opsRows.map(() => false),
-  };
-}
-
-/** Talabat "Sales, Customers & Operations" — daily rows → one monthly_customers row per month.
- *  Only reads Date + orders from new/returning customers (ignores all other columns). */
-async function buildTalabatCustomers(
-  platform: Platform,
-  month: string,
-  m: Mapping,
-  rows: Record<string, string>[],
-): Promise<Preview> {
-  const grouped = new Map<string, { newOrders: number; returningOrders: number }>();
-  let skipped = 0;
-  for (const r of rows) {
-    const date = parseDate(r[m.date]);
-    if (!date) { skipped++; continue; }
-    const mo = dateToMonth(date);
-    const cur = grouped.get(mo) ?? { newOrders: 0, returningOrders: 0 };
-    cur.newOrders += num(r[m.new_orders]);
-    cur.returningOrders += num(r[m.returning_orders]);
-    grouped.set(mo, cur);
-  }
-  if (!grouped.size) {
-    grouped.set(month, { newOrders: 0, returningOrders: 0 });
-  }
-
-  const months = Array.from(grouped.keys()).sort();
-  const opsRows: Record<string, unknown>[] = [];
-  const previewRows: Array<Record<string, string | number>> = [];
-  for (const [mo, g] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
-    const overall = g.newOrders + g.returningOrders;
-    opsRows.push({
-      month: mo,
-      platform,
-      basis: "orders",
-      new: Math.round(g.newOrders),
-      reactivated: 0,
-      returning: Math.round(g.returningOrders),
-      overall: Math.round(overall),
-    });
-    const repeatRate = overall > 0 ? (g.returningOrders / overall) * 100 : 0;
-    previewRows.push({
-      Month: mo,
-      "New orders": fmtInt(g.newOrders),
-      "Returning orders": fmtInt(g.returningOrders),
-      "Repeat rate": `${repeatRate.toFixed(1)}%`,
-    });
-  }
-
-  return {
-    upserts: [{
-      table: "monthly_customers",
-      onConflict: "month,platform",
-      rows: opsRows,
-      replace: { column: "month", values: months, match: { platform } },
-    }],
-    willAdd: opsRows.length,
-    willUpdate: 0,
-    skipped,
-    notes: [
-      `${opsRows.length} month(s) of Talabat customer data (basis = orders — not comparable to Careem's customer counts).`,
-      `This import replaces all existing Talabat customer rows for ${months.join(", ")}.`,
-      skipped ? `${skipped} row(s) skipped (no valid date).` : "",
-    ].filter(Boolean),
-    previewCols: ["Month", "New orders", "Returning orders", "Repeat rate"],
     previewRows,
     rowFlags: opsRows.map(() => false),
   };
