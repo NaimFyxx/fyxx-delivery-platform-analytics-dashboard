@@ -57,6 +57,7 @@ import {
   isChargedCancelled,
   dateToMonth,
   monthFromColumns,
+  portalUrlForMonth,
   num,
   round3,
   type Mapping,
@@ -462,7 +463,7 @@ function Step2Report({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <a
-                      href={r.portalUrl}
+                      href={portalUrlForMonth(r, month)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -843,7 +844,7 @@ function CsvFlow({
             <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
               <div className="text-xs text-muted-foreground">{report.hint}</div>
               <a
-                href={report.portalUrl}
+                href={portalUrlForMonth(report, checklistMonth)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary hover:underline"

@@ -49,9 +49,36 @@ export interface ReportDef {
 // Stable report pages (generated-file links expire, especially on Careem).
 const T_ORDERS = "https://partner-app.talabat.com/report-builder/create/ORDERS";
 const T_REPORTS = "https://partner-app.talabat.com/report-builder/create/REPORTS";
-const T_PERFORMANCE = "https://partner-app.talabat.com/performance";
+const T_MENU_ITEM = "https://partner-app.talabat.com/reports/TB_JO;779776";
 const C_FINANCE = "https://app.careemnow.com/merchant/finances";
 const C_PERF = "https://app.careemnow.com/merchant/dashboard-analytics/business-performance";
+
+// Talabat report pages that accept ?from=&to= to pre-filter to a date range.
+const TALABAT_DATE_FILTERED = new Set<ReportId>([
+  "talabat:menu_item",
+  "talabat:performance",
+  "talabat:customers",
+]);
+
+/** First and last calendar day (YYYY-MM-DD) of a "YYYY-MM" month. */
+export function monthDateRange(month: string): { from: string; to: string } {
+  const [y, m] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, "0")}` };
+}
+
+/**
+ * Portal URL for a report. For Talabat pages that support date pre-filtering, append
+ * the selected import month's range as ?from=&to= so the platform opens on that month.
+ */
+export function portalUrlForMonth(report: ReportDef, month: string): string {
+  if (report.platform !== "Talabat" || !TALABAT_DATE_FILTERED.has(report.id)) {
+    return report.portalUrl;
+  }
+  const { from, to } = monthDateRange(month);
+  const sep = report.portalUrl.includes("?") ? "&" : "?";
+  return `${report.portalUrl}${sep}from=${from}&to=${to}`;
+}
 
 export const REPORTS: Record<ReportId, ReportDef> = {
   // ---------------- Talabat ----------------
@@ -152,10 +179,10 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     id: "talabat:menu_item",
     platform: "Talabat",
     label: "Sales by Menu Item",
-    portalUrl: T_PERFORMANCE,
-    portalLabel: "Open Performance",
+    portalUrl: T_MENU_ITEM,
+    portalLabel: "Open Reports (Menu Item)",
     portalSteps:
-      "Performance → set the date range to a full calendar month (1st–last day) → scroll to the 'Sales by Menu Item' card → click the download icon (top-right of that card). The file downloads as popularDishes_<dates>.csv with columns Dish / Total / Sales.",
+      "Reports → set the date range to a full calendar month (1st–last day) → scroll to the 'Sales by Menu Item' card → click the download icon (top-right of that card). The file downloads as popularDishes_<dates>.csv with columns Dish / Total / Sales.",
     table: "monthly_item_sales",
     monthSource: "from-rows",
     signature: ["Dish", "Total", "Sales"],
@@ -256,21 +283,21 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalUrl: C_PERF,
     portalLabel: "Open Business Performance",
     portalSteps:
-      "Analytics & reports → Sales Performance → Download Report (Daily, 'By menu item' metric)",
+      "Analytics & reports → Sales Performance → Gross sales breakdown → 'By menu item' → Export. The file has columns menu_item / orders / sales (no dates) — pick the month in the wizard above.",
     table: "monthly_item_sales",
-    monthSource: "from-columns",
-    monthColumns: { from: "FromDate", to: "ToDate" },
-    signature: ["Name", "Orders", "FromDate"],
-    hint: "Careem item-level sales. The period is read from the FromDate / ToDate columns.",
+    // The export has no FromDate/ToDate — use the month selected in the wizard.
+    monthSource: "none",
+    signature: ["menu_item|Name", "orders|Orders"],
+    hint: "Careem item-level sales (menu_item / orders / sales). Uses the month selected in the wizard — re-importing updates each item for that month.",
     fields: [
-      { key: "item_name", label: "Item name", defaults: ["Name"], required: true },
-      { key: "units", label: "Orders (units)", defaults: ["Orders"], required: true },
+      { key: "item_name", label: "Item name", defaults: ["menu_item", "Name"], required: true },
+      { key: "units", label: "Orders (units)", defaults: ["orders", "Orders"], required: true },
     ],
     optionalFields: [
       {
         key: "revenue_jod",
-        label: "Revenue (Amount)",
-        defaults: ["Amount", "Gross Sales", "Sales", "Revenue", "Total"],
+        label: "Revenue (sales)",
+        defaults: ["sales", "Amount", "Gross Sales", "Sales", "Revenue", "Total"],
         required: false,
       },
     ],
@@ -356,13 +383,13 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     platform: "Careem",
     label: "New, Retained & Reactivated Customers",
     portalUrl: C_PERF,
-    portalLabel: "Open Business Performance",
+    portalLabel: "Open Sales Performance",
     portalSteps:
-      "Analytics & reports → Business Performance → Customer Type → set date range to a full calendar month → Export. The file is titled 'New, retained, reactivated Customers' with columns: Date, Number of customers - New users, Number of customers - Reactivated users, Number of customers - Retained users.",
+      "Analytics & reports → Sales Performance → 'New, retained, reactivated' tab → set the toggle to ORDERS (not Sales) → set date range to a full calendar month → Export. ⚠ The SALES toggle exports only a date + overall-totals file with NO customer breakdown and will not import here — it MUST be the ORDERS view, which gives the new_user / reactivated_user / retained_user counts.",
     table: "monthly_customers",
     monthSource: "from-rows",
     signature: ["Number of customers - New users|new_user", "Number of customers - Retained users|retained_user"],
-    hint: "Daily new / retained / reactivated customer counts. Aggregated to monthly totals on import. Basis = customers.",
+    hint: "Daily new / retained / reactivated customer counts — use the ORDERS toggle (NOT Sales). Aggregated to monthly totals on import. Basis = customers.",
     fields: [
       { key: "date",        label: "Date",             defaults: ["Date", "date"],                                                required: true },
       { key: "new_users",   label: "New users",        defaults: ["Number of customers - New users", "new_user"],                 required: true },

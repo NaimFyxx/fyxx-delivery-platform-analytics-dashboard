@@ -101,13 +101,15 @@ function TargetsPage() {
   );
   const earliest = useMemo(() => [...targetMonths].sort()[0] ?? null, [targetMonths]);
 
+  // Actuals come from the pace tracker's manual data (pace_daily), the same source as the
+  // pace tracker — so Targets only populates once daily sales are entered, not from imports.
   const { data: sales = [] } = useQuery({
-    queryKey: ["daily_sales_span", earliest],
+    queryKey: ["pace_daily_span", earliest],
     queryFn: async () => {
       if (!earliest) return [];
       const start = `${earliest}-01`;
       const { data, error } = await supabase
-        .from("daily_sales").select("*").gte("date", start).lte("date", today);
+        .from("pace_daily").select("*").gte("date", start).lte("date", today);
       if (error) throw error;
       return data ?? [];
     },

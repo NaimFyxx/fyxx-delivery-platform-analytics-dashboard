@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, Upload } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
+import { parseCsv, parseDate, num, round3 } from "@/lib/csv-import";
 
 export const Route = createFileRoute("/_authenticated/entry")({
   head: () => ({ meta: [{ title: "Data entry · TGR" }] }),
@@ -105,6 +106,7 @@ function DailySalesForm() {
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
+      <PaceCsvImport onImported={invalidate} />
       <RecentTable
         title="Pace entries"
         right={<ListFilterBar f={filter} months={months} />}
@@ -118,6 +120,185 @@ function DailySalesForm() {
         ])}
       />
     </div>
+  );
+}
+
+/* ---------- Pace tracker CSV import (order-detail → one daily gross per date) ---------- */
+// Which columns to read per platform from an order-detail export.
+const PACE_IMPORT: Record<Platform, { dateCols: string[]; grossCols: string[]; note: string }> = {
+  Talabat: {
+    dateCols: ["Order received at", "Order Received At"],
+    grossCols: ["Subtotal"],
+    note: "Talabat: sums Subtotal grouped by the ‘Order received at’ date.",
+  },
+  Careem: {
+    dateCols: ["order_created_at"],
+    grossCols: ["order_amount"],
+    note: "Careem: sums order_amount (currency prefix stripped) grouped by the ‘order_created_at’ date.",
+  },
+};
+
+function findHeader(headers: string[], candidates: string[]): string | null {
+  const lower = headers.map((h) => h.toLowerCase().trim());
+  for (const c of candidates) {
+    const idx = lower.indexOf(c.toLowerCase().trim());
+    if (idx >= 0) return headers[idx];
+  }
+  return null;
+}
+
+type PaceRow = { date: string; sales: number; orders: number };
+
+function PaceCsvImport({ onImported }: { onImported: () => void }) {
+  const [platform, setPlatform] = useState<Platform>("Talabat");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PaceRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setPreview(null);
+    setError(null);
+    setFileName(null);
+  }
+
+  async function onFile(f: File | null) {
+    reset();
+    setFileName(f?.name ?? null);
+    if (!f) return;
+    const cfg = PACE_IMPORT[platform];
+    try {
+      const text = await f.text();
+      const { headers, rows } = parseCsv(text);
+      const dateCol = findHeader(headers, cfg.dateCols);
+      const grossCol = findHeader(headers, cfg.grossCols);
+      if (!dateCol || !grossCol) {
+        setError(
+          `Couldn't find the expected ${platform} columns. Need a date column (${cfg.dateCols.join(" / ")}) and a gross column (${cfg.grossCols.join(" / ")}). This file has: ${headers.join(", ")}`,
+        );
+        return;
+      }
+      const byDate = new Map<string, { sales: number; orders: number }>();
+      for (const r of rows) {
+        const d = parseDate(String(r[dateCol] ?? "").slice(0, 10));
+        if (!d) continue;
+        const cur = byDate.get(d) ?? { sales: 0, orders: 0 };
+        cur.sales += num(r[grossCol]);
+        cur.orders += 1;
+        byDate.set(d, cur);
+      }
+      const out = Array.from(byDate.entries())
+        .map(([date, v]) => ({ date, sales: round3(v.sales), orders: v.orders }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      if (!out.length) {
+        setError("No dated rows found in this file.");
+        return;
+      }
+      setPreview(out);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const importMut = useMutation({
+    mutationFn: async () => {
+      if (!preview) return;
+      const payload = preview.map((p) => ({
+        date: p.date,
+        platform,
+        sales_jod: p.sales,
+        orders: null as number | null,
+      }));
+      for (let i = 0; i < payload.length; i += 500) {
+        const { error } = await supabase
+          .from("pace_daily")
+          .upsert(payload.slice(i, i + 500), { onConflict: "date,platform" });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success(`Imported ${preview?.length ?? 0} day(s) to ${platform}`);
+      reset();
+      onImported();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const total = preview?.reduce((s, p) => s + p.sales, 0) ?? 0;
+
+  return (
+    <Card className="p-5">
+      <div className="text-sm font-semibold mb-1">Or import a CSV</div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Upload a Talabat or Careem order-detail export — it sums gross sales per day and writes one
+        figure per date into the pace tracker (same as entering it by hand). Re-importing replaces
+        those dates.
+      </p>
+      <div className="grid gap-4 md:grid-cols-[200px_1fr] md:items-end">
+        <Field label="Platform">
+          <PlatformSelect value={platform} onChange={(p) => { setPlatform(p); reset(); }} />
+        </Field>
+        <div className="space-y-1.5">
+          <Label className="text-xs">CSV file</Label>
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card hover:bg-accent text-sm">
+              <Upload className="size-4" />
+              {fileName ? "Replace file" : "Choose CSV"}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {fileName && <span className="text-xs text-muted-foreground">{fileName}</span>}
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-2">{PACE_IMPORT[platform].note}</p>
+
+      {error && (
+        <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      {preview && (
+        <div className="mt-4 space-y-3">
+          <div className="text-xs text-muted-foreground">
+            {preview.length} day(s) · total gross{" "}
+            <span className="font-semibold text-foreground">{fmtJOD(total)}</span>
+          </div>
+          <div className="border border-border rounded-md max-h-64 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Orders</TableHead>
+                  <TableHead className="text-right">Gross sales</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {preview.map((p) => (
+                  <TableRow key={p.date}>
+                    <TableCell>{p.date}</TableCell>
+                    <TableCell className="text-right text-num">{fmtInt(p.orders)}</TableCell>
+                    <TableCell className="text-right text-num">{fmtJOD(p.sales)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <Button
+            onClick={() => importMut.mutate()}
+            disabled={importMut.isPending}
+            className="bg-gradient-primary text-primary-foreground"
+          >
+            {importMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
+            Confirm — write {preview.length} day(s) to {platform}
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }
 
