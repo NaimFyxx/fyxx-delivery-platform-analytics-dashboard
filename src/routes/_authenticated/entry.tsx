@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
-import { parseCsv, parseDate, num, round3 } from "@/lib/csv-import";
+import { parseCsv, parseDate, num, round3, isDelivered } from "@/lib/csv-import";
 
 export const Route = createFileRoute("/_authenticated/entry")({
   head: () => ({ meta: [{ title: "Data entry · TGR" }] }),
@@ -125,16 +125,25 @@ function DailySalesForm() {
 
 /* ---------- Pace tracker CSV import (order-detail → one daily gross per date) ---------- */
 // Which columns to read per platform from an order-detail export.
-const PACE_IMPORT: Record<Platform, { dateCols: string[]; grossCols: string[]; note: string }> = {
+//  - entryTypeCols: if set, keep only rows whose value is FOOD_ORDER.
+//  - statusCols: if set, keep only delivered rows.
+// Careem reads the Order Level export (TOTAL_AMOUNT is gross, incl. Plus discounts) so the pace
+// tracker matches the financials — NOT the Recent Orders export whose order_amount is net.
+const PACE_IMPORT: Record<
+  Platform,
+  { dateCols: string[]; grossCols: string[]; entryTypeCols?: string[]; statusCols?: string[]; note: string }
+> = {
   Talabat: {
     dateCols: ["Order received at", "Order Received At"],
     grossCols: ["Subtotal"],
-    note: "Talabat: sums Subtotal grouped by the ‘Order received at’ date.",
+    note: "Talabat: sums Subtotal (gross) grouped by the ‘Order received at’ date.",
   },
   Careem: {
-    dateCols: ["order_created_at"],
-    grossCols: ["order_amount"],
-    note: "Careem: sums order_amount (currency prefix stripped) grouped by the ‘order_created_at’ date.",
+    dateCols: ["TRANSACTION_DATE"],
+    grossCols: ["TOTAL_AMOUNT"],
+    entryTypeCols: ["ENTRY_TYPE"],
+    statusCols: ["STATUS"],
+    note: "Careem: from the Order Level export — sums TOTAL_AMOUNT (gross) for delivered FOOD_ORDER rows, grouped by TRANSACTION_DATE.",
   },
 };
 
@@ -177,8 +186,13 @@ function PaceCsvImport({ onImported }: { onImported: () => void }) {
         );
         return;
       }
+      const entryCol = cfg.entryTypeCols ? findHeader(headers, cfg.entryTypeCols) : null;
+      const statusCol = cfg.statusCols ? findHeader(headers, cfg.statusCols) : null;
       const byDate = new Map<string, { sales: number; orders: number }>();
       for (const r of rows) {
+        // Careem Order Level: keep only delivered FOOD_ORDER rows (matches the financials).
+        if (entryCol && String(r[entryCol] ?? "").trim().toUpperCase() !== "FOOD_ORDER") continue;
+        if (statusCol && !isDelivered(r[statusCol])) continue;
         const d = parseDate(String(r[dateCol] ?? "").slice(0, 10));
         if (!d) continue;
         const cur = byDate.get(d) ?? { sales: 0, orders: 0 };

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { useSoftGate } from "@/hooks/use-soft-gate";
@@ -846,8 +846,8 @@ function OrderVolumeTooltip({ active, payload }: {
   );
 }
 
-export function PaceTracker({ pace, currentMonth }: {
-  pace: PaceData | null; currentMonth: string;
+export function PaceTracker({ pace, currentMonth, footer }: {
+  pace: PaceData | null; currentMonth: string; footer?: ReactNode;
 }) {
   if (!pace) return null;
   const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "#FF5A00" : "#1BD15D";
@@ -943,6 +943,8 @@ export function PaceTracker({ pace, currentMonth }: {
           Combined <span className="text-foreground font-semibold">{fmtInt(pace.totalSales)}</span> / {fmtJOD0(pace.totalTarget)}
         </span>
       </div>
+
+      {footer && <div className="mt-3 pt-3 border-t border-border">{footer}</div>}
     </div>
   );
 }
