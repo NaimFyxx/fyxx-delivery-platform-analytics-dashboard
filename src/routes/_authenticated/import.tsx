@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Check,
   Circle,
+  Minus,
 } from "lucide-react";
 import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
 import { canonicalItemName, normalizeItemName, type DbAliasMap } from "@/lib/costs";
@@ -198,6 +199,73 @@ function useImportStatus(month: string) {
   });
 }
 
+/* ----- All-months coverage matrix ----- */
+
+type PlatCoverage = { daily: boolean; items: boolean; financials: boolean; customers: boolean };
+type MonthCoverage = {
+  Talabat: PlatCoverage;
+  Careem: PlatCoverage & { plus: boolean };
+};
+type CoverageMap = Record<string, MonthCoverage>;
+
+const emptyMonthCoverage = (): MonthCoverage => ({
+  Talabat: { daily: false, items: false, financials: false, customers: false },
+  Careem: { daily: false, items: false, financials: false, customers: false, plus: false },
+});
+
+/** Same "meaningful signal per slot" thresholds as useImportStatus, but for every month at
+ *  once — one pass over each table (no month filter), grouped by month in JS. Adjustments and
+ *  raw order rows aren't required columns, so they aren't read here. */
+function useAllMonthsCoverage() {
+  return useQuery({
+    queryKey: ["coverage_all_months"],
+    queryFn: async (): Promise<CoverageMap> => {
+      const [daily, items, fin, cust] = await Promise.all([
+        supabase.from("daily_sales").select("date,platform,sales_jod,cplus_customers"),
+        supabase.from("monthly_item_sales").select("month,platform,revenue_jod"),
+        supabase.from("monthly_financials").select("month,platform,gross_sales"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from as any)("monthly_customers").select("month,platform,new,returning"),
+      ]);
+      const map: CoverageMap = {};
+      const ensure = (mo: string) => (map[mo] ??= emptyMonthCoverage());
+      const isPlat = (p: unknown): p is "Talabat" | "Careem" => p === "Talabat" || p === "Careem";
+
+      for (const r of daily.data ?? []) {
+        if (!isPlat(r.platform)) continue;
+        const e = ensure(String(r.date).slice(0, 7));
+        if (Number(r.sales_jod) > 0) e[r.platform].daily = true;
+        if (r.platform === "Careem" && Number(r.cplus_customers) > 0) e.Careem.plus = true;
+      }
+      for (const r of items.data ?? []) {
+        if (!isPlat(r.platform)) continue;
+        if (Number(r.revenue_jod) > 0) ensure(r.month)[r.platform].items = true;
+      }
+      for (const r of fin.data ?? []) {
+        if (!isPlat(r.platform)) continue;
+        if (Number(r.gross_sales) > 0) ensure(r.month)[r.platform].financials = true;
+      }
+      for (const r of (cust.data ?? []) as Array<{ platform: string; month: string; new: number; returning: number }>) {
+        if (!isPlat(r.platform)) continue;
+        if (Number(r.new) > 0 || Number(r.returning) > 0) ensure(r.month)[r.platform].customers = true;
+      }
+      return map;
+    },
+  });
+}
+
+/** Months from 2025-10 through the given (calendar) month, inclusive, ascending. */
+function monthsFromOct2025(through: string): string[] {
+  const out: string[] = [];
+  let [y, m] = [2025, 10];
+  const [ey, em] = through.split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
 function ImportPage() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -205,6 +273,7 @@ function ImportPage() {
   const [reportId, setReportId] = useState<ReportId | null>(null);
   const [checklistMonth, setChecklistMonth] = useState(currentMonth());
   const { data: importStatus } = useImportStatus(checklistMonth);
+  const { data: coverage } = useAllMonthsCoverage();
 
   const report = reportId ? REPORTS[reportId] : null;
 
@@ -219,6 +288,12 @@ function ImportPage() {
       <PageHeader
         title="CSV import wizard"
         description="Four quick steps: pick a platform, pick a report, upload, then confirm."
+      />
+
+      <CoverageMatrix
+        coverage={coverage}
+        selectedMonth={checklistMonth}
+        onPickMonth={setChecklistMonth}
       />
 
       <CompletenessPanel
@@ -470,6 +545,107 @@ function Step2Report({
       </div>
       </Card>
     </TooltipProvider>
+  );
+}
+
+/* ----- All-months coverage matrix ----- */
+
+const COV_MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function covMonthLabel(m: string) {
+  const [y, mo] = m.split("-");
+  return `${COV_MONTH_NAMES[Number(mo) - 1]} ${y}`;
+}
+
+function CoverageCell({ ok }: { ok: boolean }) {
+  return ok ? (
+    <Check className="size-4 text-success mx-auto" />
+  ) : (
+    <Minus className="size-4 text-destructive/50 mx-auto" />
+  );
+}
+
+const TAL_COLS = ["daily", "items", "financials", "customers"] as const;
+const CAR_COLS = ["daily", "items", "financials", "customers", "plus"] as const;
+const COL_LABELS = ["Daily", "Items", "Financials", "Customers"];
+
+function CoverageMatrix({
+  coverage,
+  selectedMonth,
+  onPickMonth,
+}: {
+  coverage: CoverageMap | undefined;
+  selectedMonth: string;
+  onPickMonth: (m: string) => void;
+}) {
+  const months = monthsFromOct2025(currentMonth()).reverse(); // newest first
+
+  return (
+    <Card className="p-5 mb-4">
+      <div className="mb-3">
+        <div className="text-sm font-semibold">Coverage — all months</div>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Every required report per month. All listed reports are required (Careem Adjustments is
+          optional and not shown). Click a row to load that month below.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px] border-collapse">
+          <thead>
+            <tr className="text-muted-foreground">
+              <th rowSpan={2} className="text-left font-medium px-2 py-1.5 align-bottom">Month</th>
+              <th colSpan={4} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--talabat)" }}>Talabat</th>
+              <th colSpan={5} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--careem)" }}>Careem</th>
+              <th rowSpan={2} className="text-right font-medium px-2 py-1.5 align-bottom border-l border-border">Status</th>
+            </tr>
+            <tr className="text-[10.5px] text-muted-foreground">
+              {COL_LABELS.map((l, i) => (
+                <th key={`t-${l}`} className={`font-normal px-2 py-1 ${i === 0 ? "border-l border-border" : ""}`}>{l}</th>
+              ))}
+              {[...COL_LABELS, "Plus"].map((l, i) => (
+                <th key={`c-${l}`} className={`font-normal px-2 py-1 ${i === 0 ? "border-l border-border" : ""}`}>{l}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((mo) => {
+              const c = coverage?.[mo] ?? emptyMonthCoverage();
+              const required = [
+                ...TAL_COLS.map((k) => c.Talabat[k]),
+                ...CAR_COLS.map((k) => c.Careem[k]),
+              ];
+              const missing = required.filter((x) => !x).length;
+              const isSel = mo === selectedMonth;
+              return (
+                <tr
+                  key={mo}
+                  onClick={() => onPickMonth(mo)}
+                  className={`border-t border-border cursor-pointer hover:bg-muted/40 ${isSel ? "bg-primary/5" : ""}`}
+                >
+                  <td className="px-2 py-1.5 font-medium whitespace-nowrap">{covMonthLabel(mo)}</td>
+                  {TAL_COLS.map((k, i) => (
+                    <td key={`t-${k}`} className={`text-center px-2 py-1.5 ${i === 0 ? "border-l border-border" : ""}`}>
+                      <CoverageCell ok={c.Talabat[k]} />
+                    </td>
+                  ))}
+                  {CAR_COLS.map((k, i) => (
+                    <td key={`c-${k}`} className={`text-center px-2 py-1.5 ${i === 0 ? "border-l border-border" : ""}`}>
+                      <CoverageCell ok={c.Careem[k]} />
+                    </td>
+                  ))}
+                  <td className="px-2 py-1.5 text-right border-l border-border whitespace-nowrap">
+                    {missing === 0 ? (
+                      <Badge variant="outline" className="bg-success/15 text-success border-success/30 text-[10px]">Complete</Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 text-[10px]">{missing} missing</Badge>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
