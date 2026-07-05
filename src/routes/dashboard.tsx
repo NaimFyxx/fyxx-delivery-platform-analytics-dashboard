@@ -392,7 +392,7 @@ function PublicDashboard() {
         </div>
 
         <SectionLabel>Analytics — Controlled by the Range &amp; Platform Filters Above</SectionLabel>
-        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform">
+        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform" footnote="Careem shown on food-basket basis (your revenue), ~11% below Careem's GMV headline. See tooltip.">
           <ResponsiveContainer>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -702,7 +702,7 @@ export function Kpi({
   );
 }
 
-function ChartCard({ title, sub, children, action, infoId }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode; infoId?: string }) {
+function ChartCard({ title, sub, children, action, infoId, footnote }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode; infoId?: string; footnote?: React.ReactNode }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
       <div className="flex items-start justify-between gap-2 mb-0.5">
@@ -713,6 +713,7 @@ function ChartCard({ title, sub, children, action, infoId }: { title: string; su
       </div>
       <div className="text-[10.5px] text-muted-foreground mb-3">{sub}</div>
       <div className="h-[230px]">{children}</div>
+      {footnote && <div className="text-[10px] text-muted-foreground/80 mt-2 leading-snug">{footnote}</div>}
     </div>
   );
 }

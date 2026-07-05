@@ -101,7 +101,14 @@ function DailySalesForm() {
         <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Date"><DatePicker value={date} onChange={setDate} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
-          <Field label="Gross sales (JOD)"><Input type="number" step="0.001" min="0" value={sales} onChange={(e) => setSales(e.target.value)} required /></Field>
+          <Field label="Gross sales (JOD)">
+            <Input type="number" step="0.001" min="0" value={sales} onChange={(e) => setSales(e.target.value)} required />
+            <p className="text-[10.5px] leading-snug text-muted-foreground">
+              {platform === "Careem"
+                ? "Enter the food-basket total from the Order Level export (TOTAL_AMOUNT) — NOT the Careem app's “Total Sales / GMV” figure, which is ~10–11% higher (it includes delivery & platform fees). Easiest and safest: use the CSV import below."
+                : "Talabat's “Sales” figure is correct as-is (it's the food subtotal)."}
+            </p>
+          </Field>
           <Field label="Orders (optional)"><Input type="number" step="1" min="0" value={orders} onChange={(e) => setOrders(e.target.value)} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>

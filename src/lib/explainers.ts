@@ -3,7 +3,13 @@ export interface Explainer {
   meaning: string;
   formula?: string;
   example?: string;
+  /** Optional callout rendered as a distinct note beneath the meaning. */
+  note?: string;
 }
+
+/** Shared note explaining Careem food-basket vs the portal's GMV headline. */
+const CAREEM_BASKET_NOTE =
+  "Careem = your food-basket revenue (menu value of items sold). This runs ~10–11% below Careem's portal “Total Sales / GMV”, which also includes delivery & platform fees that aren't your revenue. Both are correct — they measure different things. Talabat already matches because it reports food sales, not GMV.";
 
 export const EXPLAINERS: Record<string, Explainer> = {
   // Sales & basket
@@ -12,6 +18,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
     meaning: "Total gross sales customers paid, VAT included, across Talabat + Careem for the period.",
     formula: "Σ gross sales (incl VAT)",
     example: "e.g. Jun = 737 JOD.",
+    note: CAREEM_BASKET_NOTE,
   },
   aov: {
     label: "Avg Basket (AOV)",
@@ -187,6 +194,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
     label: "Sales by Platform",
     meaning:
       "Gross sales (incl VAT) per platform — monthly bars over the selected range, daily view when a single month is chosen.",
+    note: CAREEM_BASKET_NOTE,
   },
   chart_margin_trend: {
     label: "Margin over Time",

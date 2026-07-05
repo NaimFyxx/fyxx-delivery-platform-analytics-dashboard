@@ -46,6 +46,9 @@ export function InfoTip({
       >
         <p className="font-semibold text-[13px] mb-1 text-foreground">{exp.label}</p>
         <p className="text-muted-foreground mb-2">{exp.meaning}</p>
+        {exp.note && (
+          <p className="text-muted-foreground mb-2 border-l-2 border-border pl-2 text-[11px] leading-relaxed">{exp.note}</p>
+        )}
         {exp.formula && (
           <p className="font-mono bg-muted rounded px-2 py-1 text-[11px] mb-1.5 text-foreground">{exp.formula}</p>
         )}
