@@ -133,9 +133,17 @@ type Resolution =
 /** What has actually been imported for a month — based on the MEANINGFUL signal per slot,
  *  not mere row existence (Plus files write daily_sales rows with sales=0; Adjustments writes a
  *  financials row with gross=0 — neither should count as "Daily sales" / "Financials" imported). */
+type PlatformStatus = {
+  daily: boolean;
+  items: boolean;
+  financials: boolean;
+  customers: boolean;
+  adjustments: boolean;
+  plus: boolean;
+};
 type ImportStatus = {
   slot: Partial<Record<ReportId, boolean>>;
-  platform: Record<Platform, { daily: boolean; items: boolean; financials: boolean; customers: boolean }>;
+  platform: Record<Platform, PlatformStatus>;
 };
 function useImportStatus(month: string) {
   return useQuery({
@@ -186,12 +194,16 @@ function useImportStatus(month: string) {
             items: itemsReal("Talabat"),
             financials: finReal("Talabat"),
             customers: custReal("Talabat"),
+            adjustments: false, // Talabat has no adjustments report
+            plus: false, // Talabat has no Plus report
           },
           Careem: {
             daily: dailyReal("Careem"),
             items: itemsReal("Careem"),
             financials: finReal("Careem"),
             customers: custReal("Careem"),
+            adjustments: adjHas("Careem"),
+            plus: cplusCust,
           },
         },
       };
@@ -204,26 +216,27 @@ function useImportStatus(month: string) {
 type PlatCoverage = { daily: boolean; items: boolean; financials: boolean; customers: boolean };
 type MonthCoverage = {
   Talabat: PlatCoverage;
-  Careem: PlatCoverage & { plus: boolean };
+  Careem: PlatCoverage & { adjustments: boolean; plus: boolean };
 };
 type CoverageMap = Record<string, MonthCoverage>;
 
 const emptyMonthCoverage = (): MonthCoverage => ({
   Talabat: { daily: false, items: false, financials: false, customers: false },
-  Careem: { daily: false, items: false, financials: false, customers: false, plus: false },
+  Careem: { daily: false, items: false, financials: false, customers: false, adjustments: false, plus: false },
 });
 
 /** Same "meaningful signal per slot" thresholds as useImportStatus, but for every month at
- *  once — one pass over each table (no month filter), grouped by month in JS. Adjustments and
- *  raw order rows aren't required columns, so they aren't read here. */
+ *  once — one pass over each table (no month filter), grouped by month in JS. Every report is
+ *  required; raw platform_orders rows aren't a matrix column (Daily/Financials cover them). */
 function useAllMonthsCoverage() {
   return useQuery({
     queryKey: ["coverage_all_months"],
     queryFn: async (): Promise<CoverageMap> => {
-      const [daily, items, fin, cust] = await Promise.all([
+      const [daily, items, fin, adj, cust] = await Promise.all([
         supabase.from("daily_sales").select("date,platform,sales_jod,cplus_customers"),
         supabase.from("monthly_item_sales").select("month,platform,revenue_jod"),
         supabase.from("monthly_financials").select("month,platform,gross_sales"),
+        supabase.from("monthly_adjustments").select("month,platform"),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from as any)("monthly_customers").select("month,platform,new,returning"),
       ]);
@@ -244,6 +257,9 @@ function useAllMonthsCoverage() {
       for (const r of fin.data ?? []) {
         if (!isPlat(r.platform)) continue;
         if (Number(r.gross_sales) > 0) ensure(r.month)[r.platform].financials = true;
+      }
+      for (const r of adj.data ?? []) {
+        if (r.platform === "Careem") ensure(r.month).Careem.adjustments = true;
       }
       for (const r of (cust.data ?? []) as Array<{ platform: string; month: string; new: number; returning: number }>) {
         if (!isPlat(r.platform)) continue;
@@ -565,8 +581,9 @@ function CoverageCell({ ok }: { ok: boolean }) {
 }
 
 const TAL_COLS = ["daily", "items", "financials", "customers"] as const;
-const CAR_COLS = ["daily", "items", "financials", "customers", "plus"] as const;
-const COL_LABELS = ["Daily", "Items", "Financials", "Customers"];
+const CAR_COLS = ["daily", "items", "financials", "adjustments", "plus", "customers"] as const;
+const TAL_LABELS = ["Daily", "Items", "Financials", "Customers"];
+const CAR_LABELS = ["Daily", "Items", "Financials", "Adjustments", "Plus", "Customers"];
 
 function CoverageMatrix({
   coverage,
@@ -584,8 +601,8 @@ function CoverageMatrix({
       <div className="mb-3">
         <div className="text-sm font-semibold">Coverage — all months</div>
         <p className="text-[11px] text-muted-foreground mt-0.5">
-          Every required report per month. All listed reports are required (Careem Adjustments is
-          optional and not shown). Click a row to load that month below.
+          All reports are required — a month isn't complete until every one is imported. Click a row
+          to load that month below.
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -594,14 +611,14 @@ function CoverageMatrix({
             <tr className="text-muted-foreground">
               <th rowSpan={2} className="text-left font-medium px-2 py-1.5 align-bottom">Month</th>
               <th colSpan={4} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--talabat)" }}>Talabat</th>
-              <th colSpan={5} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--careem)" }}>Careem</th>
+              <th colSpan={6} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--careem)" }}>Careem</th>
               <th rowSpan={2} className="text-right font-medium px-2 py-1.5 align-bottom border-l border-border">Status</th>
             </tr>
             <tr className="text-[10.5px] text-muted-foreground">
-              {COL_LABELS.map((l, i) => (
+              {TAL_LABELS.map((l, i) => (
                 <th key={`t-${l}`} className={`font-normal px-2 py-1 ${i === 0 ? "border-l border-border" : ""}`}>{l}</th>
               ))}
-              {[...COL_LABELS, "Plus"].map((l, i) => (
+              {CAR_LABELS.map((l, i) => (
                 <th key={`c-${l}`} className={`font-normal px-2 py-1 ${i === 0 ? "border-l border-border" : ""}`}>{l}</th>
               ))}
             </tr>
@@ -649,7 +666,7 @@ function CoverageMatrix({
   );
 }
 
-/* ----- Monthly completeness checklist (informational) ----- */
+/* ----- Monthly completeness checklist ----- */
 
 function CompletenessPanel({
   month,
@@ -662,10 +679,7 @@ function CompletenessPanel({
 }) {
   const data = status?.platform;
 
-  const rowsByPlatform: Record<
-    Platform,
-    { label: string; key: "daily" | "items" | "financials" | "customers" }[]
-  > = {
+  const rowsByPlatform: Record<Platform, { label: string; key: keyof PlatformStatus }[]> = {
     Talabat: [
       { label: "Daily sales (Performance)", key: "daily" },
       { label: "Items (Sales by Menu Item)", key: "items" },
@@ -676,6 +690,8 @@ function CompletenessPanel({
       { label: "Daily sales (Order Level)", key: "daily" },
       { label: "Items (By Menu Item)", key: "items" },
       { label: "Financials (Order Level)", key: "financials" },
+      { label: "Adjustments", key: "adjustments" },
+      { label: "Careem Plus — Customers", key: "plus" },
       { label: "Customers (New / Retained / Reactivated)", key: "customers" },
     ],
   };
@@ -686,8 +702,7 @@ function CompletenessPanel({
         <div>
           <div className="text-sm font-semibold">Monthly completeness</div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Informational only — you can always import any report. Margin / COGS calculations need
-            items + financials for the month.
+            All reports are required — a month isn't complete until every one is imported.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
