@@ -15,6 +15,7 @@ import {
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
+import { EmptyState } from "@/components/fyxx/empty-state";
 import { cogsFor } from "@/lib/costs";
 import { exVat, fmtJOD0, fmtInt, platformsFromFilter, type PlatformKey } from "@/lib/fyxx";
 import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
@@ -70,8 +71,19 @@ function PublicDashboard() {
     return Array.from(set).sort();
   }, [data]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeIsSingleMonth } =
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeIsSingleMonth, rangeLabel } =
     useRangeFilter({ allMonths, today });
+
+  // Does any data fall within the selected range? Drives the "no data" empty state.
+  const rangeHasData = useMemo(() => {
+    if (!data || !rangeMonths.length) return false;
+    const set = new Set(rangeMonths);
+    return (
+      data.daily.some((d) => set.has(monthOfDate(d.date))) ||
+      data.financials.some((f) => set.has(f.month)) ||
+      data.itemSales.some((i) => set.has(i.month))
+    );
+  }, [data, rangeMonths]);
 
   // --- Aggregations per month, respecting platform filter ---
   const monthAggs: MonthAgg[] = useMemo(() => {
@@ -365,6 +377,10 @@ function PublicDashboard() {
         {/* PACE TRACKER — always current month, always all platforms, ignores all filters */}
         <PaceTracker pace={pace} currentMonth={paceMonth} />
 
+        {!rangeHasData ? (
+          <EmptyState label={rangeLabel} />
+        ) : (
+        <>
         {/* KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
           <Kpi label="Sales (incl VAT)" value={fmtInt(kpis.gross)} unit="JOD"
@@ -524,6 +540,8 @@ function PublicDashboard() {
             </ResponsiveContainer>
           </ChartCard>
         </div>
+        </>
+        )}
 
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
           The Green Room × Talabat &amp; Careem · Margins VAT-stripped per Zeid's formula · Public read-only ·{" "}

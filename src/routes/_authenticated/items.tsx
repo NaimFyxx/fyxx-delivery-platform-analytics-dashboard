@@ -9,8 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MonthPicker } from "@/components/fyxx/date-picker";
+import { EmptyState } from "@/components/fyxx/empty-state";
 import { fmtJOD, fmtInt, platformBg, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
-import { monthLabel, type RangeKey } from "@/lib/months";
+import { type RangeKey } from "@/lib/months";
 import { type CostRow } from "@/lib/costs";
 import { aggregateItems } from "@/lib/items";
 import { loadDbAliases } from "@/lib/aliases";
@@ -44,7 +45,7 @@ function Items() {
     return last ? `${last}-28` : new Date().toISOString().slice(0, 10);
   }, [allMonths]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths } =
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
     useRangeFilter({ allMonths, today });
 
   const { data: sales = [] } = useQuery({
@@ -133,12 +134,6 @@ function Items() {
       .sort((a, b) => b.units - a.units);
   }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, dbAliases, q]);
 
-  const rangeLabel = useMemo(() => {
-    if (!rangeMonths.length) return "All time";
-    if (rangeMonths.length === 1) return monthLabel(rangeMonths[0]);
-    return `${monthLabel(rangeMonths[0])} – ${monthLabel(rangeMonths[rangeMonths.length - 1])}`;
-  }, [rangeMonths]);
-
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <PageHeader title="Items" description="Sell-price columns show your set list price (bold); 'avg' is what customers actually paid — revenue ÷ units, after discounts & combos." />
@@ -179,6 +174,9 @@ function Items() {
         <p className="text-xs text-muted-foreground mb-3">{rangeLabel}</p>
       )}
 
+      {sales.length === 0 ? (
+        <EmptyState label={rangeLabel} />
+      ) : (
       <Card className="p-0 overflow-hidden overflow-x-auto">
         <Table className="min-w-[700px]">
           <TableHeader>
@@ -249,6 +247,7 @@ function Items() {
           </TableBody>
         </Table>
       </Card>
+      )}
     </div>
   );
 }

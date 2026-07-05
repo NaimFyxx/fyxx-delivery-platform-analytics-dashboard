@@ -20,6 +20,7 @@ import {
   Cell,
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
+import { EmptyState } from "@/components/fyxx/empty-state";
 import { Header, Segmented, SectionLabel, type PlatformKey } from "./dashboard";
 import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
 import { platformsFromFilter } from "@/lib/fyxx";
@@ -69,8 +70,19 @@ function InsightsPage() {
     return Array.from(set).sort();
   }, [data]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths } =
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
     useRangeFilter({ allMonths, today });
+
+  // Does any data fall within the selected range? Drives the "no data" empty state.
+  const rangeHasData = useMemo(() => {
+    if (!data || !rangeMonths.length) return false;
+    const set = new Set(rangeMonths);
+    return (
+      data.itemSales.some((i) => set.has(i.month)) ||
+      data.customers.some((c) => set.has(c.month)) ||
+      data.daily.some((d) => set.has(monthOfDate(d.date)))
+    );
+  }, [data, rangeMonths]);
 
   const [sortBy, setSortBy] = useState<SortKey>("revenue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -259,6 +271,10 @@ function InsightsPage() {
           </div>
         </div>
 
+        {!rangeHasData ? (
+          <EmptyState label={rangeLabel} />
+        ) : (
+        <>
         {/* CUSTOMER TIERS — prominent */}
         <SectionLabel>Customer Tiers — Careem+ &amp; Talabat Pro</SectionLabel>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
@@ -494,6 +510,8 @@ function InsightsPage() {
             </div>
           )}
         </Panel>
+        </>
+        )}
 
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
           The Green Room × Talabat &amp; Careem · Insights tab ·{" "}
