@@ -970,15 +970,10 @@ function CustomerPanel({
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconSize={8}
             />
-            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="#C8B89B" radius={[0, 0, 0, 0]} />
-            {showSplit ? (
-              <>
-                <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="rgba(46,110,102,0.45)" />
-                <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />
-              </>
-            ) : (
-              <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />
-            )}
+            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="#C8B89B" />
+            {showSplit && <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="rgba(46,110,102,0.45)" />}
+            {showSplit && <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />}
+            {!showSplit && <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />}
             <Line
               yAxisId="right"
               type="monotone"
