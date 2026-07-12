@@ -572,7 +572,18 @@ function covMonthLabel(m: string) {
   return `${COV_MONTH_NAMES[Number(mo) - 1]} ${y}`;
 }
 
-function CoverageCell({ ok }: { ok: boolean }) {
+/** When each platform started operating. Months before this are n/a (not "missing"). */
+const PLATFORM_LIVE_FROM: Record<Platform, string> = {
+  Talabat: "2025-10",
+  Careem: "2025-11",
+};
+const isLive = (p: Platform, month: string) => month >= PLATFORM_LIVE_FROM[p];
+
+function CoverageCell({ ok, na }: { ok: boolean; na?: boolean }) {
+  if (na) {
+    // Platform wasn't live this month — neutral, not a red "missing" mark.
+    return <span className="block text-center text-muted-foreground/40" title="Not live this month">—</span>;
+  }
   return ok ? (
     <Check className="size-4 text-success mx-auto" />
   ) : (
@@ -594,7 +605,8 @@ function CoverageMatrix({
   selectedMonth: string;
   onPickMonth: (m: string) => void;
 }) {
-  const months = monthsFromOct2025(currentMonth()).reverse(); // newest first
+  const thisMonth = currentMonth();
+  const months = monthsFromOct2025(thisMonth).reverse(); // newest first
 
   return (
     <Card className="p-5 mb-4">
@@ -626,9 +638,13 @@ function CoverageMatrix({
           <tbody>
             {months.map((mo) => {
               const c = coverage?.[mo] ?? emptyMonthCoverage();
+              const isCurrent = mo === thisMonth;
+              const talLive = isLive("Talabat", mo);
+              const carLive = isLive("Careem", mo);
+              // Only count cells for platforms that were live that month toward "missing".
               const required = [
-                ...TAL_COLS.map((k) => c.Talabat[k]),
-                ...CAR_COLS.map((k) => c.Careem[k]),
+                ...(talLive ? TAL_COLS.map((k) => c.Talabat[k]) : []),
+                ...(carLive ? CAR_COLS.map((k) => c.Careem[k]) : []),
               ];
               const missing = required.filter((x) => !x).length;
               const isSel = mo === selectedMonth;
@@ -636,21 +652,29 @@ function CoverageMatrix({
                 <tr
                   key={mo}
                   onClick={() => onPickMonth(mo)}
-                  className={`border-t border-border cursor-pointer hover:bg-muted/40 ${isSel ? "bg-primary/5" : ""}`}
+                  className={`border-t border-border cursor-pointer hover:bg-muted/40 ${isSel ? "bg-primary/5" : ""} ${isCurrent ? "bg-amber-500/[0.04] text-muted-foreground" : ""}`}
                 >
                   <td className="px-2 py-1.5 font-medium whitespace-nowrap">{covMonthLabel(mo)}</td>
                   {TAL_COLS.map((k, i) => (
                     <td key={`t-${k}`} className={`text-center px-2 py-1.5 ${i === 0 ? "border-l border-border" : ""}`}>
-                      <CoverageCell ok={c.Talabat[k]} />
+                      <CoverageCell ok={c.Talabat[k]} na={!talLive} />
                     </td>
                   ))}
                   {CAR_COLS.map((k, i) => (
                     <td key={`c-${k}`} className={`text-center px-2 py-1.5 ${i === 0 ? "border-l border-border" : ""}`}>
-                      <CoverageCell ok={c.Careem[k]} />
+                      <CoverageCell ok={c.Careem[k]} na={!carLive} />
                     </td>
                   ))}
                   <td className="px-2 py-1.5 text-right border-l border-border whitespace-nowrap">
-                    {missing === 0 ? (
+                    {isCurrent ? (
+                      <Badge
+                        variant="outline"
+                        title="The current month isn't finished — these figures are partial."
+                        className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]"
+                      >
+                        In progress
+                      </Badge>
+                    ) : missing === 0 ? (
                       <Badge variant="outline" className="bg-success/15 text-success border-success/30 text-[10px]">Complete</Badge>
                     ) : (
                       <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 text-[10px]">{missing} missing</Badge>
@@ -662,6 +686,10 @@ function CoverageMatrix({
           </tbody>
         </table>
       </div>
+      <p className="text-[10.5px] text-muted-foreground mt-2.5">
+        The current month isn't finished — these figures are partial. Re-import once the month closes
+        to finalise it. Months before a platform went live show “—” (n/a).
+      </p>
     </Card>
   );
 }
@@ -678,6 +706,7 @@ function CompletenessPanel({
   status: ImportStatus | undefined;
 }) {
   const data = status?.platform;
+  const isCurrent = month === currentMonth();
 
   const rowsByPlatform: Record<Platform, { label: string; key: keyof PlatformStatus }[]> = {
     Talabat: [
@@ -700,9 +729,18 @@ function CompletenessPanel({
     <Card className="p-5 mb-4">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <div>
-          <div className="text-sm font-semibold">Monthly completeness</div>
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold">Monthly completeness</div>
+            {isCurrent && (
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]">
+                In progress
+              </Badge>
+            )}
+          </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            All reports are required — a month isn't complete until every one is imported.
+            {isCurrent
+              ? "The current month isn't finished — these figures are partial. Re-import once the month closes to finalise it."
+              : "All reports are required — a month isn't complete until every one is imported."}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -716,7 +754,8 @@ function CompletenessPanel({
       <div className="grid md:grid-cols-2 gap-3">
         {PLATFORMS.map((p) => {
           const ps = data?.[p];
-          const incomplete = ps && (!ps.items || !ps.financials);
+          const live = isLive(p, month);
+          const incomplete = live && ps && (!ps.items || !ps.financials);
           return (
             <div key={p} className="rounded-xl border border-border bg-background/40 p-4">
               <div className="font-display font-semibold mb-2">{p}</div>
@@ -725,21 +764,27 @@ function CompletenessPanel({
                   const ok = ps?.[row.key] ?? false;
                   return (
                     <li key={row.key} className="flex items-center gap-2 text-[12.5px]">
-                      {ok ? (
+                      {!live ? (
+                        <span className="size-4 flex items-center justify-center text-muted-foreground/40">—</span>
+                      ) : ok ? (
                         <Check className="size-4 text-success" />
                       ) : (
                         <Circle className="size-4 text-muted-foreground" />
                       )}
-                      <span className={ok ? "" : "text-muted-foreground"}>{row.label}</span>
+                      <span className={!live || !ok ? "text-muted-foreground" : ""}>{row.label}</span>
                     </li>
                   );
                 })}
               </ul>
-              {incomplete && (
+              {!live ? (
+                <div className="mt-2 text-[10.5px] text-muted-foreground italic">
+                  {p} wasn't live in {month} — n/a.
+                </div>
+              ) : incomplete ? (
                 <div className="mt-2 text-[10.5px] text-muted-foreground italic">
                   Margin incomplete — items / financials not yet imported for {month}.
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })}
