@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { InfoTip } from "@/components/fyxx/info-tip";
+import { EmptyState } from "@/components/fyxx/empty-state";
+import { MonthPicker } from "@/components/fyxx/date-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card } from "@/components/ui/card";
 import {
@@ -16,6 +18,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { fmtJOD, fmtPct, exVat, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
+import { type RangeKey } from "@/lib/months";
+import { useRangeFilter } from "@/hooks/use-range-filter";
 import { cogsFor } from "@/lib/costs";
 import { loadDbAliases } from "@/lib/aliases";
 import { Segmented } from "../dashboard";
@@ -61,8 +65,58 @@ function Financials() {
   });
 
   const [platformFilter, setPlatformFilter] = useState<PlatformKey>("All");
-  const allRows = data?.financials ?? [];
-  const rows = platformFilter === "All" ? allRows : allRows.filter((r) => r.platform === platformFilter);
+  const allRows = useMemo(() => data?.financials ?? [], [data]);
+
+  const allMonths = useMemo(
+    () => Array.from(new Set(allRows.map((r) => r.month))).sort(),
+    [allRows],
+  );
+  const today = useMemo(() => {
+    const last = allMonths.at(-1);
+    return last ? `${last}-28` : new Date().toISOString().slice(0, 10);
+  }, [allMonths]);
+
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
+    useRangeFilter({ allMonths, today });
+
+  const rows = allRows.filter(
+    (r) => (platformFilter === "All" || r.platform === platformFilter) && rangeMonths.includes(r.month),
+  );
+
+  // Per-row figures (COGS the Overview way: live from item sales × versioned costs, ex-VAT).
+  const rowData = rows.map((r) => {
+    const gross = Number(r.gross_sales);
+    const payout = Number(r.actual_payout);
+    const discount = Number(r.discount ?? 0); // partner-funded promos (menu gross − discount = net)
+    const netSales = gross - discount;
+    const cogs = cogsFor(data?.itemSales ?? [], data?.costs ?? [], r.month, [r.platform], dbAliases);
+    const net = exVat(gross);
+    const payoutExVat = exVat(payout);
+    // Margins are ex-VAT throughout (cost is ex-VAT; payout/gross are stripped).
+    const fee = net > 0 ? (net - payoutExVat) / net : 0;
+    const profit = payoutExVat - cogs;
+    const margin = payoutExVat > 0 ? profit / payoutExVat : 0;
+    return { r, gross, payout, discount, netSales, cogs, net, payoutExVat, fee, profit, margin };
+  });
+
+  // TOTALS over the currently-filtered rows. Fee % and margin % are blended from the summed
+  // figures (not averaged). Net sales (ex-VAT) = net sales ÷ 1.16 (NSV is reported ex-VAT).
+  const totals = rowData.reduce(
+    (t, d) => ({
+      gross: t.gross + d.gross,
+      discount: t.discount + d.discount,
+      netSales: t.netSales + d.netSales,
+      payout: t.payout + d.payout,
+      cogs: t.cogs + d.cogs,
+      net: t.net + d.net,
+      payoutExVat: t.payoutExVat + d.payoutExVat,
+      profit: t.profit + d.profit,
+    }),
+    { gross: 0, discount: 0, netSales: 0, payout: 0, cogs: 0, net: 0, payoutExVat: 0, profit: 0 },
+  );
+  const totalFee = totals.net > 0 ? (totals.net - totals.payoutExVat) / totals.net : 0;
+  const totalMargin = totals.payoutExVat > 0 ? totals.profit / totals.payoutExVat : 0;
+  const totalNetSalesExVat = exVat(totals.netSales);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -70,7 +124,26 @@ function Financials() {
         title="Monthly financials"
         description="Gross sales, actual payouts and COGS per platform. COGS and net margin are ex-VAT (matching the Overview)."
       />
-      <div className="mb-4">
+      <div className="flex flex-wrap gap-3 items-center mb-4">
+        <Segmented
+          options={[
+            { v: "this", l: "This Month" },
+            { v: "last", l: "Last Month" },
+            { v: "ytd", l: "YTD" },
+            { v: "custom", l: "Custom" },
+            { v: "all", l: "All-Time" },
+          ]}
+          value={range}
+          onChange={(v) => setRange(v as RangeKey)}
+        />
+        {range === "custom" && (
+          <div className="flex gap-2 items-center bg-card border border-border rounded-full px-3 py-1 text-xs">
+            <label className="text-muted-foreground">From</label>
+            <div className="w-36"><MonthPicker value={customFrom} onChange={handleCustomFrom} /></div>
+            <label className="text-muted-foreground">To</label>
+            <div className="w-36"><MonthPicker value={customTo} onChange={handleCustomTo} min={customFrom} /></div>
+          </div>
+        )}
         <Segmented
           platform
           options={[
@@ -82,86 +155,97 @@ function Financials() {
           onChange={(v) => setPlatformFilter(v as PlatformKey)}
         />
       </div>
-      <Card className="p-0 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Month</TableHead>
-              <TableHead>Platform</TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Gross (incl. VAT)<InfoTip id="sales_incl_vat" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Discount<InfoTip id="discount" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Net sales<InfoTip id="net_sales" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Actual payout<InfoTip id="actual_payout" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Platform fee %<InfoTip id="platform_fee_pct" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">COGS<InfoTip id="total_cogs" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Net profit<InfoTip id="net_profit_kept" side="bottom" /></span></TableHead>
-              <TableHead className="text-right"><span className="inline-flex items-center">Net margin<InfoTip id="net_margin" side="bottom" /></span></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 && (
+
+      {rows.length === 0 ? (
+        <EmptyState label={rangeLabel} />
+      ) : (
+        <Card className="p-0 overflow-hidden overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-12">
-                  No monthly financials yet. Import an Order Report / Order Level, or add some on
-                  the Data entry page.
+                <TableHead>Month</TableHead>
+                <TableHead>Platform</TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Gross (incl. VAT)<InfoTip id="sales_incl_vat" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Discount<InfoTip id="discount" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Net sales<InfoTip id="net_sales" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Actual payout<InfoTip id="actual_payout" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Platform fee %<InfoTip id="platform_fee_pct" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">COGS<InfoTip id="total_cogs" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Net profit<InfoTip id="net_profit_kept" side="bottom" /></span></TableHead>
+                <TableHead className="text-right"><span className="inline-flex items-center">Net margin<InfoTip id="net_margin" side="bottom" /></span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rowData.map((d) => {
+                const r = d.r;
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium">{r.month}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={platformBg(r.platform as Platform)}>
+                        {r.platform}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-num">{fmtJOD(d.gross)}</TableCell>
+                    <TableCell className="text-right text-num text-muted-foreground">
+                      {fmtJOD(d.discount)}
+                    </TableCell>
+                    <TableCell className="text-right text-num">{fmtJOD(d.netSales)}</TableCell>
+                    <TableCell className="text-right text-num">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        {fmtJOD(d.payout)}
+                        {(d.payout <= 0 || d.fee >= 0.95) && (
+                          <AnomalyNote gross={d.gross} discount={d.discount} payout={d.payout} cogs={d.cogs} />
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right text-num">{fmtPct(d.fee)}</TableCell>
+                    <TableCell className="text-right text-num text-muted-foreground">
+                      {fmtJOD(d.cogs)}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right text-num font-semibold ${d.profit >= 0 ? "text-success" : "text-destructive"}`}
+                    >
+                      {fmtJOD(d.profit)}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right text-num ${d.margin >= 0 ? "text-success" : "text-destructive"}`}
+                    >
+                      {fmtPct(d.margin)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+
+              {/* TOTALS — summed across the filtered rows; %s blended from the sums. */}
+              <TableRow className="border-t-2 border-border bg-muted/40 font-semibold hover:bg-muted/40">
+                <TableCell colSpan={2} className="font-semibold">TOTALS</TableCell>
+                <TableCell className="text-right text-num">{fmtJOD(totals.gross)}</TableCell>
+                <TableCell className="text-right text-num">{fmtJOD(totals.discount)}</TableCell>
+                <TableCell className="text-right text-num">
+                  <div>{fmtJOD(totals.netSales)}</div>
+                  <div className="text-[10px] font-normal text-muted-foreground">
+                    ex-VAT {fmtJOD(totalNetSalesExVat)}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right text-num">{fmtJOD(totals.payout)}</TableCell>
+                <TableCell className="text-right text-num">{fmtPct(totalFee)}</TableCell>
+                <TableCell className="text-right text-num">{fmtJOD(totals.cogs)}</TableCell>
+                <TableCell
+                  className={`text-right text-num ${totals.profit >= 0 ? "text-success" : "text-destructive"}`}
+                >
+                  {fmtJOD(totals.profit)}
+                </TableCell>
+                <TableCell
+                  className={`text-right text-num ${totalMargin >= 0 ? "text-success" : "text-destructive"}`}
+                >
+                  {fmtPct(totalMargin)}
                 </TableCell>
               </TableRow>
-            )}
-            {rows.map((r) => {
-              const gross = Number(r.gross_sales);
-              const payout = Number(r.actual_payout);
-              // Partner-funded discount + recognised sales bridge (menu gross − discount).
-              const discount = Number(r.discount ?? 0);
-              const netSales = gross - discount;
-              // COGS the Overview way: live from item sales × versioned costs (ex-VAT).
-              const cogs = cogsFor(data?.itemSales ?? [], data?.costs ?? [], r.month, [r.platform], dbAliases);
-              const net = exVat(gross);
-              const payoutExVat = exVat(payout);
-              // Margins are ex-VAT throughout (cost is ex-VAT; payout/gross are stripped).
-              const fee = net > 0 ? (net - payoutExVat) / net : 0;
-              const profit = payoutExVat - cogs;
-              const margin = payoutExVat > 0 ? profit / payoutExVat : 0;
-              return (
-                <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.month}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={platformBg(r.platform as Platform)}>
-                      {r.platform}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-num">{fmtJOD(gross)}</TableCell>
-                  <TableCell className="text-right text-num text-muted-foreground">
-                    {fmtJOD(discount)}
-                  </TableCell>
-                  <TableCell className="text-right text-num">{fmtJOD(netSales)}</TableCell>
-                  <TableCell className="text-right text-num">
-                    <span className="inline-flex items-center justify-end gap-1">
-                      {fmtJOD(payout)}
-                      {(payout <= 0 || fee >= 0.95) && (
-                        <AnomalyNote gross={gross} discount={discount} payout={payout} cogs={cogs} />
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right text-num">{fmtPct(fee)}</TableCell>
-                  <TableCell className="text-right text-num text-muted-foreground">
-                    {fmtJOD(cogs)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right text-num font-semibold ${profit >= 0 ? "text-success" : "text-destructive"}`}
-                  >
-                    {fmtJOD(profit)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right text-num ${margin >= 0 ? "text-success" : "text-destructive"}`}
-                  >
-                    {fmtPct(margin)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </Card>
+            </TableBody>
+          </Table>
+        </Card>
+      )}
     </div>
   );
 }

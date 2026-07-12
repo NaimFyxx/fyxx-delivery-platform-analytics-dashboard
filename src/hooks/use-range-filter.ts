@@ -50,6 +50,11 @@ export function useRangeFilter({ allMonths, today }: { allMonths: string[]; toda
     if (!allMonths.length) return [];
     if (range === "this") return [calendarMonth];
     if (range === "last") return [prevMonth(calendarMonth)];
+    if (range === "ytd") {
+      // Jan of the current calendar year up to and including the current month.
+      const ytdStart = `${calendarMonth.slice(0, 4)}-01`;
+      return allMonths.filter((m) => m >= ytdStart && m <= calendarMonth);
+    }
     if (range === "custom") {
       const lo = customFrom <= customTo ? customFrom : customTo;
       const hi = customFrom <= customTo ? customTo : customFrom;
@@ -64,6 +69,7 @@ export function useRangeFilter({ allMonths, today }: { allMonths: string[]; toda
   const rangeLabel = useMemo(() => {
     if (range === "this") return "this month";
     if (range === "last") return "last month";
+    if (range === "ytd") return "year to date";
     if (range === "all") return "all time";
     const lo = customFrom <= customTo ? customFrom : customTo;
     const hi = customFrom <= customTo ? customTo : customFrom;

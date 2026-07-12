@@ -237,6 +237,7 @@ function InsightsPage() {
             options={[
               { v: "this", l: "This Month" },
               { v: "last", l: "Last Month" },
+              { v: "ytd", l: "YTD" },
               { v: "custom", l: "Custom" },
               { v: "all", l: "All-Time" },
             ]}

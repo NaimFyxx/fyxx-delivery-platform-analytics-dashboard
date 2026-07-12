@@ -1,4 +1,4 @@
-export type RangeKey = "this" | "last" | "custom" | "all";
+export type RangeKey = "this" | "last" | "ytd" | "custom" | "all";
 
 /** Month string helpers ("YYYY-MM"). */
 export const monthOfDate = (iso: string) => iso.slice(0, 7);
