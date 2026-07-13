@@ -92,6 +92,7 @@ type UpsertGroup = {
 /** Read-back rollups run after the upserts land (keeps re-imports idempotent). */
 type Reconcile = {
   careemDailyDates?: string[];
+  talabatDailyDates?: string[];
   financials?: { platform: Platform; months: string[] };
 };
 type Preview = {
@@ -180,7 +181,8 @@ function useImportStatus(month: string) {
       return {
         slot: {
           "talabat:order_report": orderRows("Talabat"),
-          "talabat:performance": dailyReal("Talabat"),
+          // Performance now provides new-vs-returning customers (daily sales come from the Order Report).
+          "talabat:performance": custReal("Talabat"),
           "talabat:menu_item": itemsReal("Talabat"),
           "careem:order_level": orderRows("Careem"),
           "careem:menu_item": itemsReal("Careem"),
@@ -710,10 +712,10 @@ function CompletenessPanel({
 
   const rowsByPlatform: Record<Platform, { label: string; key: keyof PlatformStatus }[]> = {
     Talabat: [
-      { label: "Daily sales (Performance)", key: "daily" },
+      { label: "Daily sales (Order Report)", key: "daily" },
       { label: "Items (Sales by Menu Item)", key: "items" },
       { label: "Financials (Order Report)", key: "financials" },
-      { label: "Customers (from Performance)", key: "customers" },
+      { label: "Customers (Performance)", key: "customers" },
     ],
     Careem: [
       { label: "Daily sales (Order Level)", key: "daily" },
@@ -1025,6 +1027,9 @@ function CsvFlow({
       }
       if (preview.reconcile?.careemDailyDates?.length) {
         await reconcileCareemDaily(preview.reconcile.careemDailyDates);
+      }
+      if (preview.reconcile?.talabatDailyDates?.length) {
+        await reconcileTalabatDaily(preview.reconcile.talabatDailyDates);
       }
       if (preview.reconcile?.financials?.months.length) {
         await reconcileFinancials(
@@ -1565,6 +1570,57 @@ async function reconcileCareemDaily(dates: string[]) {
   }
 }
 
+/** Every calendar date "YYYY-MM-DD" of a "YYYY-MM" month. */
+function datesInMonth(month: string): string[] {
+  const [y, mm] = month.split("-").map(Number);
+  const days = new Date(Date.UTC(y, mm, 0)).getUTCDate();
+  return Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
+}
+
+/** Recompute Talabat daily_sales (sales + orders + Pro) from per-order rows for the given dates.
+ *  Talabat's Performance report can silently drop days that had orders, so the Order Report is the
+ *  source of truth for daily sales. Dates are pre-seeded to 0 so a stale value on a now-empty day
+ *  is cleared. Idempotent by (date, platform). Mirrors reconcileCareemDaily. */
+async function reconcileTalabatDaily(dates: string[]) {
+  const uniq = Array.from(new Set(dates));
+  for (let i = 0; i < uniq.length; i += 200) {
+    const chunkDates = uniq.slice(i, i + 200);
+    const { data, error } = await supabase
+      .from("platform_orders")
+      .select("date,gross,status,is_loyalty")
+      .eq("platform", "Talabat")
+      .in("date", chunkDates);
+    if (error) throw error;
+    const byDate = new Map<string, { sales: number; orders: number; proOrders: number; proSales: number }>();
+    for (const d of chunkDates) byDate.set(d, { sales: 0, orders: 0, proOrders: 0, proSales: 0 });
+    for (const o of data ?? []) {
+      if (!isDelivered(o.status)) continue;
+      const cur = byDate.get(o.date) ?? { sales: 0, orders: 0, proOrders: 0, proSales: 0 };
+      const g = Number(o.gross);
+      cur.sales += g;
+      cur.orders += 1;
+      if ((o as Record<string, unknown>).is_loyalty === true) {
+        cur.proOrders += 1;
+        cur.proSales += g;
+      }
+      byDate.set(o.date, cur);
+    }
+    const rows = Array.from(byDate.entries()).map(([date, v]) => ({
+      date,
+      platform: "Talabat",
+      sales_jod: round3(v.sales),
+      orders: v.orders,
+      pro_orders: v.proOrders,
+      pro_sales_jod: round3(v.proSales),
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: upErr } = await (supabase.from("daily_sales") as any).upsert(rows, {
+      onConflict: "date,platform",
+    });
+    if (upErr) throw upErr;
+  }
+}
+
 /** Recompute monthly_financials (gross, payout, fees, orders) from per-order rows
  *  + Careem adjustments, for the given months. COGS is never written (preserved). */
 async function reconcileFinancials(platform: Platform, months: string[]) {
@@ -1775,10 +1831,13 @@ async function buildTalabatOrders(
   const willUpdate = rowFlags.filter(Boolean).length;
 
   const months = Array.from(monthsSet).sort();
+  // Talabat daily_sales is derived from these orders (Delivered only), NOT the flaky Performance
+  // report. Reconcile the FULL covered month(s) so stale Performance-era daily rows are cleared.
+  const talabatDailyDates = months.flatMap(datesInMonth);
   const notes = [
     `${orderRows.length} order(s) → platform_orders (idempotent by order id).`,
-    `Monthly financials recomputed for ${months.join(", ")} from these orders (Delivered only).`,
-    "Daily totals for Talabat come from the Performance report, not this file.",
+    `Monthly financials AND daily sales recomputed for ${months.join(", ")} from these orders (Delivered only).`,
+    "Daily Talabat sales now come from this Order Report — the Performance report no longer writes them.",
     "Item revenue: upload the 'Sales by Menu Item' report to populate per-item margins correctly.",
     skipped ? `${skipped} row(s) skipped (no order id / date).` : "",
   ].filter(Boolean);
@@ -1787,7 +1846,7 @@ async function buildTalabatOrders(
     upserts: [
       { table: "platform_orders", onConflict: "platform,order_id", rows: orderRows },
     ],
-    reconcile: { financials: { platform, months } },
+    reconcile: { talabatDailyDates, financials: { platform, months } },
     willAdd: rowFlags.length - willUpdate,
     willUpdate,
     skipped,
@@ -1803,11 +1862,11 @@ async function buildPerformance(
   m: Mapping,
   rows: Record<string, string>[],
 ): Promise<Preview> {
-  const hasPro = !!(m.pro_orders || m.pro_sales);
-  const grouped = new Map<
-    string,
-    { sales: number; orders: number; pro_orders: number; pro_sales: number }
-  >();
+  // Performance NO LONGER writes daily_sales — Talabat daily totals come from the Order Report,
+  // which is immune to the Performance report silently dropping days that had orders. Performance's
+  // remaining job is the new-vs-returning customer counts (which live ONLY in this report).
+  const hasCust = !!(m.new_orders && m.returning_orders);
+  const custByMonth = new Map<string, { newOrders: number; returningOrders: number }>();
   let skipped = 0;
   for (const r of rows) {
     const date = parseDate(r[m.date]);
@@ -1815,51 +1874,7 @@ async function buildPerformance(
       skipped++;
       continue;
     }
-    grouped.set(date, {
-      sales: round3(num(r[m.sales_jod])),
-      orders: Math.round(num(r[m.orders])),
-      pro_orders: m.pro_orders ? Math.round(num(r[m.pro_orders])) : 0,
-      pro_sales: m.pro_sales ? round3(num(r[m.pro_sales])) : 0,
-    });
-  }
-  const dates = Array.from(grouped.keys());
-  const existingSet = await existingKeys("daily_sales", "date", platform, dates);
-
-  const opsRows: Record<string, unknown>[] = [];
-  const previewRows: Array<Record<string, string | number>> = [];
-  const rowFlags: boolean[] = [];
-  for (const [date, g] of Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
-    rowFlags.push(existingSet.has(date));
-    const payload: Record<string, unknown> = {
-      date,
-      platform,
-      sales_jod: g.sales,
-      orders: g.orders,
-    };
-    if (hasPro) {
-      payload.pro_orders = g.pro_orders;
-      payload.pro_sales_jod = g.pro_sales;
-    }
-    opsRows.push(payload);
-    const row: Record<string, string | number> = {
-      Date: date,
-      Sales: fmtJOD(g.sales),
-      Orders: fmtInt(g.orders),
-    };
-    if (hasPro) {
-      row["Pro orders"] = fmtInt(g.pro_orders);
-      row["Pro sales"] = fmtJOD(g.pro_sales);
-    }
-    previewRows.push(row);
-  }
-  // Same Performance file also carries new / returning customer orders → monthly_customers.
-  // Aggregate per month (basis = orders) so Daily sales AND Customers land in one import.
-  const hasCust = !!(m.new_orders && m.returning_orders);
-  const custByMonth = new Map<string, { newOrders: number; returningOrders: number }>();
-  if (hasCust) {
-    for (const r of rows) {
-      const date = parseDate(r[m.date]);
-      if (!date) continue;
+    if (hasCust) {
       const mo = dateToMonth(date);
       const cur = custByMonth.get(mo) ?? { newOrders: 0, returningOrders: 0 };
       cur.newOrders += num(r[m.new_orders]);
@@ -1867,6 +1882,7 @@ async function buildPerformance(
       custByMonth.set(mo, cur);
     }
   }
+
   const custMonths = Array.from(custByMonth.keys()).sort();
   const custRows: Record<string, unknown>[] = custMonths.map((mo) => {
     const g = custByMonth.get(mo)!;
@@ -1882,9 +1898,14 @@ async function buildPerformance(
     };
   });
 
-  const upserts: UpsertGroup[] = [
-    { table: "daily_sales", onConflict: "date,platform", rows: opsRows },
-  ];
+  const previewRows: Array<Record<string, string | number>> = custRows.map((c) => ({
+    Month: c.month as string,
+    New: fmtInt(c.new as number),
+    Returning: fmtInt(c.returning as number),
+    Overall: fmtInt(c.overall as number),
+  }));
+
+  const upserts: UpsertGroup[] = [];
   if (custRows.length) {
     upserts.push({
       table: "monthly_customers",
@@ -1894,26 +1915,23 @@ async function buildPerformance(
     });
   }
 
-  const willUpdate = rowFlags.filter(Boolean).length;
   const notes = [
-    `Platform set to ${platform}.`,
-    hasPro
-      ? "Talabat Pro orders / revenue will be stored alongside the daily totals."
-      : "No Pro columns mapped — Pro tier panel stays empty for these days.",
-    custRows.length
-      ? `Also fills Customers: ${custRows.length} month(s) of new vs returning orders → monthly_customers (basis = orders).`
-      : "No new/returning customer columns found — Customers slot stays empty for this month.",
+    "Daily sales are no longer taken from the Performance report — import the Order Report for Talabat daily totals (it can't be broken by Performance dropping days).",
+    hasCust
+      ? `Fills Customers: ${custRows.length} month(s) of new vs returning orders → monthly_customers (basis = orders).`
+      : "No new/returning customer columns found — this Performance file has nothing left to import.",
     skipped ? `${skipped} row(s) skipped (no valid date).` : "",
   ].filter(Boolean);
+
   return {
     upserts,
-    willAdd: rowFlags.length - willUpdate,
-    willUpdate,
+    willAdd: custRows.length,
+    willUpdate: 0,
     skipped,
     notes,
-    previewCols: ["Date", "Sales", "Orders", ...(hasPro ? ["Pro orders", "Pro sales"] : [])],
+    previewCols: ["Month", "New", "Returning", "Overall"],
     previewRows,
-    rowFlags,
+    rowFlags: custRows.map(() => false),
   };
 }
 

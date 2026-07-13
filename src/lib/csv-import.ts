@@ -93,7 +93,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     table: "platform_orders",
     monthSource: "from-rows",
     signature: ["Order ID", "Payout Amount", "Order Items"],
-    hint: "One row per order — money, items and Pro flag. Lands per-order money; item sales and monthly financials are derived from it.",
+    hint: "One row per order — money, items and Pro flag. Daily sales, monthly financials (and, with the item report, per-item margins) are all derived from it. This is the source of truth for Talabat daily sales — immune to the Performance report dropping days.",
     fields: [
       { key: "order_id", label: "Order ID", defaults: ["Order ID"], required: true },
       {
@@ -143,10 +143,10 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalLabel: "Open Performance Report builder",
     portalSteps:
       "Reports → Create a new report → Performance → set date range → Create → download CSV from History",
-    table: "daily_sales",
+    table: "monthly_customers",
     monthSource: "from-rows",
     signature: ["Date", "Gross Sales", "Successful Orders"],
-    hint: "One row per store per day — daily totals (Talabat Pro too). Fills TWO slots in one import: Daily sales AND Customers (it also carries new / returning customer orders), so you never re-import it.",
+    hint: "Fills the new-vs-returning Customers slot — those counts live ONLY in this report. Daily sales are NOT taken from here (the Performance report can silently drop days); they come from the Order Report instead.",
     fields: [
       { key: "date", label: "Date", defaults: ["Date"], required: true },
       { key: "sales_jod", label: "Gross Sales", defaults: ["Gross Sales"], required: true },
