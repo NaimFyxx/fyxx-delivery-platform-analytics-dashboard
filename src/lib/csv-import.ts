@@ -133,6 +133,9 @@ export const REPORTS: Record<ReportId, ReportDef> = {
       },
       { key: "discount", label: "Total Discount", defaults: ["Total Discount"], required: false },
       { key: "voucher", label: "Total Voucher", defaults: ["Total Voucher"], required: false },
+      // Paid ads + marketing (mostly Pro delivery-loyalty) — aggregated into monthly_financials.
+      { key: "ads_fee", label: "Ads Fee", defaults: ["Ads Fee"], required: false },
+      { key: "marketing_fees", label: "Marketing Fees Total", defaults: ["Marketing Fees Total"], required: false },
     ],
   },
   "talabat:performance": {

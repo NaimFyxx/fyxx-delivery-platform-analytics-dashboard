@@ -319,7 +319,7 @@ function InsightsPage() {
           asOf={freshness.invoice}
         >
           {!promo || !promo.hasData ? (
-            <Empty text="No promo or ad spend recorded for this range. (Talabat paid-ad spend isn't captured yet.)" />
+            <Empty text="No promo or ad spend recorded for this range." />
           ) : (
             <>
               <div className="grid grid-cols-3 gap-2 mb-3">
@@ -898,7 +898,8 @@ function ShareRow({
 /** Promotions & ad spend per month (respecting range + platform), with net margin overlay.
  *  Categories combine each type with its `_TAX` sibling and use absolute amounts (they're negative).
  *  Customer promos come from monthly_financials.discount (Careem catalog+promo, Talabat discount+voucher).
- *  Note: Talabat paid-ad spend (Ads Fee) isn't captured yet, so Talabat "Paid ads" reads 0 — expected. */
+ *  Talabat Paid ads / Loyalty subsidy come from monthly_financials.ads_fee / marketing_fees (Order
+ *  Report); Careem's equivalents (ADVERTISEMENTS / CPLUS_FEE) come from monthly_adjustments. */
 function buildPromoSpend(
   data: DashboardData | undefined,
   rangeMonths: string[],
@@ -930,6 +931,12 @@ function buildPromoSpend(
     b.gross += f.gross;
     b.payout += f.payout;
     b.cogs += cogsFor(data.itemSales, data.costs, f.month, [f.platform]);
+    // Talabat paid-ads + loyalty come from the Order Report (monthly_financials); Careem's equivalents
+    // (ADVERTISEMENTS / CPLUS_FEE) come from monthly_adjustments above.
+    if (f.platform === "Talabat") {
+      b.paidAds += f.adsFee;
+      b.loyaltySubsidy += f.marketingFees;
+    }
   }
 
   const rows = Array.from(byMonth.keys()).sort().map((m) => {

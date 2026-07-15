@@ -93,7 +93,12 @@ type UpsertGroup = {
 type Reconcile = {
   careemDailyDates?: string[];
   talabatDailyDates?: string[];
-  financials?: { platform: Platform; months: string[] };
+  financials?: {
+    platform: Platform;
+    months: string[];
+    /** Per-month Talabat ad / marketing spend (from the Order Report) to write into monthly_financials. */
+    spend?: Record<string, { adsFee: number; marketingFees: number }>;
+  };
 };
 type Preview = {
   upserts: UpsertGroup[];
@@ -1035,6 +1040,7 @@ function CsvFlow({
         await reconcileFinancials(
           preview.reconcile.financials.platform,
           preview.reconcile.financials.months,
+          preview.reconcile.financials.spend,
         );
       }
       const totalRows = preview.upserts.reduce((s, g) => s + g.rows.length, 0);
@@ -1623,7 +1629,11 @@ async function reconcileTalabatDaily(dates: string[]) {
 
 /** Recompute monthly_financials (gross, payout, fees, orders) from per-order rows
  *  + Careem adjustments, for the given months. COGS is never written (preserved). */
-async function reconcileFinancials(platform: Platform, months: string[]) {
+async function reconcileFinancials(
+  platform: Platform,
+  months: string[],
+  spend?: Record<string, { adsFee: number; marketingFees: number }>,
+) {
   for (const month of Array.from(new Set(months))) {
     const { start, next } = monthRange(month);
     const { data: orders, error } = await supabase
@@ -1693,7 +1703,7 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
         payout += Number(a.amount);
       }
     }
-    const payload = {
+    const payload: Record<string, unknown> = {
       month,
       platform,
       gross_sales: round3(gross),
@@ -1702,6 +1712,11 @@ async function reconcileFinancials(platform: Platform, months: string[]) {
       discount: round3(discount),
       orders: orderCount,
     };
+    // Talabat paid-ad / marketing spend aggregated from the Order Report (Careem has none).
+    if (spend) {
+      payload.ads_fee = spend[month]?.adsFee ?? 0;
+      payload.marketing_fees = spend[month]?.marketingFees ?? 0;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: upErr } = await (supabase.from("monthly_financials") as any).upsert(payload, {
       onConflict: "month,platform",
@@ -1775,6 +1790,8 @@ async function buildTalabatOrders(
   const orderRows: Record<string, unknown>[] = [];
   const orderIds: string[] = [];
   const monthsSet = new Set<string>();
+  // Per-month paid-ad + marketing spend (delivered only, absolute) → monthly_financials.
+  const spendByMonth = new Map<string, { adsFee: number; marketingFees: number }>();
   const previewRows: Array<Record<string, string | number>> = [];
   let skipped = 0;
 
@@ -1801,6 +1818,13 @@ async function buildTalabatOrders(
           .toUpperCase() === "Y"
       : null;
     const status = (r[m.status] ?? "").trim() || null;
+    // Ad / marketing spend on the same basis as gross/discount: delivered orders only, absolute.
+    if (isDelivered(status)) {
+      const sp = spendByMonth.get(month) ?? { adsFee: 0, marketingFees: 0 };
+      sp.adsFee += m.ads_fee ? Math.abs(num(r[m.ads_fee])) : 0;
+      sp.marketingFees += m.marketing_fees ? Math.abs(num(r[m.marketing_fees])) : 0;
+      spendByMonth.set(month, sp);
+    }
     orderRows.push({
       platform,
       order_id,
@@ -1834,6 +1858,11 @@ async function buildTalabatOrders(
   // Talabat daily_sales is derived from these orders (Delivered only), NOT the flaky Performance
   // report. Reconcile the FULL covered month(s) so stale Performance-era daily rows are cleared.
   const talabatDailyDates = months.flatMap(datesInMonth);
+  const spend: Record<string, { adsFee: number; marketingFees: number }> = {};
+  for (const mo of months) {
+    const sp = spendByMonth.get(mo) ?? { adsFee: 0, marketingFees: 0 };
+    spend[mo] = { adsFee: round3(sp.adsFee), marketingFees: round3(sp.marketingFees) };
+  }
   const notes = [
     `${orderRows.length} order(s) → platform_orders (idempotent by order id).`,
     `Monthly financials AND daily sales recomputed for ${months.join(", ")} from these orders (Delivered only).`,
@@ -1846,7 +1875,7 @@ async function buildTalabatOrders(
     upserts: [
       { table: "platform_orders", onConflict: "platform,order_id", rows: orderRows },
     ],
-    reconcile: { talabatDailyDates, financials: { platform, months } },
+    reconcile: { talabatDailyDates, financials: { platform, months, spend } },
     willAdd: rowFlags.length - willUpdate,
     willUpdate,
     skipped,

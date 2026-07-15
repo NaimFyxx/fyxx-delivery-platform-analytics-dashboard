@@ -254,12 +254,14 @@ export type Database = {
       monthly_financials: {
         Row: {
           actual_payout: number
+          ads_fee: number | null
           cogs: number
           commission: number
           created_at: string
           discount: number
           gross_sales: number
           id: string
+          marketing_fees: number | null
           month: string
           orders: number
           platform: Database["public"]["Enums"]["platform"]
@@ -267,12 +269,14 @@ export type Database = {
         }
         Insert: {
           actual_payout: number
+          ads_fee?: number | null
           cogs?: number
           commission?: number
           created_at?: string
           discount?: number
           gross_sales: number
           id?: string
+          marketing_fees?: number | null
           month: string
           orders?: number
           platform: Database["public"]["Enums"]["platform"]
@@ -280,12 +284,14 @@ export type Database = {
         }
         Update: {
           actual_payout?: number
+          ads_fee?: number | null
           cogs?: number
           commission?: number
           created_at?: string
           discount?: number
           gross_sales?: number
           id?: string
+          marketing_fees?: number | null
           month?: string
           orders?: number
           platform?: Database["public"]["Enums"]["platform"]
