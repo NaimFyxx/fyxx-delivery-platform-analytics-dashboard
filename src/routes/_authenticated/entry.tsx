@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,12 +51,34 @@ function useInvalidateAll() {
 }
 
 /* ---------- Pace tracker (manual daily sales — feeds pace bar only) ---------- */
+type PaceRowT = { id: string; date: string; platform: string; sales_jod: number; orders: number | null; auto_filled?: boolean };
+
+/** "2026-07-13" -> "13 Jul 2026". */
+function fmtDayMonYear(d: string) {
+  return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+/** Whole days between two YYYY-MM-DD dates (a earlier). */
+function dayGap(a: string, b: string) {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+}
+/** Dates strictly between a and b (exclusive), ascending. */
+function datesBetween(a: string, b: string): string[] {
+  const out: string[] = [];
+  const d = new Date(`${a}T00:00:00Z`);
+  const end = new Date(`${b}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  while (d < end) { out.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); }
+  return out;
+}
+
 function DailySalesForm() {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   const [platform, setPlatform] = useState<Platform>("Talabat");
   const [sales, setSales] = useState("");
   const [orders, setOrders] = useState("");
+  // When a save would skip days, hold the gap here and ask before filling (never silent).
+  const [gap, setGap] = useState<{ prevLatest: string; missing: string[] } | null>(null);
   const invalidate = useInvalidateAll();
 
   const filter = useListFilter();
@@ -64,24 +87,41 @@ function DailySalesForm() {
     queryFn: async () => {
       const { data, error } = await supabase.from("pace_daily").select("*").order("date", { ascending: false }).limit(1000);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as PaceRowT[];
     },
   });
   const months = useMemo(
     () => Array.from(new Set(rows.map((r) => r.date.slice(0, 7)))).sort().reverse(),
     [rows],
   );
-  const filtered = applyListFilter(rows, filter, (r) => r.date.slice(0, 7));
+  const filtered = applyListFilter(rows, filter, (r) => r.date.slice(0, 7)) as PaceRowT[];
+
+  // Last-entered date per platform (max date in pace_daily).
+  const lastByPlatform = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const r of rows) {
+      if (!map[r.platform] || r.date > map[r.platform]) map[r.platform] = r.date;
+    }
+    return map;
+  }, [rows]);
 
   const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("pace_daily").upsert(
-        { date, platform, sales_jod: Number(sales), orders: orders ? Number(orders) : null },
-        { onConflict: "date,platform" },
-      );
+    mutationFn: async ({ fill, missing }: { fill: boolean; missing: string[] }) => {
+      const payload: { date: string; platform: Platform; sales_jod: number; orders: number | null; auto_filled: boolean }[] = [];
+      if (fill) {
+        for (const d of missing) {
+          payload.push({ date: d, platform, sales_jod: 0, orders: 0, auto_filled: true });
+        }
+      }
+      // The real entry is never auto (overwrites any prior gap-fill flag for this day).
+      payload.push({ date, platform, sales_jod: Number(sales), orders: orders ? Number(orders) : null, auto_filled: false });
+      const { error } = await supabase.from("pace_daily").upsert(payload, { onConflict: "date,platform" });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Saved"); setSales(""); setOrders(""); invalidate(); },
+    onSuccess: (_d, vars) => {
+      toast.success(vars.fill && vars.missing.length ? `Saved · filled ${vars.missing.length} missing day(s) with 0` : "Saved");
+      setSales(""); setOrders(""); setGap(null); invalidate();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -94,11 +134,42 @@ function DailySalesForm() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    // Previous latest entry for this platform strictly before the new date.
+    let prevLatest: string | null = null;
+    for (const r of rows) {
+      if (r.platform === platform && r.date < date && (!prevLatest || r.date > prevLatest)) prevLatest = r.date;
+    }
+    const missing = prevLatest ? datesBetween(prevLatest, date) : [];
+    // Only offer the fill for a real gap inside the current month, capped at ~31 days.
+    const fillable =
+      missing.length > 0 &&
+      prevLatest!.slice(0, 7) === date.slice(0, 7) &&
+      date.slice(0, 7) === currentMonth() &&
+      missing.length <= 31;
+    if (fillable) setGap({ prevLatest: prevLatest!, missing });
+    else save.mutate({ fill: false, missing: [] });
+  }
+
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
+        {/* Last-entered stamp per platform */}
+        <div className="flex flex-wrap gap-x-6 gap-y-1 mb-3">
+          {PLATFORMS.map((p) => {
+            const last = lastByPlatform[p];
+            const lagging = last ? dayGap(last, today) > 1 : false;
+            return (
+              <div key={p} className={`text-xs ${lagging ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
+                <span className="font-semibold">{p}</span> — {last ? `last entered: ${fmtDayMonYear(last)}` : "no entries yet."}
+                {lagging && ` · ${dayGap(last!, today)} days behind ⚠`}
+              </div>
+            );
+          })}
+        </div>
         <p className="text-xs text-muted-foreground mb-3">These entries power the pace tracker only. Imported CSV data is stored separately and is not affected.</p>
-        <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+        <form className="grid gap-4 md:grid-cols-5" onSubmit={onSubmit}>
           <Field label="Date"><DatePicker value={date} onChange={setDate} /></Field>
           <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Gross sales (JOD)">
@@ -113,6 +184,42 @@ function DailySalesForm() {
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
+
+      {/* Gap confirm — never fill silently */}
+      <Dialog open={!!gap} onOpenChange={(o) => { if (!o) setGap(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Missed some days?</DialogTitle>
+            <DialogDescription>
+              {gap && (
+                <>You last entered <strong>{platform}</strong> on {fmtDayMonYear(gap.prevLatest)}.
+                Fill {gap.missing.length === 1
+                  ? fmtDayMonYear(gap.missing[0])
+                  : `${fmtDayMonYear(gap.missing[0])} – ${fmtDayMonYear(gap.missing[gap.missing.length - 1])}`}
+                {" "}({gap.missing.length} day{gap.missing.length > 1 ? "s" : ""}) with 0 sales / 0 orders?</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              disabled={save.isPending}
+              onClick={() => save.mutate({ fill: false, missing: [] })}
+            >
+              Just save this day
+            </Button>
+            <Button
+              className="bg-gradient-primary text-primary-foreground"
+              disabled={save.isPending}
+              onClick={() => gap && save.mutate({ fill: true, missing: gap.missing })}
+            >
+              {save.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
+              Fill &amp; save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PaceCsvImport onImported={invalidate} />
       <RecentTable
         title="Pace entries"
@@ -121,8 +228,20 @@ function DailySalesForm() {
         rows={filtered.map((r) => [
           r.date,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
-          fmtJOD(Number(r.sales_jod)),
-          r.orders != null ? fmtInt(r.orders) : <span className="text-muted-foreground">—</span>,
+          r.auto_filled ? (
+            <span key="s" className="inline-flex items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70" title="Auto-filled gap day (0 sales / 0 orders)">
+              auto · 0
+            </span>
+          ) : (
+            fmtJOD(Number(r.sales_jod))
+          ),
+          r.auto_filled ? (
+            <span key="o" className="text-muted-foreground/60">0</span>
+          ) : r.orders != null ? (
+            fmtInt(r.orders)
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
           <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
         ])}
       />

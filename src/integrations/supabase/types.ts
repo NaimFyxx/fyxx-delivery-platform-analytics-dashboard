@@ -328,6 +328,7 @@ export type Database = {
       }
       pace_daily: {
         Row: {
+          auto_filled: boolean
           created_at: string
           date: string
           id: string
@@ -336,6 +337,7 @@ export type Database = {
           sales_jod: number
         }
         Insert: {
+          auto_filled?: boolean
           created_at?: string
           date: string
           id?: string
@@ -344,6 +346,7 @@ export type Database = {
           sales_jod?: number
         }
         Update: {
+          auto_filled?: boolean
           created_at?: string
           date?: string
           id?: string
