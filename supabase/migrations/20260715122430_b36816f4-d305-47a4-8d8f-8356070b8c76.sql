@@ -1,0 +1,1 @@
+ALTER TABLE public.pace_daily ADD COLUMN IF NOT EXISTS auto_filled boolean NOT NULL DEFAULT false;
