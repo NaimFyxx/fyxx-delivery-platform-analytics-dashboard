@@ -5,7 +5,7 @@ import { InfoTip } from "@/components/fyxx/info-tip";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getDashboardData } from "@/lib/dashboard.functions";
+import { getDashboardData, type DashboardData } from "@/lib/dashboard.functions";
 import {
   Bar,
   BarChart,
@@ -23,7 +23,8 @@ import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { Header, Segmented, SectionLabel, type PlatformKey } from "./dashboard";
 import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
-import { platformsFromFilter } from "@/lib/fyxx";
+import { platformsFromFilter, exVat, fmtJOD0 } from "@/lib/fyxx";
+import { cogsFor } from "@/lib/costs";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 import { aggregateItems } from "@/lib/items";
 
@@ -139,6 +140,9 @@ function InsightsPage() {
       ),
     [data, rangeMonths],
   );
+
+  // --- Promotions & ad spend (adjustments + customer discounts) vs net margin ---
+  const promo = useMemo(() => buildPromoSpend(data, rangeMonths, platforms), [data, rangeMonths, platforms]);
 
   // --- New vs Returning customer data ---
   const customerRows = useMemo(() => {
@@ -306,6 +310,48 @@ function InsightsPage() {
             )}
           </TierCard>
         </div>
+
+        {/* PROMOTIONS & AD SPEND */}
+        <SectionLabel>Promotions &amp; Ad Spend</SectionLabel>
+        <Panel
+          title="Promotions & ad spend"
+          sub="Customer promos, paid ads, promo sharing & loyalty subsidy vs net margin"
+          asOf={freshness.invoice}
+        >
+          {!promo || !promo.hasData ? (
+            <Empty text="No promo or ad spend recorded for this range. (Talabat paid-ad spend isn't captured yet.)" />
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <SpendKpi label="Total spend" value={fmtJOD0(promo.total)} />
+                <SpendKpi label="% of gross" value={promo.pctGross != null ? `${promo.pctGross.toFixed(1)}%` : "—"} />
+                <SpendKpi label="Biggest category" value={promo.biggest[0]} sub={fmtJOD0(promo.biggest[1])} />
+              </div>
+              <div className="h-[260px]">
+                <ResponsiveContainer>
+                  <ComposedChart data={promo.rows} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                    <YAxis yAxisId="left" stroke="var(--muted-foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#f5b400" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={40} />
+                    <Tooltip
+                      contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: number, name: string) =>
+                        name === "Net margin %" ? [`${Number(v).toFixed(1)}%`, name] : [fmtJOD0(Number(v)), name]
+                      }
+                    />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />
+                    <Bar yAxisId="left" dataKey="customerPromos" name="Customer promos" stackId="s" fill="#C8B89B" />
+                    <Bar yAxisId="left" dataKey="paidAds" name="Paid ads" stackId="s" fill="#ff8c42" />
+                    <Bar yAxisId="left" dataKey="promoSharing" name="Promo sharing" stackId="s" fill="#5fd0a3" />
+                    <Bar yAxisId="left" dataKey="loyaltySubsidy" name="Loyalty subsidy" stackId="s" fill="#2E6E66" radius={[3, 3, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="#f5b400" strokeWidth={2} dot={{ fill: "#f5b400", r: 3 }} connectNulls={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </Panel>
 
         {/* NEW VS RETURNING */}
         <SectionLabel>New vs Returning</SectionLabel>
@@ -845,6 +891,99 @@ function ShareRow({
       >
         <div className="h-full transition-all" style={{ width: `${cap}%`, background: barColor }} />
       </div>
+    </div>
+  );
+}
+
+/** Promotions & ad spend per month (respecting range + platform), with net margin overlay.
+ *  Categories combine each type with its `_TAX` sibling and use absolute amounts (they're negative).
+ *  Customer promos come from monthly_financials.discount (Careem catalog+promo, Talabat discount+voucher).
+ *  Note: Talabat paid-ad spend (Ads Fee) isn't captured yet, so Talabat "Paid ads" reads 0 — expected. */
+function buildPromoSpend(
+  data: DashboardData | undefined,
+  rangeMonths: string[],
+  platforms: string[],
+) {
+  if (!data || !rangeMonths.length) return null;
+  const inRange = new Set(rangeMonths);
+  type Bucket = { customerPromos: number; paidAds: number; promoSharing: number; loyaltySubsidy: number; gross: number; payout: number; cogs: number };
+  const byMonth = new Map<string, Bucket>();
+  const ensure = (m: string) => {
+    let b = byMonth.get(m);
+    if (!b) { b = { customerPromos: 0, paidAds: 0, promoSharing: 0, loyaltySubsidy: 0, gross: 0, payout: 0, cogs: 0 }; byMonth.set(m, b); }
+    return b;
+  };
+
+  for (const a of data.adjustments) {
+    if (!inRange.has(a.month) || !platforms.includes(a.platform)) continue;
+    const cat = a.deductionType.trim().toUpperCase().replace(/_TAX$/, "");
+    const amt = Math.abs(a.amount);
+    if (cat === "ADVERTISEMENTS") ensure(a.month).paidAds += amt;
+    else if (cat === "PROMO_SHARING") ensure(a.month).promoSharing += amt;
+    else if (cat === "CPLUS_FEE") ensure(a.month).loyaltySubsidy += amt;
+    // DEVICE_CHARGES / BANK_TRANSFER_FEE / CLAWBACK: not promo/ads → ignored
+  }
+  for (const f of data.financials) {
+    if (!inRange.has(f.month) || !platforms.includes(f.platform)) continue;
+    const b = ensure(f.month);
+    b.customerPromos += f.discount;
+    b.gross += f.gross;
+    b.payout += f.payout;
+    b.cogs += cogsFor(data.itemSales, data.costs, f.month, [f.platform]);
+  }
+
+  const rows = Array.from(byMonth.keys()).sort().map((m) => {
+    const b = byMonth.get(m)!;
+    const spend = b.customerPromos + b.paidAds + b.promoSharing + b.loyaltySubsidy;
+    const payoutExVat = exVat(b.payout);
+    const netMargin = payoutExVat > 0 ? ((payoutExVat - b.cogs) / payoutExVat) * 100 : null;
+    return {
+      label: monthLabel(m),
+      customerPromos: b.customerPromos,
+      paidAds: b.paidAds,
+      promoSharing: b.promoSharing,
+      loyaltySubsidy: b.loyaltySubsidy,
+      spend,
+      pctGross: b.gross > 0 ? (spend / b.gross) * 100 : null,
+      netMargin,
+    };
+  });
+
+  const total = rows.reduce(
+    (t, r) => ({
+      spend: t.spend + r.spend,
+      customerPromos: t.customerPromos + r.customerPromos,
+      paidAds: t.paidAds + r.paidAds,
+      promoSharing: t.promoSharing + r.promoSharing,
+      loyaltySubsidy: t.loyaltySubsidy + r.loyaltySubsidy,
+    }),
+    { spend: 0, customerPromos: 0, paidAds: 0, promoSharing: 0, loyaltySubsidy: 0 },
+  );
+  const gross = data.financials
+    .filter((f) => inRange.has(f.month) && platforms.includes(f.platform))
+    .reduce((s, f) => s + f.gross, 0);
+  const cats: [string, number][] = [
+    ["Customer promos", total.customerPromos],
+    ["Paid ads", total.paidAds],
+    ["Promo sharing", total.promoSharing],
+    ["Loyalty subsidy", total.loyaltySubsidy],
+  ];
+  const biggest = cats.reduce((a, b) => (b[1] > a[1] ? b : a), cats[0]);
+  return {
+    rows,
+    total: total.spend,
+    pctGross: gross > 0 ? (total.spend / gross) * 100 : null,
+    biggest,
+    hasData: total.spend > 0,
+  };
+}
+
+function SpendKpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-2.5">
+      <div className="text-[9.5px] uppercase tracking-wide text-muted-foreground font-semibold">{label}</div>
+      <div className="font-display text-[18px] font-semibold mt-0.5 truncate">{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
     </div>
   );
 }
