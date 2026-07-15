@@ -898,8 +898,9 @@ function ShareRow({
 /** Promotions & ad spend per month (respecting range + platform), with net margin overlay.
  *  Categories combine each type with its `_TAX` sibling and use absolute amounts (they're negative).
  *  Customer promos come from monthly_financials.discount (Careem catalog+promo, Talabat discount+voucher).
- *  Talabat Paid ads / Loyalty subsidy come from monthly_financials.ads_fee / marketing_fees (Order
- *  Report); Careem's equivalents (ADVERTISEMENTS / CPLUS_FEE) come from monthly_adjustments. */
+ *  Talabat Paid ads = monthly_financials.ads_fee + boosted_fee (Sponsored Deals); Loyalty subsidy =
+ *  marketing_fees (Pro delivery); Careem's equivalents (ADVERTISEMENTS / CPLUS_FEE) come from
+ *  monthly_adjustments. */
 function buildPromoSpend(
   data: DashboardData | undefined,
   rangeMonths: string[],
@@ -934,7 +935,8 @@ function buildPromoSpend(
     // Talabat paid-ads + loyalty come from the Order Report (monthly_financials); Careem's equivalents
     // (ADVERTISEMENTS / CPLUS_FEE) come from monthly_adjustments above.
     if (f.platform === "Talabat") {
-      b.paidAds += f.adsFee;
+      // Paid ads = Ads Fee + Sponsored Deals (boosted); Loyalty = Pro delivery / loyalty marketing.
+      b.paidAds += f.adsFee + f.boostedFee;
       b.loyaltySubsidy += f.marketingFees;
     }
   }

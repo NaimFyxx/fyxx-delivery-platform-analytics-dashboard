@@ -96,8 +96,9 @@ type Reconcile = {
   financials?: {
     platform: Platform;
     months: string[];
-    /** Per-month Talabat ad / marketing spend (from the Order Report) to write into monthly_financials. */
-    spend?: Record<string, { adsFee: number; marketingFees: number }>;
+    /** Per-month Talabat ad / marketing spend (from the Order Report) to write into monthly_financials.
+     *  boostedFee = Sponsored Deals (paid visibility); marketingFees = loyalty / Pro delivery. */
+    spend?: Record<string, { adsFee: number; boostedFee: number; marketingFees: number }>;
   };
 };
 type Preview = {
@@ -1632,7 +1633,7 @@ async function reconcileTalabatDaily(dates: string[]) {
 async function reconcileFinancials(
   platform: Platform,
   months: string[],
-  spend?: Record<string, { adsFee: number; marketingFees: number }>,
+  spend?: Record<string, { adsFee: number; boostedFee: number; marketingFees: number }>,
 ) {
   for (const month of Array.from(new Set(months))) {
     const { start, next } = monthRange(month);
@@ -1715,6 +1716,7 @@ async function reconcileFinancials(
     // Talabat paid-ad / marketing spend aggregated from the Order Report (Careem has none).
     if (spend) {
       payload.ads_fee = spend[month]?.adsFee ?? 0;
+      payload.boosted_fee = spend[month]?.boostedFee ?? 0;
       payload.marketing_fees = spend[month]?.marketingFees ?? 0;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1791,7 +1793,7 @@ async function buildTalabatOrders(
   const orderIds: string[] = [];
   const monthsSet = new Set<string>();
   // Per-month paid-ad + marketing spend (delivered only, absolute) → monthly_financials.
-  const spendByMonth = new Map<string, { adsFee: number; marketingFees: number }>();
+  const spendByMonth = new Map<string, { adsFee: number; boostedFee: number; marketingFees: number }>();
   const previewRows: Array<Record<string, string | number>> = [];
   let skipped = 0;
 
@@ -1820,9 +1822,16 @@ async function buildTalabatOrders(
     const status = (r[m.status] ?? "").trim() || null;
     // Ad / marketing spend on the same basis as gross/discount: delivered orders only, absolute.
     if (isDelivered(status)) {
-      const sp = spendByMonth.get(month) ?? { adsFee: 0, marketingFees: 0 };
+      const sp = spendByMonth.get(month) ?? { adsFee: 0, boostedFee: 0, marketingFees: 0 };
       sp.adsFee += m.ads_fee ? Math.abs(num(r[m.ads_fee])) : 0;
-      sp.marketingFees += m.marketing_fees ? Math.abs(num(r[m.marketing_fees])) : 0;
+      // Split Marketing Fees by reason: Sponsored/Boosted → paid visibility (boosted_fee);
+      // Loyalty/Pro or ambiguous/blank → loyalty (marketing_fees). Sponsored takes precedence.
+      const mktAmt = m.marketing_fee ? Math.abs(num(r[m.marketing_fee])) : 0;
+      if (mktAmt > 0) {
+        const reason = (m.marketing_reason ? String(r[m.marketing_reason] ?? "") : "").toLowerCase();
+        if (reason.includes("sponsored") || reason.includes("boosted")) sp.boostedFee += mktAmt;
+        else sp.marketingFees += mktAmt;
+      }
       spendByMonth.set(month, sp);
     }
     orderRows.push({
@@ -1858,10 +1867,10 @@ async function buildTalabatOrders(
   // Talabat daily_sales is derived from these orders (Delivered only), NOT the flaky Performance
   // report. Reconcile the FULL covered month(s) so stale Performance-era daily rows are cleared.
   const talabatDailyDates = months.flatMap(datesInMonth);
-  const spend: Record<string, { adsFee: number; marketingFees: number }> = {};
+  const spend: Record<string, { adsFee: number; boostedFee: number; marketingFees: number }> = {};
   for (const mo of months) {
-    const sp = spendByMonth.get(mo) ?? { adsFee: 0, marketingFees: 0 };
-    spend[mo] = { adsFee: round3(sp.adsFee), marketingFees: round3(sp.marketingFees) };
+    const sp = spendByMonth.get(mo) ?? { adsFee: 0, boostedFee: 0, marketingFees: 0 };
+    spend[mo] = { adsFee: round3(sp.adsFee), boostedFee: round3(sp.boostedFee), marketingFees: round3(sp.marketingFees) };
   }
   const notes = [
     `${orderRows.length} order(s) → platform_orders (idempotent by order id).`,

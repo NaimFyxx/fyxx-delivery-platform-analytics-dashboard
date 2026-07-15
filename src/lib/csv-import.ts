@@ -135,9 +135,12 @@ export const REPORTS: Record<ReportId, ReportDef> = {
       // overstate TGR's promo spend (e.g. Total Voucher 3.00 but Funded by you 1.50).
       { key: "discount", label: "Discount Funded by you", defaults: ["Discount Funded by you"], required: false },
       { key: "voucher", label: "Voucher Funded by you", defaults: ["Voucher Funded by you"], required: false },
-      // Paid ads + marketing (mostly Pro delivery-loyalty) — aggregated into monthly_financials.
+      // Paid ads → monthly_financials.ads_fee.
       { key: "ads_fee", label: "Ads Fee", defaults: ["Ads Fee"], required: false },
-      { key: "marketing_fees", label: "Marketing Fees Total", defaults: ["Marketing Fees Total"], required: false },
+      // Marketing Fees bundle Sponsored Deals (paid visibility) + Loyalty/Pro delivery charges;
+      // split per order by the reason into boosted_fee (ads) vs marketing_fees (loyalty).
+      { key: "marketing_fee", label: "Marketing Fees", defaults: ["Marketing Fees", "Marketing Fees Total"], required: false },
+      { key: "marketing_reason", label: "Marketing Fees Reasons", defaults: ["Marketing Fees Reasons"], required: false },
     ],
   },
   "talabat:performance": {

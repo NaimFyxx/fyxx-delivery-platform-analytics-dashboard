@@ -255,6 +255,7 @@ export type Database = {
         Row: {
           actual_payout: number
           ads_fee: number | null
+          boosted_fee: number | null
           cogs: number
           commission: number
           created_at: string
@@ -270,6 +271,7 @@ export type Database = {
         Insert: {
           actual_payout: number
           ads_fee?: number | null
+          boosted_fee?: number | null
           cogs?: number
           commission?: number
           created_at?: string
@@ -285,6 +287,7 @@ export type Database = {
         Update: {
           actual_payout?: number
           ads_fee?: number | null
+          boosted_fee?: number | null
           cogs?: number
           commission?: number
           created_at?: string
