@@ -79,6 +79,8 @@ function DailySalesForm() {
   const [orders, setOrders] = useState("");
   // When a save would skip days, hold the gap here and ask before filling (never silent).
   const [gap, setGap] = useState<{ prevLatest: string; missing: string[] } | null>(null);
+  // "Fill 0s to today" for a lagging platform — confirmed before the bulk write.
+  const [fillPrompt, setFillPrompt] = useState<{ platform: Platform; last: string; missing: string[] } | null>(null);
   const invalidate = useInvalidateAll();
 
   const filter = useListFilter();
@@ -134,6 +136,21 @@ function DailySalesForm() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Bulk gap-fill a lagging platform from the day after its last entry up to & including today.
+  const fillToToday = useMutation({
+    mutationFn: async ({ platform: p, missing }: { platform: Platform; missing: string[] }) => {
+      const payload = missing.map((d) => ({ date: d, platform: p, sales_jod: 0, orders: 0, auto_filled: true }));
+      const { error } = await supabase.from("pace_daily").upsert(payload, { onConflict: "date,platform" });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      toast.success(`${vars.missing.length} day${vars.missing.length > 1 ? "s" : ""} filled`);
+      setFillPrompt(null);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     // Previous latest entry for this platform strictly before the new date.
@@ -159,11 +176,22 @@ function DailySalesForm() {
         <div className="flex flex-wrap gap-x-6 gap-y-1 mb-3">
           {PLATFORMS.map((p) => {
             const last = lastByPlatform[p];
-            const lagging = last ? dayGap(last, today) > 1 : false;
+            const behind = last ? dayGap(last, today) : 0;
+            const lagging = behind > 1;
             return (
-              <div key={p} className={`text-xs ${lagging ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
-                <span className="font-semibold">{p}</span> — {last ? `last entered: ${fmtDayMonYear(last)}` : "no entries yet."}
-                {lagging && ` · ${dayGap(last!, today)} days behind ⚠`}
+              <div key={p} className={`inline-flex items-center text-xs ${lagging ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
+                <span className="font-semibold">{p}</span>
+                <span className="ml-1">— {last ? `last entered: ${fmtDayMonYear(last)}` : "no entries yet."}</span>
+                {lagging && <span className="ml-1">· {behind} days behind ⚠</span>}
+                {lagging && behind <= 31 && (
+                  <button
+                    type="button"
+                    onClick={() => setFillPrompt({ platform: p, last: last!, missing: [...datesBetween(last!, today), today] })}
+                    className="ml-2 rounded border border-amber-500/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 transition-colors"
+                  >
+                    Fill 0s to today
+                  </button>
+                )}
               </div>
             );
           })}
@@ -215,6 +243,34 @@ function DailySalesForm() {
             >
               {save.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               Fill &amp; save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fill-to-today confirm — never a silent bulk write */}
+      <Dialog open={!!fillPrompt} onOpenChange={(o) => { if (!o) setFillPrompt(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Fill missing days to today?</DialogTitle>
+            <DialogDescription>
+              {fillPrompt && (
+                <>Fill <strong>{fillPrompt.platform}</strong> from {fmtDayMonYear(fillPrompt.missing[0])} to today
+                {" "}({fmtDayMonYear(today)}) with 0 sales / 0 orders? ({fillPrompt.missing.length} day{fillPrompt.missing.length > 1 ? "s" : ""})</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" disabled={fillToToday.isPending} onClick={() => setFillPrompt(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-gradient-primary text-primary-foreground"
+              disabled={fillToToday.isPending}
+              onClick={() => fillPrompt && fillToToday.mutate({ platform: fillPrompt.platform, missing: fillPrompt.missing })}
+            >
+              {fillToToday.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
+              Fill {fillPrompt?.missing.length ?? 0} day{(fillPrompt?.missing.length ?? 0) > 1 ? "s" : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
