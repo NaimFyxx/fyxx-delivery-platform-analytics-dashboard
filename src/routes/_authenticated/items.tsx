@@ -269,12 +269,29 @@ function PriceCell({ listPrice, ppUnits, ppRevenue }: {
     return <div className="text-[11px] text-muted-foreground">avg {fmtJOD(realized!)}</div>;
   }
 
+  // Auto "discounted" flag: what customers actually paid vs the entered list price.
+  // Only meaningful when both exist and the list price is positive; >5% below = discounted.
+  const dropPct = realized != null && listPrice > 0 ? (1 - realized / listPrice) * 100 : null;
+  // Strictly more than 5%, with a tolerance so an exact 5.0% drop isn't tripped by float noise.
+  const discounted = dropPct != null && dropPct - 5 > 1e-9;
+
   // List price is set — bold headline, realized avg beneath
   return (
     <div>
       <div className="font-semibold">{fmtJOD(listPrice)}</div>
       {realized != null && (
-        <div className="text-[10px] text-muted-foreground">avg {fmtJOD(realized)}</div>
+        <div className="text-[10px] text-muted-foreground flex items-center justify-end gap-1 flex-wrap">
+          <span>avg {fmtJOD(realized)}</span>
+          {discounted && (
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1 py-0 h-auto font-normal text-muted-foreground"
+              title="Average paid is below the entered list price (promos, vouchers or combo pricing)"
+            >
+              ↓ {Math.round(dropPct)}% vs list
+            </Badge>
+          )}
+        </div>
       )}
     </div>
   );
