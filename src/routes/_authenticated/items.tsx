@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { InfoTip } from "@/components/fyxx/info-tip";
@@ -8,11 +8,15 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { Loader2, Merge } from "lucide-react";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { fmtJOD, fmtInt, platformBg, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { type RangeKey } from "@/lib/months";
-import { type CostRow } from "@/lib/costs";
+import { canonicalItemName, normalizeItemName, type CostRow, type DbAliasMap } from "@/lib/costs";
 import { aggregateItems } from "@/lib/items";
 import { loadDbAliases } from "@/lib/aliases";
 import { Segmented } from "../dashboard";
@@ -106,6 +110,24 @@ function Items() {
     staleTime: 60_000,
   });
 
+  // Every exact stored item name (all months + cost rows) — the merge picker writes these verbatim.
+  const { data: allItemNames = [] } = useQuery({
+    queryKey: ["all_item_names"],
+    queryFn: async () => {
+      const [s, c] = await Promise.all([
+        supabase.from("monthly_item_sales").select("item_name"),
+        supabase.from("item_costs").select("item_name"),
+      ]);
+      if (s.error) throw s.error;
+      if (c.error) throw c.error;
+      const set = new Set<string>();
+      (s.data ?? []).forEach((r) => set.add(r.item_name));
+      (c.data ?? []).forEach((r) => set.add(r.item_name));
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    },
+    staleTime: 60_000,
+  });
+
   const costRows: CostRow[] = useMemo(
     () => costs.map((c) => ({ item: c.item_name, cost: Number(c.cost_exvat), effective_from: c.effective_from })),
     [costs],
@@ -169,6 +191,9 @@ function Items() {
           onChange={(v) => setPlatform(v as PlatformKey)}
         />
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+        <div className="ml-auto">
+          <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
+        </div>
       </div>
 
       {range !== "this" && range !== "last" && (
@@ -250,6 +275,123 @@ function Items() {
       </Card>
       )}
     </div>
+  );
+}
+
+/** Merge a duplicate item name into a canonical one by writing an item_aliases row.
+ *  Same alias-write path as the import wizard's "Merge into existing" resolution
+ *  (upsert on raw_name), so cross-platform name splits can be fixed without SQL. */
+function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: DbAliasMap }) {
+  const [open, setOpen] = useState(false);
+  const [dup, setDup] = useState("");
+  const [target, setTarget] = useState("");
+  const qc = useQueryClient();
+
+  // The target must be a final canonical name — canonicalItemName does a single lookup, so
+  // pointing at a name that is itself merged away would break the chain.
+  const targetIsAliased = !!target && dbAliases[normalizeItemName(target)] !== undefined;
+  const alreadyMerged =
+    !!dup && !!target && canonicalItemName(dup, dbAliases) === canonicalItemName(target, dbAliases);
+  const sameName = !!dup && dup === target;
+  const valid = !!dup && !!target && !sameName && !alreadyMerged && !targetIsAliased;
+
+  function reset() {
+    setDup("");
+    setTarget("");
+  }
+
+  const merge = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("item_aliases").upsert(
+        { raw_name: dup, canonical_name: target },
+        { onConflict: "raw_name" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(`Merged “${dup}” → “${target}”`);
+      qc.invalidateQueries({ queryKey: ["item_aliases"] });
+      setOpen(false);
+      reset();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const selectCls =
+    "w-full border border-border rounded-md px-2 py-1.5 bg-background text-xs disabled:opacity-50";
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} disabled={names.length === 0}>
+        <Merge className="size-3.5 mr-1.5" /> Merge item
+      </Button>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge duplicate item</DialogTitle>
+            <DialogDescription>
+              Point a duplicate name at the item it should count as — units, revenue and COGS then roll
+              up under the canonical name everywhere. This only stores a name alias; no sales data is
+              changed, and it can be undone by removing the alias.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Duplicate (merged away)</label>
+              <select className={selectCls} value={dup} onChange={(e) => setDup(e.target.value)}>
+                <option value="">— choose the duplicate —</option>
+                {names.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Into canonical item</label>
+              <select className={selectCls} value={target} onChange={(e) => setTarget(e.target.value)}>
+                <option value="">— choose the item to keep —</option>
+                {names.filter((n) => n !== dup).map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+
+            {dup && target && (
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+                <span className="text-muted-foreground">Result: </span>
+                <span className="font-medium">“{dup}”</span>
+                <span className="text-muted-foreground"> counts as </span>
+                <span className="font-medium">“{target}”</span>
+              </div>
+            )}
+            {alreadyMerged && !sameName && (
+              <p className="text-xs text-muted-foreground">
+                These already resolve to the same item — nothing to merge.
+              </p>
+            )}
+            {targetIsAliased && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                “{target}” is itself merged into another item. Pick the final canonical name instead.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={merge.isPending}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-gradient-primary text-primary-foreground"
+              disabled={!valid || merge.isPending}
+              onClick={() => merge.mutate()}
+            >
+              {merge.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
+              Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
