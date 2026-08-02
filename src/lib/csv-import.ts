@@ -126,9 +126,10 @@ export const REPORTS: Record<ReportId, ReportDef> = {
         required: false,
       },
       {
+        // Talabat renamed "Is Pro Order" → "Is Subscription Order" (Jul 2026); accept both.
         key: "is_pro",
         label: "Is Pro Order (loyalty)",
-        defaults: ["Is Pro Order"],
+        defaults: ["Is Pro Order", "Is Subscription Order"],
         required: false,
       },
       // Merchant-funded only — "Total Discount/Voucher" include Talabat-funded amounts and would
