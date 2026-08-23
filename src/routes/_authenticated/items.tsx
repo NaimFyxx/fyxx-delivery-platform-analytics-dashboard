@@ -182,7 +182,14 @@ function Items() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <PageHeader title="Items" description="Sell-price columns show your set list price (bold); 'avg' is what customers actually paid — revenue ÷ units, after discounts & combos." />
+      <PageHeader title="Items" description="Sell-price columns show your set list price (bold); 'avg' is what customers actually paid, revenue divided by units, after discounts and combos." />
+
+      <div className="rounded-md border border-border bg-muted/30 px-3 py-2 mb-4 text-[11.5px] leading-relaxed text-muted-foreground max-w-3xl">
+        <span className="font-semibold text-foreground">How to read this:</span>{" "}
+        Set price (bold) is your menu price. Avg is what customers actually paid per unit, after
+        discounts and add-ons. Avg below set price means discounts or vouchers. Avg above set price
+        means customers added paid extras. Avg equal to set price means it sold at the menu price.
+      </div>
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <Segmented
@@ -234,8 +241,8 @@ function Items() {
               <TableHead className="align-bottom h-auto py-2.5 leading-tight">Item</TableHead>
               <TableHead className="align-bottom h-auto py-2.5 leading-tight">Platforms</TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Units<InfoTip id="units" side="bottom" /></TableHead>
-              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Talabat — sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
-              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Careem — sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Talabat sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Careem sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Avg selling price (incl VAT)<InfoTip id="avg_selling_price" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Unit cost (ex-VAT)<InfoTip id="unit_cost" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Total COGS<InfoTip id="total_cogs" side="bottom" /></TableHead>
@@ -298,7 +305,7 @@ function Items() {
                 </TableCell>
                 <TableCell className="text-right text-num">
                   {r.cogs === 0 && r.lastCost == null
-                    ? <span className="text-muted-foreground">—</span>
+                    ? <span className="text-muted-foreground">n/a</span>
                     : fmtJOD(r.cogs)}
                 </TableCell>
                 <TableCell
@@ -309,7 +316,7 @@ function Items() {
                       : "var(--muted-foreground)",
                   }}
                 >
-                  {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "—"}
+                  {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "n/a"}
                 </TableCell>
               </TableRow>
             ))}
@@ -380,9 +387,9 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
           <DialogHeader>
             <DialogTitle>Merge duplicate item</DialogTitle>
             <DialogDescription>
-              Point a duplicate name at the item it should count as — units, revenue and COGS then roll
-              up under the canonical name everywhere. This only stores a name alias; no sales data is
-              changed, and it can be undone by removing the alias.
+              Point a duplicate name at the item it should count as, so its units, revenue and COGS
+              roll up under the canonical name everywhere. This only stores a name alias; no sales data
+              is changed, and it can be undone by removing the alias.
             </DialogDescription>
           </DialogHeader>
 
@@ -390,7 +397,7 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
             <div className="space-y-1">
               <label className="text-xs font-medium">Duplicate (merged away)</label>
               <select className={selectCls} value={dup} onChange={(e) => setDup(e.target.value)}>
-                <option value="">— choose the duplicate —</option>
+                <option value="">Choose the duplicate</option>
                 {names.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
@@ -399,7 +406,7 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
             <div className="space-y-1">
               <label className="text-xs font-medium">Into canonical item</label>
               <select className={selectCls} value={target} onChange={(e) => setTarget(e.target.value)}>
-                <option value="">— choose the item to keep —</option>
+                <option value="">Choose the item to keep</option>
                 {names.filter((n) => n !== dup).map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
@@ -416,7 +423,7 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
             )}
             {alreadyMerged && !sameName && (
               <p className="text-xs text-muted-foreground">
-                These already resolve to the same item — nothing to merge.
+                These already resolve to the same item, so there is nothing to merge.
               </p>
             )}
             {targetIsAliased && (
@@ -580,7 +587,7 @@ function PriceCell({ listPrice, ppUnits, ppRevenue }: {
   const realized = ppUnits > 0 ? ppRevenue / ppUnits : null;
 
   if (listPrice == null && realized == null) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground">n/a</span>;
   }
 
   if (listPrice == null) {

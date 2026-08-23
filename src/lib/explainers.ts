@@ -49,7 +49,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   margin_after_commission: {
     label: "Margin after commission %",
     meaning:
-      "Margin after only the platform's fixed cut (commission + fees), with promos/discounts added back so it's not distorted by inconsistent promo spend.",
+      "What you keep after the platform's commission, on the actual payout with VAT stripped. This is the real margin on delivery, not the menu margin. Reflects the existing calculation, do not change it.",
     formula: "(exVat(payout + discount) − COGS) ÷ exVat(payout + discount)",
     example: "Smash Burger ≈ 49%.",
   },
@@ -70,25 +70,25 @@ export const EXPLAINERS: Record<string, Explainer> = {
   // Items / pricing
   units: {
     label: "Units",
-    meaning: "Units sold in the period (merged across both platforms for the same dish).",
+    meaning: "Units sold in the selected period, for the current platform filter.",
     formula: "Σ units",
   },
   sell_price: {
     label: "Sell price",
     meaning:
-      "Your set menu list price (bold) with the realized average underneath (what customers actually paid after discounts).",
-    formula: "list price · avg = revenue ÷ units",
-    example: "List 10.00 · avg 10.16.",
+      "Bold is your set list price on this platform, the menu price before anything. The 'avg' below it is what customers actually paid per unit here: revenue divided by units, after discounts and paid add-ons. Below list means discounts or vouchers were applied. Above list means customers added paid extras, which the platform bundles into the item line. Equal to list means it sold at menu price.",
+    formula: "avg = revenue ÷ units",
+    example: "List 10.00, avg 10.16.",
   },
   unit_cost: {
     label: "Unit cost (ex-VAT)",
-    meaning: "Cost to make one unit, ex-VAT, from the recipe cost sheet (latest version effective that month).",
-    formula: "from item_costs",
+    meaning:
+      "Your cost of goods per unit, excluding VAT, from the versioned cost table. Past periods never recalculate: each period uses the cost that was active then.",
     example: "Smash Burger = 3.18 JOD.",
   },
   total_cogs: {
     label: "Total COGS",
-    meaning: "Total cost of goods for the units sold.",
+    meaning: "Unit cost multiplied by units sold in the selected period. Excludes VAT.",
     formula: "Σ units × unit cost",
     example: "30 × 3.18 = 95.40.",
   },
@@ -106,9 +106,9 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   avg_selling_price: {
     label: "Avg selling price (incl VAT)",
-    meaning: "Average of actual sales in the period, not a set menu price. A period spanning a price change shows a blend.",
-    formula: "total sales ÷ total units (incl VAT), blended across platforms",
-    example: "combined; click the item's history icon for the monthly step.",
+    meaning:
+      "What customers actually paid per unit, blended across both platforms: total revenue divided by total units for the period, VAT included, after discounts and combos. Compare it to the bold set price. Below list means discounts or vouchers reduced it. Above list means paid add-ons lifted it. Equal means it sold at menu price. A period that spans a price change shows a blend, not a clean step. Open the per-item history (the chart icon) to see the step month by month.",
+    formula: "total revenue ÷ total units (incl VAT)",
   },
 
   // Pace tracker
