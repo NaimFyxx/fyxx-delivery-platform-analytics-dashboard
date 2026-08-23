@@ -17,11 +17,12 @@ import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { fmtJOD, fmtInt, platformBg, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { monthLabel, type RangeKey } from "@/lib/months";
-import { canonicalItemName, normalizeItemName, type CostRow, type DbAliasMap } from "@/lib/costs";
-import { aggregateItems } from "@/lib/items";
+import { canonicalItemName, normalizeItemName, costAsOf, priceAsOf, type CostRow, type DbAliasMap } from "@/lib/costs";
+import { aggregateItems, type AggItem } from "@/lib/items";
 import { loadDbAliases } from "@/lib/aliases";
-import { loadItemCategories, categoryFor, ALL_CATEGORY_OPTIONS, UNCATEGORISED } from "@/lib/categories";
+import { loadItemCategories, categoryFor, ALL_CATEGORY_OPTIONS, UNCATEGORISED, type CategoryMap } from "@/lib/categories";
 import { AddProductDialog } from "@/components/fyxx/add-product-dialog";
+import { Switch } from "@/components/ui/switch";
 import { Segmented } from "../dashboard";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 
@@ -39,11 +40,85 @@ const fmtJOD3 = (n: number) =>
     maximumFractionDigits: 3,
   }).format(n);
 
+/** A rendered Items-table row: the aggregated item plus its category and a zero-sales flag. */
+type ItemRow = AggItem & { category: string; zeroSales: boolean };
+
+/** Synthesize rows for catalogue items that have no sales in the current view. Pulls name,
+ *  platforms, set prices and unit cost from item_costs / item_prices / item_categories (the
+ *  same tables the Add product form writes). All sales-derived figures are left empty (0 units,
+ *  null margins) so nothing is faked and nothing divides by zero. */
+function buildZeroSalesRows(args: {
+  costRows: CostRow[];
+  prices: { item_name: string; platform: string; price_incl_vat: number; effective_from?: string }[];
+  catMap: CategoryMap;
+  dbAliases: DbAliasMap;
+  activePlatforms: string[];
+  present: Set<string>;
+  asOf: string;
+}): ItemRow[] {
+  const { costRows, prices, catMap, dbAliases, activePlatforms, present, asOf } = args;
+
+  // Pick one display name per canonical catalogue item, skipping any that already have sales.
+  const names = new Map<string, string>();
+  const consider = (name: string) => {
+    const canon = canonicalItemName(name, dbAliases);
+    if (present.has(canon)) return;
+    const cur = names.get(canon);
+    if (cur == null) { names.set(canon, name); return; }
+    const curDirect = normalizeItemName(cur) === canon;
+    const newDirect = normalizeItemName(name) === canon;
+    if (newDirect && !curDirect) names.set(canon, name);
+    else if (newDirect === curDirect && name.length < cur.length) names.set(canon, name);
+  };
+  for (const c of costRows) consider(c.item);
+  for (const p of prices) consider(p.item_name);
+
+  // Which platforms each catalogue item is listed on (from its price rows).
+  const platformsByCanon = new Map<string, Set<string>>();
+  for (const p of prices) {
+    const canon = canonicalItemName(p.item_name, dbAliases);
+    if (!platformsByCanon.has(canon)) platformsByCanon.set(canon, new Set());
+    platformsByCanon.get(canon)!.add(p.platform);
+  }
+
+  const rows: ItemRow[] = [];
+  for (const [canon, name] of names) {
+    const listed = Array.from(platformsByCanon.get(canon) ?? []);
+    // Respect the platform filter: show if listed on an active platform; a cost-only item
+    // (no price rows) only appears under the "All platforms" filter.
+    const onActive = listed.length ? listed.some((p) => activePlatforms.includes(p)) : activePlatforms.length >= 2;
+    if (!onActive) continue;
+
+    rows.push({
+      item: name,
+      platforms: new Set(listed.filter((p) => activePlatforms.includes(p))),
+      units: 0,
+      revenue: 0,
+      cogs: 0,
+      lastCost: costAsOf(costRows, name, asOf, dbAliases),
+      avgPrice: null,
+      perPlatform: {},
+      listPrice: {
+        Talabat: priceAsOf(prices, name, "Talabat", asOf, dbAliases),
+        Careem: priceAsOf(prices, name, "Careem", asOf, dbAliases),
+      },
+      productMargin: null,
+      commMargin: null,
+      netMargin: null,
+      category: categoryFor(name, catMap, dbAliases),
+      zeroSales: true,
+    });
+  }
+  return rows;
+}
+
 function Items() {
   const [platform, setPlatform] = useState<PlatformKey>("All");
   const [q, setQ] = useState("");
   // Category filter — "All" shows every category; stacks with the range + platform filters.
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  // Reveal catalogue items that have no sales in the current view (e.g. newly added products).
+  const [showZero, setShowZero] = useState(false);
   const qc = useQueryClient();
   // Item whose monthly price history is open (canonical display name), plus its canonical key.
   const [historyItem, setHistoryItem] = useState<{ label: string; key: string } | null>(null);
@@ -197,7 +272,7 @@ function Items() {
       units: s.units,
       revenue: Number((s as any).revenue_jod ?? 0),
     }));
-    return aggregateItems({
+    const salesRows: ItemRow[] = aggregateItems({
       itemSales: mapped,
       costs: costRows,
       prices,
@@ -205,12 +280,21 @@ function Items() {
       rangeMonths,
       platforms: activePlatforms,
       dbAliases,
-    })
-      .map((r) => ({ ...r, category: categoryFor(r.item, catMap, dbAliases) }))
+    }).map((r) => ({ ...r, category: categoryFor(r.item, catMap, dbAliases), zeroSales: false }));
+
+    let rows: ItemRow[] = salesRows;
+    if (showZero) {
+      // Catalogue items with no sales in this view get synthetic rows (0 units, no fake margin).
+      const present = new Set(salesRows.map((r) => canonicalItemName(r.item, dbAliases)));
+      const asOf = rangeMonths.length ? `${rangeMonths[rangeMonths.length - 1]}-28` : today;
+      rows = [...salesRows, ...buildZeroSalesRows({ costRows, prices, catMap, dbAliases, activePlatforms, present, asOf })];
+    }
+
+    return rows
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
       .filter((r) => categoryFilter === "All" || r.category === categoryFilter)
       .sort((a, b) => b.units - a.units);
-  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, dbAliases, catMap, categoryFilter, q]);
+  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, dbAliases, catMap, categoryFilter, q, showZero, today]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -266,6 +350,10 @@ function Items() {
           ))}
         </select>
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+          <Switch checked={showZero} onCheckedChange={setShowZero} />
+          Show items with 0 sales
+        </label>
         <div className="ml-auto flex items-center gap-2">
           <AddProductDialog />
           <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
@@ -276,7 +364,7 @@ function Items() {
         <p className="text-xs text-muted-foreground mb-3">{rangeLabel}</p>
       )}
 
-      {sales.length === 0 ? (
+      {(showZero ? aggregated.length === 0 : sales.length === 0) ? (
         <EmptyState label={rangeLabel} />
       ) : (
       <Card className="p-0 overflow-hidden overflow-x-auto">
@@ -306,7 +394,7 @@ function Items() {
             {aggregated.map((r) => (
               <TableRow key={r.item}>
                 <TableCell className="font-medium">
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 flex-wrap">
                     {r.item}
                     <button
                       type="button"
@@ -317,6 +405,11 @@ function Items() {
                     >
                       <LineChartIcon className="size-3.5" />
                     </button>
+                    {r.zeroSales && (
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-auto font-normal border-primary/30 text-primary bg-primary/10">
+                        no sales yet
+                      </Badge>
+                    )}
                   </span>
                 </TableCell>
                 <TableCell className="space-x-1">
@@ -359,7 +452,7 @@ function Items() {
                     : fmtJOD(r.lastCost)}
                 </TableCell>
                 <TableCell className="text-right text-num">
-                  {r.cogs === 0 && r.lastCost == null
+                  {r.zeroSales || (r.cogs === 0 && r.lastCost == null)
                     ? <span className="text-muted-foreground">n/a</span>
                     : fmtJOD(r.cogs)}
                 </TableCell>
