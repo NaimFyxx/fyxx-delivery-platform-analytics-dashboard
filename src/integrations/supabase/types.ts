@@ -119,6 +119,27 @@ export type Database = {
         }
         Relationships: []
       }
+      item_categories: {
+        Row: {
+          category: string
+          id: string
+          item_key: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          id?: string
+          item_key: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          id?: string
+          item_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       item_costs: {
         Row: {
           cost_exvat: number

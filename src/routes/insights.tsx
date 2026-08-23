@@ -27,6 +27,7 @@ import { platformsFromFilter, exVat, fmtJOD0 } from "@/lib/fyxx";
 import { cogsFor } from "@/lib/costs";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 import { aggregateItems } from "@/lib/items";
+import { categoryFor } from "@/lib/categories";
 
 export const Route = createFileRoute("/insights")({
   ssr: false,
@@ -121,6 +122,32 @@ function InsightsPage() {
         .sort((a, b) => (anyRevenue ? b.revenue - a.revenue : b.units - a.units))
         .slice(0, 10),
     [items, anyRevenue],
+  );
+
+  // --- Sales rolled up by category, from the SAME per-item aggregation as the table above.
+  //     Summing `items` guarantees the category totals reconcile exactly to the item totals
+  //     for the selected range + platform (no double-count). Items with no assigned category
+  //     roll up under Uncategorised. ---
+  const byCategory = useMemo(() => {
+    const catMap = data?.itemCategories ?? {};
+    const acc = new Map<string, { category: string; revenue: number; units: number }>();
+    for (const r of items) {
+      const c = categoryFor(r.item, catMap);
+      const e = acc.get(c) ?? { category: c, revenue: 0, units: 0 };
+      e.revenue += r.revenue;
+      e.units += r.units;
+      acc.set(c, e);
+    }
+    return Array.from(acc.values());
+  }, [items, data]);
+
+  const revenueByCategory = useMemo(
+    () => byCategory.filter((c) => c.revenue > 0).sort((a, b) => b.revenue - a.revenue),
+    [byCategory],
+  );
+  const unitsByCategory = useMemo(
+    () => byCategory.filter((c) => c.units > 0).sort((a, b) => b.units - a.units),
+    [byCategory],
   );
 
   // --- Tiers: Careem uses Plus customer counts (only Plus data Careem exports);
@@ -472,6 +499,68 @@ function InsightsPage() {
             )}
           </div>
         </Panel>
+
+        {/* SALES BY CATEGORY */}
+        <SectionLabel>Sales by Category</SectionLabel>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
+          <Panel
+            title="Revenue by category"
+            sub="Total item revenue (JOD) per category for this range and platform. Unassigned items roll up under Uncategorised."
+            asOf={freshness.items}
+          >
+            <div className="h-[300px]">
+              {revenueByCategory.length === 0 ? (
+                <Empty text="No item revenue for this range." />
+              ) : (
+                <ResponsiveContainer>
+                  <BarChart data={revenueByCategory} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                    <CartesianGrid stroke="var(--border)" horizontal={false} />
+                    <XAxis type="number" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="category" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                    <Tooltip
+                      contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: number) => [`${Math.round(v).toLocaleString()} JOD`, "Revenue"]}
+                    />
+                    <Bar dataKey="revenue" radius={[0, 3, 3, 0]}>
+                      {revenueByCategory.map((_, i) => (
+                        <Cell key={i} fill={i === 0 ? "var(--careem)" : "rgba(63,209,122,0.7)"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Panel>
+
+          <Panel
+            title="Units by category"
+            sub="Total units sold per category for this range and platform. Unassigned items roll up under Uncategorised."
+            asOf={freshness.items}
+          >
+            <div className="h-[300px]">
+              {unitsByCategory.length === 0 ? (
+                <Empty text="No item units for this range." />
+              ) : (
+                <ResponsiveContainer>
+                  <BarChart data={unitsByCategory} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                    <CartesianGrid stroke="var(--border)" horizontal={false} />
+                    <XAxis type="number" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="category" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                    <Tooltip
+                      contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: number) => [`${v.toLocaleString()} units`, "Units"]}
+                    />
+                    <Bar dataKey="units" radius={[0, 3, 3, 0]}>
+                      {unitsByCategory.map((_, i) => (
+                        <Cell key={i} fill={i === 0 ? "#EEC36A" : "rgba(238,195,106,0.7)"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Panel>
+        </div>
 
         {/* SALES BY ITEM */}
         <SectionLabel>Sales by Item</SectionLabel>

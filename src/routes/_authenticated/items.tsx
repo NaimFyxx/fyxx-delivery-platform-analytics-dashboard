@@ -20,6 +20,7 @@ import { monthLabel, type RangeKey } from "@/lib/months";
 import { canonicalItemName, normalizeItemName, type CostRow, type DbAliasMap } from "@/lib/costs";
 import { aggregateItems } from "@/lib/items";
 import { loadDbAliases } from "@/lib/aliases";
+import { loadItemCategories, categoryFor, ALL_CATEGORY_OPTIONS, UNCATEGORISED } from "@/lib/categories";
 import { Segmented } from "../dashboard";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 
@@ -40,6 +41,9 @@ const fmtJOD3 = (n: number) =>
 function Items() {
   const [platform, setPlatform] = useState<PlatformKey>("All");
   const [q, setQ] = useState("");
+  // Category filter — "All" shows every category; stacks with the range + platform filters.
+  const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const qc = useQueryClient();
   // Item whose monthly price history is open (canonical display name), plus its canonical key.
   const [historyItem, setHistoryItem] = useState<{ label: string; key: string } | null>(null);
 
@@ -121,6 +125,31 @@ function Items() {
     staleTime: 60_000,
   });
 
+  const { data: catMap = {} } = useQuery({
+    queryKey: ["item_categories"],
+    queryFn: loadItemCategories,
+    staleTime: 60_000,
+  });
+
+  // Assign / clear an item's category. Uncategorised removes the row (no row = Uncategorised),
+  // so the mapping table only ever holds real assignments. Keyed by canonical item name so it
+  // survives re-imports and is shared by any merged variants.
+  const assignCategory = useMutation({
+    mutationFn: async ({ key, category }: { key: string; category: string }) => {
+      if (category === UNCATEGORISED) {
+        const { error } = await supabase.from("item_categories").delete().eq("item_key", key);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("item_categories")
+          .upsert({ item_key: key, category }, { onConflict: "item_key" });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["item_categories"] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   // All-time monthly item sales — powers the per-item price history (independent of the range filter).
   const { data: allSales = [] } = useQuery({
     queryKey: ["monthly_item_sales_all"],
@@ -176,9 +205,11 @@ function Items() {
       platforms: activePlatforms,
       dbAliases,
     })
+      .map((r) => ({ ...r, category: categoryFor(r.item, catMap, dbAliases) }))
       .filter((r) => !q || r.item.toLowerCase().includes(q.toLowerCase()))
+      .filter((r) => categoryFilter === "All" || r.category === categoryFilter)
       .sort((a, b) => b.units - a.units);
-  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, dbAliases, q]);
+  }, [sales, costRows, prices, financials, rangeMonths, activePlatforms, dbAliases, catMap, categoryFilter, q]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -221,6 +252,18 @@ function Items() {
           value={platform}
           onChange={(v) => setPlatform(v as PlatformKey)}
         />
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="h-9 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          aria-label="Filter by category"
+          title="Filter by category"
+        >
+          <option value="All">All categories</option>
+          {ALL_CATEGORY_OPTIONS.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
         <div className="ml-auto">
           <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
@@ -235,11 +278,12 @@ function Items() {
         <EmptyState label={rangeLabel} />
       ) : (
       <Card className="p-0 overflow-hidden overflow-x-auto">
-        <Table className="min-w-[820px]">
+        <Table className="min-w-[960px]">
           <TableHeader>
             <TableRow className="align-bottom">
               <TableHead className="align-bottom h-auto py-2.5 leading-tight">Item</TableHead>
               <TableHead className="align-bottom h-auto py-2.5 leading-tight">Platforms</TableHead>
+              <TableHead className="align-bottom h-auto py-2.5 leading-tight">Category</TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Units<InfoTip id="units" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Talabat sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Careem sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
@@ -252,7 +296,7 @@ function Items() {
           <TableBody>
             {aggregated.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-12">
+                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-12">
                   No item sales for {rangeLabel}.
                 </TableCell>
               </TableRow>
@@ -277,6 +321,15 @@ function Items() {
                   {Array.from(r.platforms).map((p) => (
                     <Badge key={p} variant="outline" className={platformBg(p as Platform)}>{p}</Badge>
                   ))}
+                </TableCell>
+                <TableCell>
+                  <CategoryCell
+                    value={r.category}
+                    onAssign={(category) =>
+                      assignCategory.mutate({ key: canonicalItemName(r.item, dbAliases), category })
+                    }
+                    pending={assignCategory.isPending}
+                  />
                 </TableCell>
                 <TableCell className="text-right text-num">{fmtInt(r.units)}</TableCell>
                 <TableCell className="text-right text-num">
@@ -576,6 +629,37 @@ function PriceHistoryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Per-item category picker. Editing here assigns the canonical item's category (survives
+ *  re-imports). Uncategorised is the muted default; picking it clears the assignment. */
+function CategoryCell({
+  value,
+  onAssign,
+  pending,
+}: {
+  value: string;
+  onAssign: (category: string) => void;
+  pending: boolean;
+}) {
+  const isDefault = value === UNCATEGORISED;
+  return (
+    <select
+      value={value}
+      disabled={pending}
+      onChange={(e) => {
+        if (e.target.value !== value) onAssign(e.target.value);
+      }}
+      aria-label="Item category"
+      className={`w-[140px] rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 ${
+        isDefault ? "text-muted-foreground" : "text-foreground"
+      }`}
+    >
+      {ALL_CATEGORY_OPTIONS.map((c) => (
+        <option key={c} value={c}>{c}</option>
+      ))}
+    </select>
   );
 }
 

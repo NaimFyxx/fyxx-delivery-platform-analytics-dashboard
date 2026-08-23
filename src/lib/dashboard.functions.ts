@@ -14,7 +14,7 @@ import { createServerFn } from "@tanstack/react-start";
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -52,7 +52,14 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     supabaseAdmin
       .from("monthly_adjustments")
       .select("month,platform,deduction_type,amount"),
+    supabaseAdmin.from("item_categories").select("item_key,category"),
   ]);
+
+  // Canonical item name → assigned category. Missing item = Uncategorised (resolved in the UI).
+  const itemCategories: Record<string, string> = {};
+  for (const r of (catData.data ?? []) as { item_key: string; category: string }[]) {
+    itemCategories[r.item_key] = r.category;
+  }
 
   return {
     paceDaily: ((paceData.data ?? []) as { date: string; platform: string; sales_jod: number; orders: number | null }[]).map((r) => ({
@@ -123,6 +130,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       deductionType: r.deduction_type as string,
       amount: Number(r.amount),
     })),
+    itemCategories,
   };
 });
 
