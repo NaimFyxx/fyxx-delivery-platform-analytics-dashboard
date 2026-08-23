@@ -11,11 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Merge } from "lucide-react";
+import { Loader2, Merge, LineChart as LineChartIcon } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { fmtJOD, fmtInt, platformBg, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
-import { type RangeKey } from "@/lib/months";
+import { monthLabel, type RangeKey } from "@/lib/months";
 import { canonicalItemName, normalizeItemName, type CostRow, type DbAliasMap } from "@/lib/costs";
 import { aggregateItems } from "@/lib/items";
 import { loadDbAliases } from "@/lib/aliases";
@@ -27,10 +28,20 @@ export const Route = createFileRoute("/_authenticated/items")({
   component: Items,
 });
 
+/** JOD to 3 decimals (fils) — avg selling price lines up with the platform menu price (19.800). */
+const fmtJOD3 = (n: number) =>
+  new Intl.NumberFormat("en-JO", {
+    style: "currency",
+    currency: "JOD",
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  }).format(n);
 
 function Items() {
   const [platform, setPlatform] = useState<PlatformKey>("All");
   const [q, setQ] = useState("");
+  // Item whose monthly price history is open (canonical display name), plus its canonical key.
+  const [historyItem, setHistoryItem] = useState<{ label: string; key: string } | null>(null);
 
   const { data: months = [] } = useQuery({
     queryKey: ["item_sales_months"],
@@ -107,6 +118,19 @@ function Items() {
   const { data: dbAliases = {} } = useQuery({
     queryKey: ["item_aliases"],
     queryFn: loadDbAliases,
+    staleTime: 60_000,
+  });
+
+  // All-time monthly item sales — powers the per-item price history (independent of the range filter).
+  const { data: allSales = [] } = useQuery({
+    queryKey: ["monthly_item_sales_all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("monthly_item_sales")
+        .select("month,platform,item_name,units,revenue_jod");
+      if (error) throw error;
+      return data ?? [];
+    },
     staleTime: 60_000,
   });
 
@@ -204,7 +228,7 @@ function Items() {
         <EmptyState label={rangeLabel} />
       ) : (
       <Card className="p-0 overflow-hidden overflow-x-auto">
-        <Table className="min-w-[700px]">
+        <Table className="min-w-[820px]">
           <TableHeader>
             <TableRow className="align-bottom">
               <TableHead className="align-bottom h-auto py-2.5 leading-tight">Item</TableHead>
@@ -212,6 +236,7 @@ function Items() {
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Units<InfoTip id="units" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Talabat — sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Careem — sell price<InfoTip id="sell_price" side="bottom" /></TableHead>
+              <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Avg selling price (incl VAT)<InfoTip id="avg_selling_price" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Unit cost (ex-VAT)<InfoTip id="unit_cost" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Total COGS<InfoTip id="total_cogs" side="bottom" /></TableHead>
               <TableHead className="text-right align-bottom h-auto py-2.5 leading-tight whitespace-normal">Margin after commission %<InfoTip id="margin_after_commission" side="bottom" /></TableHead>
@@ -220,14 +245,27 @@ function Items() {
           <TableBody>
             {aggregated.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-12">
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-12">
                   No item sales for {rangeLabel}.
                 </TableCell>
               </TableRow>
             )}
             {aggregated.map((r) => (
               <TableRow key={r.item}>
-                <TableCell className="font-medium">{r.item}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    {r.item}
+                    <button
+                      type="button"
+                      onClick={() => setHistoryItem({ label: r.item, key: canonicalItemName(r.item, dbAliases) })}
+                      title="Avg selling price history"
+                      aria-label={`Price history for ${r.item}`}
+                      className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                    >
+                      <LineChartIcon className="size-3.5" />
+                    </button>
+                  </span>
+                </TableCell>
                 <TableCell className="space-x-1">
                   {Array.from(r.platforms).map((p) => (
                     <Badge key={p} variant="outline" className={platformBg(p as Platform)}>{p}</Badge>
@@ -247,6 +285,11 @@ function Items() {
                     ppUnits={r.perPlatform["Careem"]?.units ?? 0}
                     ppRevenue={r.perPlatform["Careem"]?.revenue ?? 0}
                   />
+                </TableCell>
+                <TableCell className="text-right text-num">
+                  {r.avgPrice != null && r.units > 0
+                    ? fmtJOD3(r.avgPrice)
+                    : <span className="text-muted-foreground">n/a</span>}
                 </TableCell>
                 <TableCell className="text-right text-num">
                   {r.lastCost == null
@@ -274,6 +317,13 @@ function Items() {
         </Table>
       </Card>
       )}
+
+      <PriceHistoryDialog
+        item={historyItem}
+        allSales={allSales}
+        dbAliases={dbAliases}
+        onClose={() => setHistoryItem(null)}
+      />
     </div>
   );
 }
@@ -392,6 +442,133 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+type SaleRow = { month: string; platform: string; item_name: string; units: number; revenue_jod: number | null };
+type HistRow = { month: string; label: string; talAvg: number | null; carAvg: number | null; combined: number | null };
+
+/** Monthly avg selling price (incl VAT) per platform for one canonical item, from stored item sales.
+ *  Monthly is the finest granularity the data supports, so a price change reads as a step. Combined
+ *  is a true blend (total sales ÷ total units), never the mean of the two platform averages. */
+function buildPriceHistory(allSales: SaleRow[], key: string, dbAliases: DbAliasMap): HistRow[] {
+  const byMonth = new Map<string, { tU: number; tR: number; cU: number; cR: number }>();
+  for (const s of allSales) {
+    if (canonicalItemName(s.item_name, dbAliases) !== key) continue;
+    const e = byMonth.get(s.month) ?? { tU: 0, tR: 0, cU: 0, cR: 0 };
+    const u = Number(s.units) || 0;
+    const rev = Number(s.revenue_jod ?? 0);
+    if (s.platform === "Talabat") { e.tU += u; e.tR += rev; }
+    else if (s.platform === "Careem") { e.cU += u; e.cR += rev; }
+    byMonth.set(s.month, e);
+  }
+  return Array.from(byMonth.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, e]) => {
+      const totU = e.tU + e.cU;
+      const totR = e.tR + e.cR;
+      return {
+        month,
+        label: monthLabel(month),
+        talAvg: e.tU > 0 ? e.tR / e.tU : null,
+        carAvg: e.cU > 0 ? e.cR / e.cU : null,
+        combined: totU > 0 ? totR / totU : null,
+      };
+    });
+}
+
+function PriceHistoryDialog({
+  item,
+  allSales,
+  dbAliases,
+  onClose,
+}: {
+  item: { label: string; key: string } | null;
+  allSales: SaleRow[];
+  dbAliases: DbAliasMap;
+  onClose: () => void;
+}) {
+  const history = useMemo(
+    () => (item ? buildPriceHistory(allSales, item.key, dbAliases) : []),
+    [item, allSales, dbAliases],
+  );
+  const cell = (v: number | null) =>
+    v != null ? fmtJOD3(v) : <span className="text-muted-foreground">n/a</span>;
+
+  return (
+    <Dialog open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{item?.label} price history</DialogTitle>
+          <DialogDescription>
+            Avg selling price (incl VAT) per month, from actual sales. Monthly is the finest
+            granularity stored, so a month spanning a price change shows a blend, not a clean step.
+          </DialogDescription>
+        </DialogHeader>
+
+        {history.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-8 text-center">
+            No item sales recorded for this item yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="h-[200px]">
+              <ResponsiveContainer>
+                <LineChart data={history} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                  <CartesianGrid stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                  <YAxis
+                    stroke="var(--muted-foreground)"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    width={44}
+                    tickFormatter={(v) => Number(v).toFixed(1)}
+                  />
+                  <RTooltip
+                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                    formatter={(v: number, name: string) => [fmtJOD3(Number(v)), name]}
+                  />
+                  <Line isAnimationActive={false} type="stepAfter" dataKey="talAvg" name="Talabat" stroke="#FF5A00" strokeWidth={2} dot={{ r: 3, fill: "#FF5A00" }} connectNulls={false} />
+                  <Line isAnimationActive={false} type="stepAfter" dataKey="carAvg" name="Careem" stroke="#1BD15D" strokeWidth={2} dot={{ r: 3, fill: "#1BD15D" }} connectNulls={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border">
+                    <th className="text-left font-medium px-3 py-2">Month</th>
+                    <th className="text-right font-medium px-3 py-2" style={{ color: "#FF5A00" }}>Talabat</th>
+                    <th className="text-right font-medium px-3 py-2" style={{ color: "#1BD15D" }}>Careem</th>
+                    <th className="text-right font-medium px-3 py-2">Combined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.month} className="border-b border-border last:border-0">
+                      <td className="px-3 py-1.5 font-medium whitespace-nowrap">{h.label}</td>
+                      <td className="px-3 py-1.5 text-right text-num">{cell(h.talAvg)}</td>
+                      <td className="px-3 py-1.5 text-right text-num">{cell(h.carAvg)}</td>
+                      <td className="px-3 py-1.5 text-right text-num font-semibold">{cell(h.combined)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Combined is a true blend: total sales divided by total units across both platforms, not
+              the average of the two platform figures.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

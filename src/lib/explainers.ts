@@ -104,6 +104,12 @@ export const EXPLAINERS: Record<string, Explainer> = {
     formula: "revenue ÷ units",
     example: "305 ÷ 30 ≈ 10.17 JOD.",
   },
+  avg_selling_price: {
+    label: "Avg selling price (incl VAT)",
+    meaning: "Average of actual sales in the period, not a set menu price. A period spanning a price change shows a blend.",
+    formula: "total sales ÷ total units (incl VAT), blended across platforms",
+    example: "combined; click the item's history icon for the monthly step.",
+  },
 
   // Pace tracker
   pace_pct: {
