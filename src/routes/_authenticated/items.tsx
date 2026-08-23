@@ -21,6 +21,7 @@ import { canonicalItemName, normalizeItemName, type CostRow, type DbAliasMap } f
 import { aggregateItems } from "@/lib/items";
 import { loadDbAliases } from "@/lib/aliases";
 import { loadItemCategories, categoryFor, ALL_CATEGORY_OPTIONS, UNCATEGORISED } from "@/lib/categories";
+import { AddProductDialog } from "@/components/fyxx/add-product-dialog";
 import { Segmented } from "../dashboard";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 
@@ -265,7 +266,8 @@ function Items() {
           ))}
         </select>
         <Input placeholder="Search items…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AddProductDialog />
           <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
         </div>
       </div>

@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, Trash2, Upload } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
+import { AddProductDialog } from "@/components/fyxx/add-product-dialog";
 import { parseCsv, parseDate, num, round3, isDelivered } from "@/lib/csv-import";
 
 export const Route = createFileRoute("/_authenticated/entry")({
@@ -26,7 +28,12 @@ export const Route = createFileRoute("/_authenticated/entry")({
 function Entry() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader title="Data entry" description="Pace tracker entries feed the pace bar only — they are separate from imported data. Item costs, menu prices and targets are also entered here." />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader title="Data entry" description="Pace tracker entries feed the pace bar only — they are separate from imported data. Item costs, menu prices and targets are also entered here." />
+        <div className="pt-1 shrink-0">
+          <AddProductDialog />
+        </div>
+      </div>
       <Tabs defaultValue="daily">
         <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
           <TabsTrigger value="daily">Pace tracker</TabsTrigger>
@@ -48,6 +55,26 @@ function Entry() {
 function useInvalidateAll() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries();
+}
+
+/** Every item name the dashboard knows about (costs, prices, sales), so existing items —
+ *  including sales-only items with no cost yet — stay selectable. New items are created
+ *  through the Add product form, not by typing into these dropdowns. */
+function useAllItemNames() {
+  return useQuery({
+    queryKey: ["entry_item_names"],
+    queryFn: async () => {
+      const [c, p, s] = await Promise.all([
+        supabase.from("item_costs").select("item_name"),
+        supabase.from("item_prices").select("item_name"),
+        supabase.from("monthly_item_sales").select("item_name"),
+      ]);
+      const set = new Set<string>();
+      for (const r of [...(c.data ?? []), ...(p.data ?? []), ...(s.data ?? [])]) set.add(r.item_name);
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    },
+    staleTime: 30_000,
+  });
 }
 
 /* ---------- Pace tracker (manual daily sales — feeds pace bar only) ---------- */
@@ -501,21 +528,15 @@ function PaceCsvImport({ onImported }: { onImported: () => void }) {
 /* ---------- Menu prices ---------- */
 function MenuPricesForm() {
   const [item, setItem] = useState("");
-  const [mode, setMode] = useState<"existing" | "new">("existing");
+  // Menu price is usually the same on both platforms, so default to writing both at once.
+  const [both, setBoth] = useState(true);
   const [platform, setPlatform] = useState<Platform>("Talabat");
   const [price, setPrice] = useState("");
   const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
   const [q, setQ] = useState("");
   const invalidate = useInvalidateAll();
 
-  const { data: costRows = [] } = useQuery({
-    queryKey: ["entry_costs_names"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("item_costs").select("item_name").order("item_name");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const { data: itemNames = [] } = useAllItemNames();
 
   const { data: priceRows = [] } = useQuery({
     queryKey: ["entry_item_prices"],
@@ -525,14 +546,6 @@ function MenuPricesForm() {
       return data ?? [];
     },
   });
-
-  const itemNames = useMemo(
-    () => Array.from(new Set([
-      ...costRows.map((r: { item_name: string }) => r.item_name),
-      ...priceRows.map((r) => r.item_name),
-    ])).sort() as string[],
-    [costRows, priceRows],
-  );
 
   const today = new Date().toISOString().slice(0, 10);
   const currentIds = useMemo(() => {
@@ -550,12 +563,19 @@ function MenuPricesForm() {
     mutationFn: async () => {
       const name = item.trim();
       if (!name) throw new Error("Item name is required");
-      const { error } = await supabase.from("item_prices").insert({
-        item_name: name, platform, price_incl_vat: Number(price), effective_from: from,
-      });
+      const targets: Platform[] = both ? [...PLATFORMS] : [platform];
+      const { error } = await supabase.from("item_prices").insert(
+        targets.map((p) => ({
+          item_name: name, platform: p, price_incl_vat: Number(price), effective_from: from,
+        })),
+      );
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Price version added"); setPrice(""); invalidate(); },
+    onSuccess: () => {
+      toast.success(both ? "Price version added for both platforms" : "Price version added");
+      setPrice("");
+      invalidate();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -571,25 +591,24 @@ function MenuPricesForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
-        <p className="text-xs text-muted-foreground mb-3">Each save adds a new version. The Items table shows the price effective as of the selected month.</p>
+        <p className="text-xs text-muted-foreground mb-1">Each save adds a new version. The Items table shows the price effective as of the selected month. To add a brand new product, use “Add product” above.</p>
+        <ApplyBothToggle both={both} onChange={setBoth} label="Apply this price to both platforms" />
         <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Item name">
-            {mode === "existing" ? (
-              <Select value={item} onValueChange={(v) => { if (v === "__new__") { setMode("new"); setItem(""); } else setItem(v); }}>
-                <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
-                <SelectContent>
-                  {itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                  <SelectItem value="__new__" className="text-primary">+ Add new item</SelectItem>
-                </SelectContent>
-              </Select>
+            <Select value={item} onValueChange={setItem}>
+              <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+              <SelectContent>
+                {itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Platform">
+            {both ? (
+              <div className="h-10 flex items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground">Talabat + Careem</div>
             ) : (
-              <div className="flex gap-2">
-                <Input value={item} onChange={(e) => setItem(e.target.value)} required placeholder="New item name" autoFocus />
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode("existing"); setItem(""); }}>Cancel</Button>
-              </div>
+              <PlatformSelect value={platform} onChange={setPlatform} />
             )}
           </Field>
-          <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
           <Field label="Price (incl VAT, JOD)"><Input type="number" step="0.001" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required /></Field>
           <Field label="Effective from"><DatePicker value={from} onChange={setFrom} /></Field>
           <SubmitBtn pending={save.isPending} />
@@ -634,10 +653,11 @@ function MenuPricesForm() {
 /* ---------- Item costs (versioned) ---------- */
 function ItemCostsForm() {
   const [item, setItem] = useState("");
-  const [mode, setMode] = useState<"existing" | "new">("existing");
   const [cost, setCost] = useState("");
   const [from, setFrom] = useState(new Date().toISOString().slice(0, 10));
   const invalidate = useInvalidateAll();
+
+  const { data: itemNames = [] } = useAllItemNames();
 
   const [q, setQ] = useState("");
   const { data: rows = [] } = useQuery({
@@ -685,36 +705,18 @@ function ItemCostsForm() {
     return new Set(Array.from(byItem.values()).map((v) => v.id));
   }, [rows, today]);
 
-  const itemNames = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.item_name))).sort((a, b) => a.localeCompare(b));
-  }, [rows]);
-
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
-        <p className="text-xs text-muted-foreground mb-3">Each save adds a new version. The dashboard uses the latest version on or before the requested month.</p>
+        <p className="text-xs text-muted-foreground mb-3">Each save adds a new version. The dashboard uses the latest version on or before the requested month. Cost is shared across both platforms. To add a brand new product, use “Add product” above.</p>
         <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Item name">
-            {mode === "existing" ? (
-              <Select
-                value={item}
-                onValueChange={(v) => {
-                  if (v === "__new__") { setMode("new"); setItem(""); }
-                  else setItem(v);
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
-                <SelectContent>
-                  {itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                  <SelectItem value="__new__" className="text-primary">+ Add new item</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="flex gap-2">
-                <Input value={item} onChange={(e) => setItem(e.target.value)} required placeholder="New item name" autoFocus />
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode("existing"); setItem(""); }}>Cancel</Button>
-              </div>
-            )}
+            <Select value={item} onValueChange={setItem}>
+              <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+              <SelectContent>
+                {itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Cost (ex-VAT, JOD)"><Input type="number" step="0.0001" min="0" value={cost} onChange={(e) => setCost(e.target.value)} required /></Field>
           <Field label="Effective from"><DatePicker value={from} onChange={setFrom} /></Field>
@@ -759,8 +761,9 @@ function ItemCostsForm() {
 /* ---------- Targets ---------- */
 function TargetsForm() {
   const [month, setMonth] = useState(currentMonth());
-  const [platform, setPlatform] = useState<Platform>("Talabat");
-  const [salesT, setSalesT] = useState("");
+  // Targets differ per platform, so both are entered together in one pass.
+  const [talT, setTalT] = useState("");
+  const [carT, setCarT] = useState("");
   const invalidate = useInvalidateAll();
 
   const filter = useListFilter();
@@ -778,16 +781,23 @@ function TargetsForm() {
   );
   const filtered = applyListFilter(rows, filter, (r) => r.month);
 
+  // Show the currently saved target for the chosen month as a placeholder on each field.
+  const currentFor = (p: Platform) => {
+    const r = rows.find((x) => x.month === month && x.platform === p);
+    return r ? `current: ${fmtInt(Number(r.sales_target_jod))}` : "0.000";
+  };
+
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("targets").upsert(
-        { month, platform, sales_target_jod: Number(salesT) },
-        { onConflict: "month,platform" },
-      );
+      const payload: { month: string; platform: Platform; sales_target_jod: number }[] = [];
+      if (talT.trim() !== "") payload.push({ month, platform: "Talabat", sales_target_jod: Number(talT) });
+      if (carT.trim() !== "") payload.push({ month, platform: "Careem", sales_target_jod: Number(carT) });
+      if (payload.length === 0) throw new Error("Enter a target for at least one platform");
+      const { error } = await supabase.from("targets").upsert(payload, { onConflict: "month,platform" });
       if (error) throw error;
-      await logImport({ platform, report_type: "invoice", file_name: `target: ${month}` });
+      await logImport({ platform: "—", report_type: "invoice", file_name: `target: ${month}` });
     },
-    onSuccess: () => { toast.success("Saved"); setSalesT(""); invalidate(); },
+    onSuccess: () => { toast.success("Targets saved"); setTalT(""); setCarT(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -803,10 +813,11 @@ function TargetsForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
+        <p className="text-xs text-muted-foreground mb-3">Enter both platforms in one pass. Leave a field blank to keep that platform's current target unchanged.</p>
         <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
-          <Field label="Platform"><PlatformSelect value={platform} onChange={setPlatform} /></Field>
-          <Field label="Sales target (JOD)"><Input type="number" step="0.001" min="0" value={salesT} onChange={(e) => setSalesT(e.target.value)} required /></Field>
+          <Field label="Talabat target (JOD)"><Input type="number" step="0.001" min="0" value={talT} onChange={(e) => setTalT(e.target.value)} placeholder={currentFor("Talabat")} /></Field>
+          <Field label="Careem target (JOD)"><Input type="number" step="0.001" min="0" value={carT} onChange={(e) => setCarT(e.target.value)} placeholder={currentFor("Careem")} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
@@ -835,6 +846,15 @@ function PlatformSelect({ value, onChange }: { value: Platform; onChange: (v: Pl
       <SelectTrigger><SelectValue /></SelectTrigger>
       <SelectContent>{PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
     </Select>
+  );
+}
+/** Shared "write to both platforms at once" switch for same-value per-platform entries. */
+function ApplyBothToggle({ both, onChange, label }: { both: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2 mb-3 max-w-sm">
+      <Label className="text-xs cursor-pointer">{label}</Label>
+      <Switch checked={both} onCheckedChange={onChange} />
+    </div>
   );
 }
 function SubmitBtn({ pending }: { pending: boolean }) {
