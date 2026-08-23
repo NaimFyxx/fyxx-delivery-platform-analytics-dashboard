@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Merge, LineChart as LineChartIcon } from "lucide-react";
+import { Loader2, Merge, LineChart as LineChartIcon, Trash2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
@@ -122,6 +122,8 @@ function Items() {
   const qc = useQueryClient();
   // Item whose monthly price history is open (canonical display name), plus its canonical key.
   const [historyItem, setHistoryItem] = useState<{ label: string; key: string } | null>(null);
+  // Catalogue item pending deletion (display name + canonical key).
+  const [deleteTarget, setDeleteTarget] = useState<{ label: string; canon: string } | null>(null);
 
   const { data: months = [] } = useQuery({
     queryKey: ["item_sales_months"],
@@ -410,6 +412,17 @@ function Items() {
                         no sales yet
                       </Badge>
                     )}
+                    {r.zeroSales && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget({ label: r.item, canon: canonicalItemName(r.item, dbAliases) })}
+                        title="Delete item"
+                        aria-label={`Delete ${r.item}`}
+                        className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
                   </span>
                 </TableCell>
                 <TableCell className="space-x-1">
@@ -478,6 +491,16 @@ function Items() {
         allSales={allSales}
         dbAliases={dbAliases}
         onClose={() => setHistoryItem(null)}
+      />
+
+      <DeleteItemDialog
+        target={deleteTarget}
+        costs={costs}
+        prices={prices}
+        allSales={allSales}
+        catMap={catMap}
+        dbAliases={dbAliases}
+        onClose={() => setDeleteTarget(null)}
       />
     </div>
   );
@@ -597,6 +620,120 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Hard-delete a zero-sales catalogue item (its cost, price and category rows). Guarded: an
+ *  item with ANY sales history is blocked, since removing it would corrupt historical reports.
+ *  Grouped by canonical name, so option variants like "(With Salad)" delete independently of
+ *  the base item. Only deletes rows; no importer, margin, VAT or cost-evaluation logic. */
+function DeleteItemDialog({
+  target,
+  costs,
+  prices,
+  allSales,
+  catMap,
+  dbAliases,
+  onClose,
+}: {
+  target: { label: string; canon: string } | null;
+  costs: { id: string; item_name: string }[];
+  prices: { id: string; item_name: string; platform: string }[];
+  allSales: SaleRow[];
+  catMap: CategoryMap;
+  dbAliases: DbAliasMap;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const canon = target?.canon ?? "";
+
+  const costRowsInGroup = useMemo(
+    () => costs.filter((c) => canonicalItemName(c.item_name, dbAliases) === canon),
+    [costs, canon, dbAliases],
+  );
+  const priceRowsInGroup = useMemo(
+    () => prices.filter((p) => canonicalItemName(p.item_name, dbAliases) === canon),
+    [prices, canon, dbAliases],
+  );
+  const salesCount = useMemo(
+    () => allSales.filter((s) => canonicalItemName(s.item_name, dbAliases) === canon).length,
+    [allSales, canon, dbAliases],
+  );
+
+  const costNames = Array.from(new Set(costRowsInGroup.map((c) => c.item_name)));
+  const priceNames = Array.from(new Set(priceRowsInGroup.map((p) => p.item_name)));
+  const catCount = canon && catMap[canon] ? 1 : 0;
+  const blocked = salesCount > 0;
+
+  const del = useMutation({
+    mutationFn: async () => {
+      if (blocked) throw new Error("Item has sales history and cannot be deleted");
+      if (costNames.length) {
+        const { error } = await supabase.from("item_costs").delete().in("item_name", costNames);
+        if (error) throw error;
+      }
+      if (priceNames.length) {
+        const { error } = await supabase.from("item_prices").delete().in("item_name", priceNames);
+        if (error) throw error;
+      }
+      if (catCount) {
+        const { error } = await supabase.from("item_categories").delete().eq("item_key", canon);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success(`Deleted “${target?.label}”`);
+      [
+        "item_costs", "item_prices", "item_categories", "all_item_names", "monthly_item_sales_all",
+        "entry_costs", "entry_item_prices", "entry_item_names", "all_item_canon", "item_sales_months",
+      ].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={!!target} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete item</DialogTitle>
+          <DialogDescription>
+            {blocked
+              ? "This item has sales history, so it cannot be deleted."
+              : "This permanently removes the item from the catalogue and cannot be undone."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {blocked ? (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+            <strong>{target?.label}</strong> has {salesCount} sales {salesCount === 1 ? "record" : "records"} in the
+            history. Deleting it would corrupt historical reports, so it is kept. You can still change its cost,
+            price or category from Data entry.
+          </div>
+        ) : (
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-sm">
+            <p>This will permanently delete <strong>{target?.label}</strong>:</p>
+            <ul className="mt-1.5 list-disc pl-5 text-muted-foreground text-xs space-y-0.5">
+              <li>{costRowsInGroup.length} cost {costRowsInGroup.length === 1 ? "row" : "rows"}</li>
+              <li>{priceRowsInGroup.length} price {priceRowsInGroup.length === 1 ? "row" : "rows"}</li>
+              <li>{catCount} category {catCount === 1 ? "row" : "rows"}</li>
+            </ul>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={onClose} disabled={del.isPending}>
+            {blocked ? "Close" : "Cancel"}
+          </Button>
+          {!blocked && (
+            <Button variant="destructive" disabled={del.isPending} onClick={() => del.mutate()}>
+              {del.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
+              Delete item
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
