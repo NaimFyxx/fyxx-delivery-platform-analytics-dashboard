@@ -477,6 +477,8 @@ function PublicDashboard() {
         </ChartCard>
 
         {salesTrend.length >= 1 && (
+          <>
+          <SectionLabel>Total Sales · Monthly</SectionLabel>
           <ChartCard
             title="Total sales over time"
             sub={
@@ -489,7 +491,7 @@ function PublicDashboard() {
               <LineChart data={salesTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => fmtJOD0(v)} />
+                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(Number(v)).toLocaleString()} />
                 <Tooltip content={<SalesTrendTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {salesFloor && (
@@ -508,6 +510,7 @@ function PublicDashboard() {
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
+          </>
         )}
 
         {allMonthAggs.length >= 2 && (
