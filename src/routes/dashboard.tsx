@@ -328,6 +328,56 @@ function PublicDashboard() {
     });
   }, [data, rangeIsSingleMonth, rangeMonths, monthAggs, platforms, currentMonth, today]);
 
+  // Total sales over time: one point per month = combined gross incl VAT, reusing monthAggs
+  // (the exact aggregation behind Sales by Platform), so it reconciles to that chart. Respects
+  // the range + platform filters. The in-progress month is flagged so it can render as partial
+  // and be excluded from the moving average and the running-minimum floor.
+  const salesTrend = useMemo(() => {
+    if (!data) return [];
+    // Per-month combined total computed exactly like the Sales by Platform bars (per-platform
+    // financials gross, falling back to summed daily), so each point reconciles to that chart.
+    const base = rangeMonths.map((m) => {
+      const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
+      const talabat = finRows.filter((r) => r.platform === "Talabat").reduce((s, r) => s + r.gross, 0) ||
+        data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Talabat" && platforms.includes("Talabat")).reduce((s, d) => s + d.sales, 0);
+      const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
+        data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
+      const total = (platforms.includes("Talabat") ? talabat : 0) + (platforms.includes("Careem") ? careem : 0);
+      return { month: m, label: monthLabel(m), total, partial: m === currentMonth };
+    });
+    const completed = base.filter((r) => !r.partial);
+    const rows = base.map((r) => {
+      let avg3: number | null = null;
+      if (!r.partial) {
+        const idx = completed.findIndex((c) => c.month === r.month);
+        // 3-month moving average over completed months only, from the third month onward.
+        if (idx >= 2) avg3 = (completed[idx].total + completed[idx - 1].total + completed[idx - 2].total) / 3;
+      }
+      return {
+        ...r,
+        totalSolid: r.partial ? null : (r.total as number | null),
+        totalPartial: null as number | null,
+        avg3,
+      };
+    });
+    // Dashed connector into the in-progress month: anchor it to the previous point.
+    const pIdx = rows.findIndex((r) => r.partial);
+    if (pIdx >= 0) {
+      rows[pIdx].totalPartial = rows[pIdx].total;
+      if (pIdx > 0) rows[pIdx - 1].totalPartial = rows[pIdx - 1].total;
+    }
+    return rows;
+  }, [data, rangeMonths, platforms, currentMonth]);
+
+  // Running-minimum floor over completed months in the visible range (excludes in-progress).
+  const salesFloor = useMemo(() => {
+    const completed = salesTrend.filter((r) => !r.partial);
+    if (completed.length < 2) return null;
+    let min = completed[0];
+    for (const r of completed) if (r.total < min.total) min = r;
+    return { value: min.total, label: min.label };
+  }, [salesTrend]);
+
   if (!sessionChecked || isLoading || !data) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
@@ -425,6 +475,40 @@ function PublicDashboard() {
             </ComposedChart>
           </ResponsiveContainer>
         </ChartCard>
+
+        {salesTrend.length >= 1 && (
+          <ChartCard
+            title="Total sales over time"
+            sub={
+              platform === "All"
+                ? "Combined monthly gross incl VAT (Talabat + Careem), same basis as the chart above"
+                : `${platform} monthly gross incl VAT, same basis as the chart above`
+            }
+          >
+            <ResponsiveContainer>
+              <LineChart data={salesTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                <CartesianGrid stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => fmtJOD0(v)} />
+                <Tooltip content={<SalesTrendTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {salesFloor && (
+                  <ReferenceLine
+                    y={salesFloor.value}
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="6 4"
+                    label={{ value: `Floor ${fmtJOD0(salesFloor.value)} (${salesFloor.label})`, fill: "var(--muted-foreground)", fontSize: 10, position: "insideBottomRight" }}
+                  />
+                )}
+                <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3.5, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress" stroke="var(--primary)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} legendType="none" />
+                {salesTrend.some((r) => r.avg3 !== null) && (
+                  <Line isAnimationActive={false} type="monotone" dataKey="avg3" name="3-month average" stroke="#C8B89B" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        )}
 
         {allMonthAggs.length >= 2 && (
           <>
@@ -974,6 +1058,32 @@ const tooltipStyle = {
   },
   labelStyle: { color: "var(--foreground)" },
 };
+
+/** Hollow dot drawn only on the in-progress month of the Total sales trend, so a partial month
+ *  reads as awaiting data rather than a completed point. */
+function PartialDot(props: { cx?: number; cy?: number; payload?: { partial?: boolean } }) {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null || !payload?.partial) return <g />;
+  return <circle cx={cx} cy={cy} r={4} fill="var(--card)" stroke="var(--primary)" strokeWidth={2} />;
+}
+
+/** Tooltip for the Total sales trend: month, exact combined total, and the 3-month average. */
+function SalesTrendTooltip({ active, payload }: {
+  active?: boolean;
+  payload?: { payload: { label: string; total: number; partial: boolean; avg3: number | null } }[];
+}) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div style={{ ...tooltipStyle.contentStyle, padding: "6px 10px" }}>
+      <div style={{ fontWeight: 600, color: "var(--foreground)" }}>
+        {p.label}{p.partial ? " (in progress)" : ""}
+      </div>
+      <div style={{ color: "var(--foreground)" }}>{fmtJOD0(p.total)} JOD</div>
+      {p.avg3 != null && <div style={{ color: "#C8B89B" }}>3-month avg {fmtJOD0(p.avg3)} JOD</div>}
+    </div>
+  );
+}
 
 // ---------- math ----------
 export function sum(rows: { gross: number; payout: number; cogs: number; orders: number }[]) {
