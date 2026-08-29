@@ -8,6 +8,7 @@
 import { exVat } from "./fyxx";
 import { cogsFor, canonicalItemName, normalizeItemName, type DbAliasMap } from "./costs";
 import { categoryFor } from "./categories";
+import { TGR_LOGO, TALABAT_LOGO, CAREEM_LOGO } from "./report-logos";
 import type { DashboardData } from "./dashboard.functions";
 
 const PLATFORMS = ["Talabat", "Careem"] as const;
@@ -251,10 +252,12 @@ const REPORT_CSS = `
   @media print { html, body { background:#fff; } .page { margin:0; box-shadow:none; } }
   .head { border-bottom:1.5px solid var(--green); padding-bottom:2.8mm; }
   .headtop { display:flex; justify-content:space-between; align-items:center; }
-  .brandlock { display:flex; align-items:center; gap:3mm; }
-  .badge { width:12mm; height:12mm; flex:0 0 auto; }
-  .wordmark { font-family:"Baskervville", Georgia, serif; font-size:19pt; letter-spacing:.2px; line-height:1; color:var(--green); }
-  .wordmark .u { color:var(--yellow); }
+  .brandlock { display:flex; align-items:center; gap:2.6mm; }
+  .brandlock img { display:block; width:auto; flex:0 0 auto; }
+  .tgrlogo { height:9mm; }
+  .platlogo { height:4.5mm; }
+  .brandlock .x { font-size:9pt; color:var(--grey); line-height:1; }
+  .rowlogo { height:2.9mm; width:auto; margin-right:2mm; vertical-align:middle; }
   .eyebrow { font-family:"Syne", sans-serif; font-weight:800; font-size:6.5pt; letter-spacing:2px; text-transform:uppercase; color:var(--grey); }
   .head .eyebrow { white-space:nowrap; text-align:right; line-height:1.7; }
   .head .eyebrow b { color:var(--green); }
@@ -322,8 +325,9 @@ export function renderReportHtml(m: ReportModel): string {
   const moneyRows = m.money.map((r) =>
     `<tr><td class="${r.cls}">${r.label}</td><td${r.cls.includes("sub") ? ' class="sub"' : ""}>${r.month}</td><td${r.cls.includes("sub") ? ' class="sub"' : ""}>${r.ytd}</td></tr>`,
   ).join("");
+  const platLogo = (name: string) => (name === "Talabat" ? TALABAT_LOGO : CAREEM_LOGO);
   const platRows = m.byPlatform.map((p) =>
-    `<tr><td class="name"><span class="dot" style="background:${p.color}"></span>${p.name}</td><td>${p.gross}</td><td>${p.netProfit}</td><td>${p.margin}</td></tr>`,
+    `<tr><td class="name"><img class="rowlogo" src="${platLogo(p.name)}" alt="${p.name}">${p.name}</td><td>${p.gross}</td><td>${p.netProfit}</td><td>${p.margin}</td></tr>`,
   ).join("");
 
   return `<!DOCTYPE html>
@@ -341,12 +345,11 @@ export function renderReportHtml(m: ReportModel): string {
   <header class="head">
     <div class="headtop">
       <div class="brandlock">
-        <svg class="badge" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="23" fill="#092727"/>
-          <circle cx="24" cy="24" r="19.5" fill="none" stroke="#EEC36A" stroke-width="0.8"/>
-          <text x="24" y="29.5" text-anchor="middle" font-family="Baskervville, Georgia, serif" font-size="15" fill="#f4efe7" font-style="italic">TGR</text>
-        </svg>
-        <div class="wordmark">The Green Room</div>
+        <img class="tgrlogo" src="${TGR_LOGO}" alt="The Green Room">
+        <span class="x">×</span>
+        <img class="platlogo" src="${TALABAT_LOGO}" alt="Talabat">
+        <span class="x">×</span>
+        <img class="platlogo" src="${CAREEM_LOGO}" alt="Careem">
       </div>
       <div class="eyebrow">Talabat &amp; Careem Delivery<br><b>Monthly Performance Report</b></div>
     </div>
