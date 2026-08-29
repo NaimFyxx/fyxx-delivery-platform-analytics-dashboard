@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { loadDbAliases } from "@/lib/aliases";
 import { exportReportPdf } from "@/lib/report";
@@ -34,13 +33,11 @@ export function ExportReportButton({
   });
   const [busy, setBusy] = useState(false);
 
-  async function onClick() {
+  function onClick() {
     if (!data) return;
     setBusy(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      const preparedBy = (u.user?.user_metadata?.display_name as string) || u.user?.email || "";
-      const res = exportReportPdf(data, dbAliases, preparedBy);
+      const res = exportReportPdf(data, dbAliases, "Naím Aljada");
       if (!res.ok) toast.error(res.error ?? "Could not generate the report");
     } catch (e) {
       toast.error((e as Error).message);

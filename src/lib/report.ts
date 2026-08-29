@@ -195,7 +195,7 @@ export function buildReportModel(
     headerMonth: `${monthLong(monthKey)} ${year}`,
     periodLine: `1 to ${lastDay} ${monthLong(monthKey)} ${year}`,
     issued: `${now.getDate()} ${now.toLocaleString("en-US", { month: "long" })} ${now.getFullYear()}`,
-    preparedBy: opts?.preparedBy || "TGR Delivery Dashboard",
+    preparedBy: opts?.preparedBy || "Naím Aljada",
     monthShort: monthLong(monthKey),
     ytdLabel: `YTD ${year}`,
     highlight,
@@ -213,6 +213,8 @@ export function buildReportModel(
       { label: "Net sales (NSV)", month: money2(month.netSales), ytd: money2(ytd.netSales), cls: "name" },
       { label: "Less: commissions &amp; fees", month: paren(month.commFees), ytd: paren(ytd.commFees), cls: "name sub" },
       { label: "Payout received", month: money2(month.payout), ytd: money2(ytd.payout), cls: "name" },
+      { label: "Less: VAT", month: paren(month.payout - month.payoutExVat), ytd: paren(ytd.payout - ytd.payoutExVat), cls: "name sub" },
+      { label: "Payout ex-VAT", month: money2(month.payoutExVat), ytd: money2(ytd.payoutExVat), cls: "name" },
       { label: "Less: cost of goods", month: paren(month.cogs), ytd: paren(ytd.cogs), cls: "name sub" },
     ],
     monthNet: money2(month.netProfit),
@@ -366,8 +368,8 @@ export function renderReportHtml(m: ReportModel): string {
     <div class="reach">
       <div class="kpi"><div class="n">${m.kpi.gross} <small>JOD</small></div><div class="l">Gross sales <b>&middot; Talabat ${m.kpi.splitTal} &middot; Careem ${m.kpi.splitCar}</b></div></div>
       <div class="kpi"><div class="n">${m.kpi.netProfit} <small>JOD</small></div><div class="l">Net profit kept after all fees and cost</div></div>
-      <div class="kpi"><div class="n">${m.kpi.netMargin}<small>%</small></div><div class="l">Net margin <b>on payout, after commission</b></div></div>
-      <div class="kpi"><div class="n">${m.kpi.prodMargin}<small>%</small></div><div class="l">Product margin on menu price, before fees</div></div>
+      <div class="kpi"><div class="n">${m.kpi.netMargin}<small>%</small></div><div class="l">Net margin <b>on ex-VAT payout, after commission</b></div></div>
+      <div class="kpi"><div class="n">${m.kpi.prodMargin}<small>%</small></div><div class="l">Product margin on menu price, before discounts and fees</div></div>
     </div>
   </section>
 
@@ -382,7 +384,7 @@ export function renderReportHtml(m: ReportModel): string {
           <tr class="mg"><td class="name">Net margin</td><td>${m.moneyMonthMargin}</td><td>${m.moneyYtdMargin}</td></tr>
         </tbody>
       </table>
-      <p class="plnote">Net profit is the platform payout after all commissions and fees, VAT-stripped per the company margin formula, less cost of goods. It is the delivery-channel contribution and excludes TGR internal overheads (staff, rent, packaging).</p>
+      <p class="plnote">Net profit is the delivery-channel contribution and excludes TGR internal overheads (staff, rent, packaging).</p>
     </section>
 
     <section>
