@@ -17,8 +17,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 import { fmtJOD, fmtPct, exVat, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
-import { type RangeKey } from "@/lib/months";
+import { monthLabel, type RangeKey } from "@/lib/months";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 import { cogsFor } from "@/lib/costs";
 import { loadDbAliases } from "@/lib/aliases";
@@ -118,6 +120,42 @@ function Financials() {
   const totalMargin = totals.payoutExVat > 0 ? totals.profit / totals.payoutExVat : 0;
   const totalNetSalesExVat = exVat(totals.netSales);
 
+  // Client-side CSV of exactly the rows/totals shown, for the active range + platform filters.
+  // JOD to 3 decimals (fils), percentages as displayed, ISO month. No figure is recomputed.
+  function exportCsv() {
+    const jod = (n: number) => n.toFixed(3);
+    const headers = [
+      "Month", "Platform", "Gross (incl VAT)", "Discount", "Net sales",
+      "Actual payout", "Platform fee %", "COGS", "Net profit", "Net margin",
+    ];
+    const body = rowData.map((d) => [
+      d.r.month, d.r.platform, jod(d.gross), jod(d.discount), jod(d.netSales),
+      jod(d.payout), fmtPct(d.fee), jod(d.cogs), jod(d.profit), fmtPct(d.margin),
+    ]);
+    const totalsRow = [
+      "TOTALS", "", jod(totals.gross), jod(totals.discount), jod(totals.netSales),
+      jod(totals.payout), fmtPct(totalFee), jod(totals.cogs), jod(totals.profit), fmtPct(totalMargin),
+    ];
+    const csv = [headers, ...body, totalsRow].map((row) => row.map(csvCell).join(",")).join("\r\n");
+
+    const short = (m: string) => monthLabel(m).toLowerCase().replace(/\s+/g, "");
+    const first = rangeMonths[0];
+    const last = rangeMonths[rangeMonths.length - 1];
+    const rangeToken = first === last ? short(first) : `${short(first)}-${short(last)}`;
+    const platToken = platformFilter === "All" ? "" : `-${platformFilter.toLowerCase()}`;
+    const filename = `fyxx-financials${platToken}-${rangeToken}.csv`;
+
+    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <PageHeader
@@ -154,6 +192,15 @@ function Financials() {
           value={platformFilter}
           onChange={(v) => setPlatformFilter(v as PlatformKey)}
         />
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={exportCsv}
+          disabled={rows.length === 0}
+        >
+          <Download className="size-3.5 mr-1.5" /> Export CSV
+        </Button>
       </div>
 
       {rows.length === 0 ? (
@@ -248,6 +295,14 @@ function Financials() {
       )}
     </div>
   );
+}
+
+/** UTF-8 byte-order mark so Excel opens the CSV as UTF-8. */
+const BOM = "﻿";
+
+/** Quote a CSV cell when it contains a comma, quote or newline (RFC 4180). */
+function csvCell(v: string): string {
+  return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
 function AnomalyNote({ gross, discount, payout, cogs }: { gross: number; discount: number; payout: number; cogs: number }) {
