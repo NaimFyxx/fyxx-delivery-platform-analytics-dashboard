@@ -384,7 +384,7 @@ export function renderReportHtml(m: ReportModel): string {
           <tr class="mg"><td class="name">Net margin</td><td>${m.moneyMonthMargin}</td><td>${m.moneyYtdMargin}</td></tr>
         </tbody>
       </table>
-      <p class="plnote">Net profit is the delivery-channel contribution and excludes TGR internal overheads (staff, rent, packaging).</p>
+      <p class="plnote">Commissions &amp; fees includes platform commission, payment fees, and platform advertising, loyalty and promo-sharing charges. Net profit is the delivery-channel contribution and excludes TGR internal overheads (staff, rent, packaging).</p>
     </section>
 
     <section>
