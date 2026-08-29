@@ -37,7 +37,7 @@ export function ExportReportButton({
     if (!data) return;
     setBusy(true);
     try {
-      const res = exportReportPdf(data, dbAliases, "Naím Aljada");
+      const res = exportReportPdf(data, dbAliases, "Lori Ketchijian");
       if (!res.ok) toast.error(res.error ?? "Could not generate the report");
     } catch (e) {
       toast.error((e as Error).message);
