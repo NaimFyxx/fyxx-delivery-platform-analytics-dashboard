@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExportReportButton } from "@/components/fyxx/export-report-button";
 import { Download } from "lucide-react";
 import { fmtJOD, fmtPct, exVat, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { monthLabel, type RangeKey } from "@/lib/months";
@@ -192,15 +193,17 @@ function Financials() {
           value={platformFilter}
           onChange={(v) => setPlatformFilter(v as PlatformKey)}
         />
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={exportCsv}
-          disabled={rows.length === 0}
-        >
-          <Download className="size-3.5 mr-1.5" /> Export CSV
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <ExportReportButton />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+          >
+            <Download className="size-3.5 mr-1.5" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       {rows.length === 0 ? (

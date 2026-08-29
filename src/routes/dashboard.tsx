@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
+import { ExportReportButton } from "@/components/fyxx/export-report-button";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
@@ -423,6 +424,7 @@ function PublicDashboard() {
             value={platform}
             onChange={(v) => setPlatform(v as PlatformKey)}
           />
+          <ExportReportButton className="ml-auto" />
         </div>
 
         {/* PACE TRACKER — always current month, always all platforms, ignores all filters */}
