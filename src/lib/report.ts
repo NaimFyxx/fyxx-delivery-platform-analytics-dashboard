@@ -121,19 +121,38 @@ function bestGroup(
   };
 }
 
-/** Build the report model, or null if there is no completed month of data yet. */
+/**
+ * Complete calendar months that have financials data (excludes the in-progress month).
+ * Sorted ascending. This is the exact set the report month can be, so the picker offers it.
+ */
+export function completeMonths(data: DashboardData, now?: Date): string[] {
+  const n = now ?? new Date();
+  const curCalMonth = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  return Array.from(new Set(data.financials.map((f) => f.month)))
+    .sort()
+    .filter((m) => m < curCalMonth);
+}
+
+/** Build the report model. Returns null if there is no completed month, or if an explicit
+ *  monthKey is given that is not a valid completed month. */
 export function buildReportModel(
   data: DashboardData,
   dbAliases: DbAliasMap,
-  opts?: { now?: Date; preparedBy?: string },
+  opts?: { now?: Date; preparedBy?: string; monthKey?: string },
 ): ReportModel | null {
   const now = opts?.now ?? new Date();
-  const curCalMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const monthsWithData = Array.from(new Set(data.financials.map((f) => f.month))).sort();
-  const completed = monthsWithData.filter((m) => m < curCalMonth);
+  const completed = completeMonths(data, now);
   if (!completed.length) return null;
 
-  const monthKey = completed[completed.length - 1];
+  // Report month: the picked month if given (and valid), otherwise the latest complete month.
+  let monthKey: string;
+  if (opts?.monthKey) {
+    if (!completed.includes(opts.monthKey)) return null;
+    monthKey = opts.monthKey;
+  } else {
+    monthKey = completed[completed.length - 1];
+  }
+  const idx = completed.indexOf(monthKey);
   const [yrStr, moStr] = monthKey.split("-");
   const year = Number(yrStr), moNum = Number(moStr);
   const ytdMonths = completed.filter((m) => m.slice(0, 4) === yrStr && m <= monthKey);
@@ -154,8 +173,8 @@ export function buildReportModel(
 
   const menu = bestGroup(data, monthKey, dbAliases);
 
-  // Trend: last up to 9 completed months, combined gross incl VAT (sales-over-time basis).
-  const trendMonths = completed.slice(-9);
+  // Trend: up to 9 completed months ending at the report month, combined gross incl VAT.
+  const trendMonths = completed.slice(Math.max(0, idx - 8), idx + 1);
   const trend = trendMonths.map((m) => ({
     label: monthShortUpper(m),
     value: combinedGross(data, m),
@@ -163,7 +182,7 @@ export function buildReportModel(
   }));
 
   // Highlight paragraph (rules-based, factual, no em dashes).
-  const priorKey = completed[completed.length - 2];
+  const priorKey = completed[idx - 1];
   const grossMonth = month.gross;
   let momClause: string, verb: string;
   if (priorKey) {
@@ -436,9 +455,13 @@ export function renderReportHtml(m: ReportModel): string {
 }
 
 /** Compose the report and open it in a new window, ready to save as PDF. */
-export function exportReportPdf(data: DashboardData, dbAliases: DbAliasMap, preparedBy?: string): { ok: boolean; error?: string } {
-  const model = buildReportModel(data, dbAliases, { preparedBy });
-  if (!model) return { ok: false, error: "No completed month of data to report yet." };
+export function exportReportPdf(
+  data: DashboardData,
+  dbAliases: DbAliasMap,
+  opts?: { monthKey?: string; preparedBy?: string },
+): { ok: boolean; error?: string } {
+  const model = buildReportModel(data, dbAliases, { monthKey: opts?.monthKey, preparedBy: opts?.preparedBy });
+  if (!model) return { ok: false, error: "No completed month of data to report for that selection." };
   const html = renderReportHtml(model);
   const w = window.open("", "_blank");
   if (!w) return { ok: false, error: "Allow pop-ups for this site to export the report." };

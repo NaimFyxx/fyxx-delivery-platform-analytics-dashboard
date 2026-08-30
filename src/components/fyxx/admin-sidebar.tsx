@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { BarChart2, LayoutDashboard, LineChart, LogOut, Menu, PenSquare, Target, Upload, Utensils } from "lucide-react";
+import { BarChart2, FileText, LayoutDashboard, LineChart, LogOut, Menu, PenSquare, Target, Upload, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import tgrLogoLight from "@/assets/tgr-logo-light.svg";
 import fyxxLogo from "@/assets/fyxx-logo-white.svg";
@@ -19,7 +19,10 @@ export const NAV_GROUPS = [
   },
   {
     heading: "Planning",
-    items: [{ to: "/targets", label: "Targets", icon: Target }],
+    items: [
+      { to: "/targets", label: "Targets", icon: Target },
+      { to: "/report", label: "Executive report", icon: FileText },
+    ],
   },
   {
     heading: "Data",
