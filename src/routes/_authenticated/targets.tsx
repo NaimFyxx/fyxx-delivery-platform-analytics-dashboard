@@ -29,16 +29,29 @@ function fmtMonthLong(m: string) {
 }
 const platformColor = (p: Platform) => (p === "Careem" ? "var(--careem)" : "var(--talabat)");
 
-type Tone = "win" | "onpace" | "close" | "behind" | "below";
+type Tone = "reached" | "onpace" | "behind" | "missed";
 type Status = {
   badge: { label: string; tone: Tone; celebrate?: boolean };
-  arrow: { up: boolean; pct: number; ref: string };
+  // dir=false hides the over/under word so the figure reads as a plain achievement (e.g. "111% of target").
+  arrow: { up: boolean; pct: number; ref: string; dir?: boolean };
 } | null;
 
-// Decide the badge + over/under arrow for a month.
-// Completed months get a final verdict; the in-progress month is judged on pace (no harsh "missed").
+// Decide the badge + arrow for a month, from the COMBINED actual vs COMBINED target only.
+// Once cumulative sales reach the target there is nothing left to project, so "Target reached"
+// wins on any day. Below target, an in-progress month is judged on pace; a complete month missed.
 function buildStatus(inProgress: boolean, actual: number, target: number, proRated: number): Status {
   if (target <= 0) return null;
+  const ach = actual / target;
+
+  // Target reached: cumulative has met the target. Applies mid-month too, and cannot reverse.
+  if (actual >= target) {
+    return {
+      badge: { label: "Target reached", tone: "reached", celebrate: true },
+      arrow: { up: true, pct: ach * 100, ref: "of target", dir: false },
+    };
+  }
+
+  // Below target, month still running: existing pace behaviour.
   if (inProgress) {
     const delta = proRated > 0 ? (actual - proRated) / proRated : 0;
     return {
@@ -46,21 +59,19 @@ function buildStatus(inProgress: boolean, actual: number, target: number, proRat
       arrow: { up: delta >= 0, pct: Math.abs(delta) * 100, ref: "vs pace" },
     };
   }
-  const ach = actual / target;
-  const over = ach - 1;
-  const badge =
-    ach >= 1 ? { label: "Target hit", tone: "win" as Tone, celebrate: true }
-    : ach >= 0.9 ? { label: "So close", tone: "close" as Tone }
-    : { label: "Below target", tone: "below" as Tone };
-  return { badge, arrow: { up: over >= 0, pct: Math.abs(over) * 100, ref: "vs target" } };
+
+  // Month complete and under target.
+  return {
+    badge: { label: "Target missed", tone: "missed" },
+    arrow: { up: false, pct: (1 - ach) * 100, ref: "vs target" },
+  };
 }
 
 const TONE_CLS: Record<Tone, string> = {
-  win:    "bg-success/10 text-success border-success/40",
-  onpace: "bg-success/10 text-success border-success/40",
-  close:  "bg-amber-500/10 text-amber-600 border-amber-500/40",
-  behind: "bg-amber-500/10 text-amber-600 border-amber-500/40",
-  below:  "bg-muted text-muted-foreground border-border",
+  reached: "bg-success/10 text-success border-success/40",
+  onpace:  "bg-success/10 text-success border-success/40",
+  behind:  "bg-amber-500/10 text-amber-600 border-amber-500/40",
+  missed:  "bg-muted text-muted-foreground border-border",
 };
 
 function StatusBadge({ s }: { s: NonNullable<Status>["badge"] }) {
@@ -76,7 +87,9 @@ function DeltaArrow({ a }: { a: NonNullable<Status>["arrow"] }) {
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-semibold ${a.up ? "text-success" : "text-destructive"}`}>
       {a.up ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
-      {a.pct.toFixed(0)}% {a.up ? "over" : "under"} <span className="text-muted-foreground font-normal">{a.ref}</span>
+      {a.pct.toFixed(0)}%{" "}
+      {a.dir !== false && <>{a.up ? "over" : "under"}{" "}</>}
+      <span className="text-muted-foreground font-normal">{a.ref}</span>
     </span>
   );
 }
