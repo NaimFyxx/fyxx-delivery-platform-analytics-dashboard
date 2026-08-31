@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { DesktopOnly } from "@/components/fyxx/desktop-only";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -144,6 +145,7 @@ function TargetsPage() {
   }
 
   return (
+    <DesktopOnly title="Targets">
     <div className="p-6 max-w-3xl mx-auto">
       <PageHeader title="Targets vs actuals" description="Monthly pace per platform, from the pace tracker's daily sales. Completed months show the final result; the current month is judged on pace." />
 
@@ -264,5 +266,6 @@ function TargetsPage() {
           })}
       </div>
     </div>
+    </DesktopOnly>
   );
 }

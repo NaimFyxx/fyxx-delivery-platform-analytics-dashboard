@@ -3,6 +3,7 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { DesktopOnly } from "@/components/fyxx/desktop-only";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -308,6 +309,7 @@ function ImportPage() {
   }
 
   return (
+    <DesktopOnly title="CSV import">
     <div className="p-6 max-w-6xl mx-auto">
       <PageHeader
         title="CSV import wizard"
@@ -374,6 +376,7 @@ function ImportPage() {
         />
       )}
     </div>
+    </DesktopOnly>
   );
 }
 

@@ -22,7 +22,7 @@ function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <AdminSidebar email={user.email ?? ""} onSignOut={signOut} />
       <main className="flex-1 min-w-0">
         <Outlet />

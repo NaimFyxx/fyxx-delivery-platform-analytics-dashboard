@@ -7,28 +7,30 @@ import fyxxLogo from "@/assets/fyxx-logo-white.svg";
 
 /** Nav grouped into labelled sections. Headings show when the rail is expanded; a thin
  *  divider stands in for them on the collapsed icon rail. */
+// `mobile: true` marks the destinations that stay in the phone sidebar. Reading pages plus the
+// daily sales entry; desk-work routes (Targets, Executive report, CSV import) are desktop-only.
 export const NAV_GROUPS = [
   {
     heading: "Analytics",
     items: [
-      { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-      { to: "/insights", label: "Insights", icon: BarChart2 },
-      { to: "/financials", label: "Financials", icon: LineChart },
-      { to: "/items", label: "Items", icon: Utensils },
+      { to: "/dashboard", label: "Overview", icon: LayoutDashboard, mobile: true },
+      { to: "/insights", label: "Insights", icon: BarChart2, mobile: true },
+      { to: "/financials", label: "Financials", icon: LineChart, mobile: true },
+      { to: "/items", label: "Items", icon: Utensils, mobile: true },
     ],
   },
   {
     heading: "Planning",
     items: [
-      { to: "/targets", label: "Targets", icon: Target },
-      { to: "/report", label: "Executive report", icon: FileText },
+      { to: "/targets", label: "Targets", icon: Target, mobile: false },
+      { to: "/report", label: "Executive report", icon: FileText, mobile: false },
     ],
   },
   {
     heading: "Data",
     items: [
-      { to: "/entry", label: "Data entry", icon: PenSquare },
-      { to: "/import", label: "CSV import", icon: Upload },
+      { to: "/entry", label: "Data entry", icon: PenSquare, mobile: true },
+      { to: "/import", label: "CSV import", icon: Upload, mobile: false },
     ],
   },
 ];
@@ -142,21 +144,24 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
           <Button size="sm" variant="ghost" onClick={onSignOut}><LogOut className="size-4" /></Button>
         </div>
         <div className="flex overflow-x-auto gap-1 px-2 py-2 border-b border-border bg-sidebar">
-          {NAV_GROUPS.map((group, gi) => (
-            <div key={group.heading} className="flex items-center gap-1 shrink-0">
-              {gi > 0 && <div className="w-px h-5 bg-sidebar-border/60 mx-1 shrink-0" />}
-              {group.items.map(({ to, label, icon: Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className="flex items-center gap-2 whitespace-nowrap px-3 py-1.5 rounded-md text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:text-sidebar-foreground"
-                  activeProps={{ className: "active" }}
-                >
-                  <Icon className="size-3.5" /> {label}
-                </Link>
-              ))}
-            </div>
-          ))}
+          {NAV_GROUPS
+            .map((group) => group.items.filter((i) => i.mobile))
+            .filter((items) => items.length > 0)
+            .map((items, gi) => (
+              <div key={gi} className="flex items-center gap-1 shrink-0">
+                {gi > 0 && <div className="w-px h-5 bg-sidebar-border/60 mx-1 shrink-0" />}
+                {items.map(({ to, label, icon: Icon }) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    className="flex items-center gap-2 whitespace-nowrap px-3 py-1.5 rounded-md text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:text-sidebar-foreground"
+                    activeProps={{ className: "active" }}
+                  >
+                    <Icon className="size-3.5" /> {label}
+                  </Link>
+                ))}
+              </div>
+            ))}
         </div>
       </div>
     </>
@@ -174,7 +179,7 @@ export function AdminShell({
 }) {
   if (!admin) return <>{children}</>;
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <AdminSidebar email={admin.email} onSignOut={onSignOut} />
       <main className="flex-1 min-w-0 overflow-auto">{children}</main>
     </div>

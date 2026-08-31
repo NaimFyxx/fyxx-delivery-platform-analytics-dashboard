@@ -30,17 +30,18 @@ function Entry() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-4">
         <PageHeader title="Data entry" description="Pace tracker entries feed the pace bar only — they are separate from imported data. Item costs, menu prices and targets are also entered here." />
-        <div className="pt-1 shrink-0">
+        <div className="pt-1 shrink-0 hidden md:block">
           <AddProductDialog />
         </div>
       </div>
+      {/* Mobile shows only the daily sales entry; the cost / price / target / clear tabs are desk work. */}
       <Tabs defaultValue="daily">
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-1 md:grid-cols-5 w-full">
           <TabsTrigger value="daily">Pace tracker</TabsTrigger>
-          <TabsTrigger value="costs">Item costs</TabsTrigger>
-          <TabsTrigger value="prices">Menu prices</TabsTrigger>
-          <TabsTrigger value="targets">Targets</TabsTrigger>
-          <TabsTrigger value="clear" className="text-destructive data-[state=active]:text-destructive">Clear month</TabsTrigger>
+          <TabsTrigger value="costs" className="hidden md:inline-flex">Item costs</TabsTrigger>
+          <TabsTrigger value="prices" className="hidden md:inline-flex">Menu prices</TabsTrigger>
+          <TabsTrigger value="targets" className="hidden md:inline-flex">Targets</TabsTrigger>
+          <TabsTrigger value="clear" className="hidden md:inline-flex text-destructive data-[state=active]:text-destructive">Clear month</TabsTrigger>
         </TabsList>
         <TabsContent value="daily"><DailySalesForm /></TabsContent>
         <TabsContent value="costs"><ItemCostsForm /></TabsContent>

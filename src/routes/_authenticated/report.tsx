@@ -6,6 +6,7 @@ import { getDashboardData } from "@/lib/dashboard.functions";
 import { loadDbAliases } from "@/lib/aliases";
 import { completeMonths, exportReportPdf } from "@/lib/report";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { DesktopOnly } from "@/components/fyxx/desktop-only";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -62,6 +63,7 @@ function ReportPage() {
   }
 
   return (
+    <DesktopOnly title="Executive report">
     <div className="p-6 max-w-3xl mx-auto">
       <PageHeader
         title="Generate executive report"
@@ -122,5 +124,6 @@ function ReportPage() {
         )}
       </Card>
     </div>
+    </DesktopOnly>
   );
 }
