@@ -18,7 +18,7 @@ import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { cogsFor } from "@/lib/costs";
 import { exVat, fmtJOD0, fmtInt, platformsFromFilter, type PlatformKey } from "@/lib/fyxx";
-import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
+import { monthOfDate, monthLabel, prevMonth, lastDayOfMonth, type RangeKey } from "@/lib/months";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 // Re-exported so other routes keep importing these from here.
 export { costAsOf, cogsFor } from "@/lib/costs";
@@ -243,10 +243,41 @@ function PublicDashboard() {
 
   const [showAvgTrailing, setShowAvgTrailing] = useState(false);
 
-  // --- Pace tracker: always the REAL current calendar month (not the latest-data month, not the range filter) ---
+  // --- Pace tracker: current calendar month, but hold the finished month for the first 3 days
+  //     of a new one so Lori has time to close it and set targets. Toggle is ephemeral (not persisted). ---
   const paceToday = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const paceMonth = monthOfDate(paceToday);
-  const pace = useMemo(() => data ? computePace(data, paceMonth, paceToday) : null, [data, paceMonth, paceToday]);
+  const realMonth = monthOfDate(paceToday);
+  const holdPrev = Number(paceToday.slice(8, 10)) <= 3; // days 1-3 default to the previous month
+  const defaultPaceMonth = holdPrev ? prevMonth(realMonth) : realMonth;
+  const [showOtherPaceMonth, setShowOtherPaceMonth] = useState(false);
+  const paceMonth = showOtherPaceMonth
+    ? (defaultPaceMonth === realMonth ? prevMonth(realMonth) : realMonth)
+    : defaultPaceMonth;
+  // A completed month is measured to its month end; the live month to today.
+  const paceAsOf = paceMonth === realMonth ? paceToday : lastDayOfMonth(paceMonth);
+  const pace = useMemo(() => data ? computePace(data, paceMonth, paceAsOf) : null, [data, paceMonth, paceAsOf]);
+  // The toggle switches to the other of {current, previous}; label it with that month.
+  const togglesToMonth = paceMonth === realMonth ? prevMonth(realMonth) : realMonth;
+  const paceToggleLabel = `Show ${new Date(togglesToMonth + "-01T00:00:00").toLocaleString("en-US", { month: "long" })}`;
+
+  // --- All-time sales per platform, every month in the data, same basis as Sales by Platform
+  //     (monthly_financials gross, falling back to summed daily). firstMonth surfaces the real
+  //     start so the total never silently begins later than the data does. ---
+  const allTime = useMemo(() => {
+    if (!data) return null;
+    const perPlatform = (p: "Talabat" | "Careem") =>
+      allMonths.reduce((sum, m) => {
+        const fin = data.financials.filter((f) => f.month === m && f.platform === p).reduce((s, f) => s + f.gross, 0);
+        const day = data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === p).reduce((s, d) => s + d.sales, 0);
+        return sum + (fin || day);
+      }, 0);
+    const talabat = perPlatform("Talabat");
+    const careem = perPlatform("Careem");
+    // Earliest month present in the data. Surfaced on the card so the coverage start is explicit:
+    // if October is in the data it reads "since Oct 25"; if it is missing it reads "since Nov 25".
+    const firstMonth = allMonths[0] ?? null;
+    return { talabat, careem, firstMonth };
+  }, [data, allMonths]);
 
   // Distinct dates with any data in range + platform filter (used for avg/day KPI sub-stats).
   const activeDays = useMemo(() => {
@@ -425,8 +456,12 @@ function PublicDashboard() {
           />
         </div>
 
-        {/* PACE TRACKER — always current month, always all platforms, ignores all filters */}
-        <PaceTracker pace={pace} currentMonth={paceMonth} />
+        {/* PACE TRACKER — current month (holds the finished month for the first 3 days), all platforms, ignores filters */}
+        <PaceTracker
+          pace={pace}
+          currentMonth={paceMonth}
+          toggle={{ label: paceToggleLabel, onToggle: () => setShowOtherPaceMonth((v) => !v) }}
+        />
 
         {!rangeHasData ? (
           <EmptyState label={rangeLabel} />
@@ -457,6 +492,26 @@ function PublicDashboard() {
                prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.netProfit)}` : "payout exVAT − cost"}
                infoId="net_profit_kept" />
         </div>
+
+        {/* All-time sales per platform — solid brand-fill pair, independent of the range filter. */}
+        {allTime && (
+          <div className="grid grid-cols-2 gap-3.5 mb-4">
+            <AllTimeCard
+              platform="Talabat"
+              total={allTime.talabat}
+              fill="#FF5A00"
+              winner={allTime.talabat >= allTime.careem}
+              sinceMonth={allTime.firstMonth}
+            />
+            <AllTimeCard
+              platform="Careem"
+              total={allTime.careem}
+              fill="#1BD15D"
+              winner={allTime.careem > allTime.talabat}
+              sinceMonth={allTime.firstMonth}
+            />
+          </div>
+        )}
 
         <SectionLabel>Analytics — Controlled by the Range &amp; Platform Filters Above</SectionLabel>
         <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform" footnote="Careem shown on food-basket basis (your revenue), ~11% below Careem's GMV headline. See tooltip.">
@@ -808,6 +863,34 @@ export function Kpi({
   );
 }
 
+/** All-time sales per platform. Solid brand fill; dark TGR green text (#092727) reads well on
+ *  both Talabat orange (~7:1) and Careem green (~14:1). One small "Top seller" chip on the leader. */
+function AllTimeCard({ platform, total, fill, winner, sinceMonth }: {
+  platform: string; total: number; fill: string; winner: boolean; sinceMonth: string | null;
+}) {
+  return (
+    <div className="rounded-2xl p-4 shadow-sm" style={{ background: fill, color: "#092727" }}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-[0.8px] font-bold">{platform}</span>
+        {winner && (
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold"
+            style={{ background: "rgba(9,39,39,0.16)", color: "#092727" }}
+          >
+            Top seller
+          </span>
+        )}
+      </div>
+      <div className="font-display text-[25px] font-bold leading-none mt-1.5">
+        {fmtInt(total)} <span className="text-[13px] font-semibold" style={{ color: "rgba(9,39,39,0.65)" }}>JOD</span>
+      </div>
+      <div className="text-[10px] mt-1.5" style={{ color: "rgba(9,39,39,0.65)" }}>
+        All-time total{sinceMonth ? ` · since ${monthLabel(sinceMonth)}` : ""}
+      </div>
+    </div>
+  );
+}
+
 function ChartCard({ title, sub, children, action, infoId, footnote }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode; infoId?: string; footnote?: React.ReactNode }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
@@ -953,10 +1036,37 @@ function OrderVolumeTooltip({ active, payload }: {
   );
 }
 
-export function PaceTracker({ pace, currentMonth }: {
+export function PaceTracker({ pace, currentMonth, toggle }: {
   pace: PaceData | null; currentMonth: string;
+  toggle?: { label: string; onToggle: () => void };
 }) {
   if (!pace) return null;
+
+  // Target not set (interactive Overview only): no target for the shown month. Show a distinct
+  // TGR-yellow "needs attention" card with the toggle, and no percentage, badge or progress bar.
+  if (toggle && pace.totalTarget <= 0) {
+    return (
+      <div className="rounded-2xl border p-4 mb-4 shadow-sm"
+           style={{ background: "#EEC36A", borderColor: "rgba(9,39,39,0.25)", color: "#092727" }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="font-display text-sm font-semibold whitespace-nowrap">{monthLabel(currentMonth)} pace · Combined</h3>
+          <button
+            type="button"
+            onClick={toggle.onToggle}
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition-colors"
+            style={{ border: "1px solid rgba(9,39,39,0.35)", background: "rgba(9,39,39,0.08)", color: "#092727" }}
+          >
+            {toggle.label}
+          </button>
+        </div>
+        <div className="mt-2 text-sm font-semibold">Target not set</div>
+        <div className="mt-0.5 text-[11.5px]" style={{ color: "rgba(9,39,39,0.7)" }}>
+          Set this month's targets on the Data entry page to track pace.
+        </div>
+      </div>
+    );
+  }
+
   const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "#FF5A00" : "#1BD15D";
   const pctColor = (n: number) => n >= 100 ? "var(--careem)" : "#f5b400";
   const careem = pace.rows.find((r) => r.platform === "Careem");
@@ -996,6 +1106,15 @@ export function PaceTracker({ pace, currentMonth }: {
               data through {pace.dataThroughLabel}
               <InfoTip id="data_through" side="bottom" />
             </span>
+          )}
+          {toggle && (
+            <button
+              type="button"
+              onClick={toggle.onToggle}
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold border border-border text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+            >
+              {toggle.label}
+            </button>
           )}
         </div>
         <div className="text-right leading-none">
