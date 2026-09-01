@@ -683,8 +683,7 @@ function PublicDashboard() {
         )}
 
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
-          The Green Room × Talabat &amp; Careem · Margins VAT-stripped per Zeid's formula · Public read-only ·{" "}
-          <Link to="/auth" className="underline hover:text-foreground">Admin sign in</Link>
+          The Green Room × Talabat &amp; Careem
         </div>
       </div>
     </div>
@@ -701,28 +700,40 @@ export function Header({
   showNav?: boolean;
 }) {
   const fresh = useFreshness(today, lastDailyDate);
+  // Understated admin entry point, shown only to guests (signed-in admins use the sidebar).
+  const signIn = showNav ? (
+    <Link
+      to="/auth"
+      className="inline-flex items-center rounded-full border border-border px-3 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors whitespace-nowrap"
+    >
+      Admin sign in
+    </Link>
+  ) : null;
   return (
     <div className="border-b border-border bg-card sticky top-0 z-50">
       {/* Mobile: two compact rows */}
       <div className="flex md:hidden flex-col px-4 py-2.5 gap-1.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <img src={tgrLogoDark} alt="The Green Room" className="h-8 w-auto" />
-          {showNav && (
-            <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
-              <Link
-                to="/dashboard"
-                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-                activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-                inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-              >Dashboard</Link>
-              <Link
-                to="/insights"
-                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
-                activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
-                inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
-              >Insights</Link>
-            </nav>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            {showNav && (
+              <nav className="flex items-center gap-1 bg-background border border-border rounded-full p-1">
+                <Link
+                  to="/dashboard"
+                  className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+                  activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+                  inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+                >Dashboard</Link>
+                <Link
+                  to="/insights"
+                  className="text-[11px] font-semibold px-3 py-1 rounded-full transition-colors"
+                  activeProps={{ style: { background: "#f4efe7", color: "#1a1a1a" } }}
+                  inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+                >Insights</Link>
+              </nav>
+            )}
+            {signIn}
+          </div>
         </div>
         <div className="flex items-center justify-between gap-2">
           <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
@@ -769,6 +780,7 @@ export function Header({
             <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: fresh.color }} />
             <span style={{ color: fresh.color }}>{fresh.text}</span>
           </div>
+          {signIn}
         </div>
       </div>
     </div>

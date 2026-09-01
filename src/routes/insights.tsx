@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
@@ -566,7 +566,7 @@ function InsightsPage() {
         <SectionLabel>Sales by Item</SectionLabel>
         <Panel
           title="Per-item breakdown"
-          sub="Units, revenue, avg price, COGS, product margin (menu price), and Zeid's net margin (allocated payout). Tap a column to sort."
+          sub="Units, revenue, avg price, COGS, product margin (menu price), and net margin (allocated payout). Tap a column to sort."
           asOf={freshness.items}
         >
           {items.length === 0 ? (
@@ -650,10 +650,7 @@ function InsightsPage() {
         )}
 
         <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
-          The Green Room × Talabat &amp; Careem · Insights tab ·{" "}
-          <Link to="/auth" className="underline hover:text-foreground">
-            Admin sign in
-          </Link>
+          The Green Room × Talabat &amp; Careem
         </div>
       </div>
     </div>

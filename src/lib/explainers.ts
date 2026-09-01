@@ -56,7 +56,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   net_margin: {
     label: "Net Margin",
     meaning:
-      "Zeid's net margin — what you actually keep after the platform's commission AND your promo/discount spend.",
+      "What you actually keep after the platform's commission and your promo or discount spend.",
     formula: "(exVat(actual payout) − COGS) ÷ exVat(actual payout)",
     example: "Smash Burger ≈ 27%.",
   },
