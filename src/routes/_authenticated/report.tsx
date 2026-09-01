@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { loadDbAliases } from "@/lib/aliases";
 import { completeMonths, exportReportPdf } from "@/lib/report";
+import { runDataHealthChecks, checkReportConsistency, type HealthCheck } from "@/lib/data-health";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { DesktopOnly } from "@/components/fyxx/desktop-only";
 import { Card } from "@/components/ui/card";
@@ -48,6 +49,34 @@ function ReportPage() {
   const monthsInYear = useMemo(() => months.filter((m) => m.startsWith(year)), [months, year]);
 
   const [busy, setBusy] = useState(false);
+
+  // Non-blocking data-health gate: surface any failing/warning check for the selected month
+  // (and a report-consistency check on the report's own YTD/combined additivity) before generating.
+  const health = useMemo(() => (data ? runDataHealthChecks(data, dbAliases) : null), [data, dbAliases]);
+  const flagged = useMemo<HealthCheck[]>(() => {
+    if (!data || !monthKey) return [];
+    const mo = health?.months.find((m) => m.month === monthKey);
+    const out: HealthCheck[] = mo ? mo.checks.filter((c) => c.status !== "pass") : [];
+
+    // Check 5: report YTD equals the sum of its monthly figures, and combined equals the platform
+    // rows. Computed at full precision from the same figures the report uses.
+    const yr = monthKey.slice(0, 4);
+    const window = months.filter((m) => m.startsWith(yr) && m <= monthKey);
+    const grossFor = (mm: string, p?: string) =>
+      data.financials.filter((f) => f.month === mm && (!p || f.platform === p)).reduce((s, f) => s + f.gross, 0);
+    const monthlyGross = window.map((mm) => grossFor(mm));
+    const consistency = checkReportConsistency({
+      monthlyGross,
+      ytdGross: monthlyGross.reduce((s, v) => s + v, 0),
+      talabatYtdGross: window.reduce((s, mm) => s + grossFor(mm, "Talabat"), 0),
+      careemYtdGross: window.reduce((s, mm) => s + grossFor(mm, "Careem"), 0),
+      combinedYtdGross: window.reduce((s, mm) => s + grossFor(mm), 0),
+    });
+    if (consistency.status !== "pass") out.push(consistency);
+    return out;
+  }, [data, monthKey, months, health]);
+
+  const worst = flagged.some((c) => c.status === "fail") ? "fail" : flagged.length ? "warn" : "pass";
 
   function onGenerate() {
     if (!data || !monthKey) return;
@@ -120,6 +149,39 @@ function ReportPage() {
                 Generate report
               </Button>
             </div>
+
+            {flagged.length > 0 && (
+              <div
+                className="mt-5 rounded-md border p-3.5"
+                style={{
+                  borderColor: worst === "fail" ? "var(--destructive)" : "#EEC36A",
+                  background: worst === "fail" ? "color-mix(in srgb, var(--destructive) 8%, transparent)" : "color-mix(in srgb, #EEC36A 12%, transparent)",
+                }}
+              >
+                <div className="text-sm font-semibold mb-1.5">
+                  {worst === "fail"
+                    ? `Data health flagged ${monthName(monthKey)} before you generate`
+                    : `${monthName(monthKey)} has data-health warnings`}
+                </div>
+                <p className="text-xs text-muted-foreground mb-2.5">
+                  The report will still generate. These are worth checking first so the figures are not built on partial data.
+                </p>
+                <ul className="space-y-1.5">
+                  {flagged.map((c, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[12px] leading-relaxed">
+                      <span
+                        className="mt-1.5 inline-block w-2 h-2 rounded-full shrink-0"
+                        style={{ background: c.status === "fail" ? "var(--destructive)" : "#EEC36A" }}
+                      />
+                      <span>
+                        <span className="font-medium">{c.label}{c.scope ? ` · ${c.scope}` : ""}:</span>{" "}
+                        <span className="text-muted-foreground">{c.detail}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         )}
       </Card>

@@ -14,7 +14,7 @@ import { createServerFn } from "@tanstack/react-start";
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -53,6 +53,9 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       .from("monthly_adjustments")
       .select("month,platform,deduction_type,amount"),
     supabaseAdmin.from("item_categories").select("item_key,category"),
+    // Lightweight two-column read: just platform + date, reduced to a max order date per
+    // platform per month for the data-health day-coverage check (gross / order coverage only).
+    supabaseAdmin.from("platform_orders").select("platform,date").limit(100000),
   ]);
 
   // Canonical item name → assigned category. Missing item = Uncategorised (resolved in the UI).
@@ -60,6 +63,19 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   for (const r of (catData.data ?? []) as { item_key: string; category: string }[]) {
     itemCategories[r.item_key] = r.category;
   }
+
+  // Max order date per platform per month (from platform_orders), for the day-coverage check.
+  const loMap = new Map<string, string>();
+  for (const r of (ordersData.data ?? []) as { platform: string; date: string }[]) {
+    if (!r.date) continue;
+    const key = `${r.platform}|${r.date.slice(0, 7)}`;
+    const cur = loMap.get(key);
+    if (!cur || r.date > cur) loMap.set(key, r.date);
+  }
+  const lastOrderDates = Array.from(loMap.entries()).map(([key, lastDate]) => {
+    const [platform, month] = key.split("|");
+    return { platform, month, lastDate };
+  });
 
   return {
     paceDaily: ((paceData.data ?? []) as { date: string; platform: string; sales_jod: number; orders: number | null }[]).map((r) => ({
@@ -131,6 +147,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       amount: Number(r.amount),
     })),
     itemCategories,
+    lastOrderDates,
   };
 });
 

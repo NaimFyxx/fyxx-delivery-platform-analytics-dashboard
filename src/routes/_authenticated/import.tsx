@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { DesktopOnly } from "@/components/fyxx/desktop-only";
+import { DataHealthForMonth } from "@/components/fyxx/data-health-chip";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -327,6 +328,10 @@ function ImportPage() {
         onMonthChange={setChecklistMonth}
         status={importStatus}
       />
+
+      <div className="mt-4">
+        <DataHealthForMonth month={checklistMonth} />
+      </div>
 
       <Stepper
         step={step}

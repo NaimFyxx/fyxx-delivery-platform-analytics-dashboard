@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
+import { DataHealthChip } from "@/components/fyxx/data-health-chip";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -259,7 +260,7 @@ function InsightsPage() {
   return (
     <AdminShell admin={adminUser} onSignOut={handleSignOut}>
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} />
+      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} statusChip={adminUser ? <DataHealthChip /> : null} />
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}

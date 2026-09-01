@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
+import { DataHealthChip } from "@/components/fyxx/data-health-chip";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -426,7 +427,7 @@ function PublicDashboard() {
   return (
     <AdminShell admin={adminUser} onSignOut={handleSignOut}>
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} />
+      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} statusChip={adminUser ? <DataHealthChip /> : null} />
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
@@ -719,11 +720,12 @@ function PublicDashboard() {
 
 // ---------- small UI primitives ----------
 export function Header({
-  today, lastDailyDate, showNav = true,
+  today, lastDailyDate, showNav = true, statusChip,
 }: {
   today: string;
   lastDailyDate: string | null;
   showNav?: boolean;
+  statusChip?: ReactNode;
 }) {
   const fresh = useFreshness(today, lastDailyDate);
   // Understated admin entry point, shown only to guests (signed-in admins use the sidebar).
@@ -763,9 +765,12 @@ export function Header({
         </div>
         <div className="flex items-center justify-between gap-2">
           <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
-          <div className="flex items-center gap-1 text-[10px] shrink-0">
-            <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: fresh.color }} />
-            <span style={{ color: fresh.color }}>{fresh.text}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {statusChip}
+            <div className="flex items-center gap-1 text-[10px]">
+              <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: fresh.color }} />
+              <span style={{ color: fresh.color }}>{fresh.text}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -806,6 +811,7 @@ export function Header({
             <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: fresh.color }} />
             <span style={{ color: fresh.color }}>{fresh.text}</span>
           </div>
+          {statusChip}
           {signIn}
         </div>
       </div>
