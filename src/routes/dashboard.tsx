@@ -493,9 +493,9 @@ function PublicDashboard() {
                infoId="net_profit_kept" />
         </div>
 
-        {/* All-time sales per platform — solid brand-fill pair, independent of the range filter. */}
+        {/* All-time sales per platform — small brand-coloured chips (quiet background context), independent of the range filter. */}
         {allTime && (
-          <div className="grid grid-cols-2 gap-3.5 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <AllTimeCard
               platform="Talabat"
               total={allTime.talabat}
@@ -863,30 +863,30 @@ export function Kpi({
   );
 }
 
-/** All-time sales per platform. Solid brand fill; dark TGR green text (#092727) reads well on
- *  both Talabat orange (~7:1) and Careem green (~14:1). One small "Top seller" chip on the leader. */
+/** All-time sales per platform as a small brand-coloured chip (~one KPI line tall). Dark TGR green
+ *  text (#092727) reads well on both Talabat orange (~7:1) and Careem green (~14:1). "Top seller"
+ *  marks the leader. Quiet background context, not a headline. */
 function AllTimeCard({ platform, total, fill, winner, sinceMonth }: {
   platform: string; total: number; fill: string; winner: boolean; sinceMonth: string | null;
 }) {
+  const dim = "rgba(9,39,39,0.72)";
   return (
-    <div className="rounded-2xl p-4 shadow-sm" style={{ background: fill, color: "#092727" }}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-[0.8px] font-bold">{platform}</span>
-        {winner && (
-          <span
-            className="inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold"
-            style={{ background: "rgba(9,39,39,0.16)", color: "#092727" }}
-          >
-            Top seller
-          </span>
-        )}
-      </div>
-      <div className="font-display text-[25px] font-bold leading-none mt-1.5">
-        {fmtInt(total)} <span className="text-[13px] font-semibold" style={{ color: "rgba(9,39,39,0.65)" }}>JOD</span>
-      </div>
-      <div className="text-[10px] mt-1.5" style={{ color: "rgba(9,39,39,0.65)" }}>
-        All-time total{sinceMonth ? ` · since ${monthLabel(sinceMonth)}` : ""}
-      </div>
+    <div className="inline-flex items-center gap-2 rounded-full pl-3 pr-2.5 py-1" style={{ background: fill, color: "#092727" }}>
+      <span className="text-[9.5px] uppercase tracking-[0.6px] font-bold">{platform}</span>
+      <span className="font-display text-[14px] font-bold leading-none">
+        {fmtInt(total)}<span className="text-[9px] font-semibold ml-0.5" style={{ color: dim }}>JOD</span>
+      </span>
+      {sinceMonth && (
+        <span className="text-[9px] font-medium" style={{ color: dim }}>since {monthLabel(sinceMonth)}</span>
+      )}
+      {winner && (
+        <span
+          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[8.5px] font-semibold"
+          style={{ background: "rgba(9,39,39,0.18)", color: "#092727" }}
+        >
+          Top seller
+        </span>
+      )}
     </div>
   );
 }
@@ -1042,6 +1042,9 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
 }) {
   if (!pace) return null;
 
+  // "August 2026", not "Aug 26" (which scans as a day-of-month).
+  const monthTitle = new Date(currentMonth + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" });
+
   // Target not set (interactive Overview only): no target for the shown month. Show a distinct
   // TGR-yellow "needs attention" card with the toggle, and no percentage, badge or progress bar.
   if (toggle && pace.totalTarget <= 0) {
@@ -1049,7 +1052,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
       <div className="rounded-2xl border p-4 mb-4 shadow-sm"
            style={{ background: "#EEC36A", borderColor: "rgba(9,39,39,0.25)", color: "#092727" }}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h3 className="font-display text-sm font-semibold whitespace-nowrap">{monthLabel(currentMonth)} pace · Combined</h3>
+          <h3 className="font-display text-sm font-semibold whitespace-nowrap">{monthTitle} · Combined</h3>
           <button
             type="button"
             onClick={toggle.onToggle}
@@ -1081,12 +1084,20 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   const segCareem = segFill * segCareemShare;
   const segCappedTalabat = segFill * (1 - segCareemShare);
 
+  // Combined target status (combined figure vs combined target only). Once cumulative >= target the
+  // month is settled: "Target reached" on any day, and it cannot reverse. A completed month left
+  // under target reads "Target missed". Otherwise the in-progress pace figure stands.
+  const targetSet = pace.totalTarget > 0;
+  const reached = targetSet && pace.totalSales >= pace.totalTarget;
+  const complete = pace.dayOfMonth >= pace.daysInMonth;
+  const missed = complete && targetSet && !reached;
+
   return (
     <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
-            {monthLabel(currentMonth)} pace · Combined
+            {monthTitle} · Combined
           </h3>
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">WD</span>
@@ -1120,13 +1131,25 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
         <div className="text-right leading-none">
           <span className="font-display text-[26px] font-bold align-middle"
                 style={{ color: pctColor(pace.totalAchievement) }}>
-            {pace.totalTarget ? Math.round(pace.totalAchievement) + "%" : "—"}
+            {targetSet ? Math.round(pace.totalAchievement) + "%" : "—"}
           </span>
           <InfoTip id="pace_pct" side="bottom" />
-          <span className="ml-2 text-[10.5px] text-muted-foreground align-middle">
-            {pace.totalTarget ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set"}
-          </span>
-          {pace.totalTarget > 0 && <InfoTip id="pace_prorated" side="bottom" />}
+          {reached || missed ? (
+            <span
+              className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold align-middle ${
+                reached ? "bg-success/10 text-success border-success/30" : "bg-muted text-muted-foreground border-border"
+              }`}
+            >
+              {reached ? "Target reached" : "Target missed"}
+            </span>
+          ) : (
+            <>
+              <span className="ml-2 text-[10.5px] text-muted-foreground align-middle">
+                {targetSet ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set"}
+              </span>
+              {targetSet && <InfoTip id="pace_prorated" side="bottom" />}
+            </>
+          )}
         </div>
       </div>
 
