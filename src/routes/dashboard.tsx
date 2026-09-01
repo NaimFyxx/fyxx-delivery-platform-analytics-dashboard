@@ -366,22 +366,21 @@ function PublicDashboard() {
     [rangeIsSingleMonth, chartData],
   );
 
-  // Total sales over time: one point per month = combined gross incl VAT, reusing monthAggs
-  // (the exact aggregation behind Sales by Platform), so it reconciles to that chart. Respects
-  // the range + platform filters. The in-progress month is flagged so it can render as partial
-  // and be excluded from the moving average and the running-minimum floor.
+  // Total sales over time: one point per month = combined gross incl VAT, per-platform financials
+  // gross (falling back to summed daily), the same value as the Sales by Platform bars. Like the
+  // Margin over Time chart beside it, this is a trend, so it always shows full monthly history and
+  // ignores the date filter (the platform filter still applies). "In progress" is the real current
+  // calendar month only, so a completed month is never flagged just because it is the newest data.
   const salesTrend = useMemo(() => {
     if (!data) return [];
-    // Per-month combined total computed exactly like the Sales by Platform bars (per-platform
-    // financials gross, falling back to summed daily), so each point reconciles to that chart.
-    const base = rangeMonths.map((m) => {
+    const base = allMonths.map((m) => {
       const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
       const talabat = finRows.filter((r) => r.platform === "Talabat").reduce((s, r) => s + r.gross, 0) ||
         data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Talabat" && platforms.includes("Talabat")).reduce((s, d) => s + d.sales, 0);
       const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
         data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
       const total = (platforms.includes("Talabat") ? talabat : 0) + (platforms.includes("Careem") ? careem : 0);
-      return { month: m, label: monthLabel(m), total, partial: m === currentMonth };
+      return { month: m, label: monthLabel(m), total, partial: m === realMonth };
     });
     const completed = base.filter((r) => !r.partial);
     const rows = base.map((r) => {
@@ -405,7 +404,7 @@ function PublicDashboard() {
       if (pIdx > 0) rows[pIdx - 1].totalPartial = rows[pIdx - 1].total;
     }
     return rows;
-  }, [data, rangeMonths, platforms, currentMonth]);
+  }, [data, allMonths, platforms, realMonth]);
 
   // Running-minimum floor over completed months in the visible range (excludes in-progress).
   const salesFloor = useMemo(() => {
@@ -541,8 +540,8 @@ function PublicDashboard() {
             title="Total sales over time"
             sub={
               platform === "All"
-                ? "Combined monthly gross incl VAT (Talabat + Careem), same basis as the chart above"
-                : `${platform} monthly gross incl VAT, same basis as the chart above`
+                ? "Combined monthly gross incl VAT (Talabat + Careem), full monthly history, not affected by the date filter above"
+                : `${platform} monthly gross incl VAT, full monthly history, not affected by the date filter above`
             }
           >
             <ResponsiveContainer>
@@ -1231,8 +1230,8 @@ function SalesTrendTooltip({ active, payload }: {
       <div style={{ fontWeight: 600, color: "var(--foreground)" }}>
         {p.label}{p.partial ? " (in progress)" : ""}
       </div>
-      <div style={{ color: "var(--foreground)" }}>{fmtJOD0(p.total)} JOD</div>
-      {p.avg3 != null && <div style={{ color: "#C8B89B" }}>3-month avg {fmtJOD0(p.avg3)} JOD</div>}
+      <div style={{ color: "var(--foreground)" }}>{fmtJOD0(p.total)}</div>
+      {p.avg3 != null && <div style={{ color: "#C8B89B" }}>3-month avg {fmtJOD0(p.avg3)}</div>}
     </div>
   );
 }
