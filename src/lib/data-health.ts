@@ -30,6 +30,12 @@ export interface HealthReport {
 const PLATFORMS = ["Talabat", "Careem"] as const;
 type Platform = (typeof PLATFORMS)[number];
 
+// Check 4 sensitivity. The expected spacing between orders is derived from live data
+// (days-in-month / orders); these two knobs set how far past that spacing a trailing gap has to
+// run before it is worth a glance. Warn-only, never a failure.
+const COVERAGE_GAP_FLOOR_DAYS = 4; // a normal few-day tail never fires
+const COVERAGE_GAP_MULTIPLE = 3; // gap must exceed 3x the platform's usual spacing
+
 const worst = (a: HealthStatus, b: HealthStatus): HealthStatus =>
   a === "fail" || b === "fail" ? "fail" : a === "warn" || b === "warn" ? "warn" : "pass";
 const worstOf = (xs: HealthStatus[]): HealthStatus => xs.reduce(worst, "pass" as HealthStatus);
@@ -163,19 +169,27 @@ export function runDataHealthChecks(
         });
       }
 
-      // 4. Day coverage (gross / order data only), complete months only.
+      // 4. Order-date coverage (gross / order data only). Warn-only: a quiet trailing gap is a
+      // business fact, not proof of broken data. The threshold scales with the platform's own
+      // order frequency for the month, so a thin month loosens automatically. Complete months only.
       if (complete) {
-        const last =
-          data.lastOrderDates.find((l) => l.month === m && l.platform === p)?.lastDate ?? null;
-        if (last) {
+        const lo = data.lastOrderDates.find((l) => l.month === m && l.platform === p);
+        if (lo?.lastDate) {
           const end = lastDayOfMonth(m);
-          const gap = daysBetween(last, end);
+          const gap = daysBetween(lo.lastDate, end);
+          const daysInMonth = Number(end.slice(-2));
+          const orders = lo.orders ?? 0;
+          const spacing = orders > 0 ? daysInMonth / orders : daysInMonth;
+          const threshold = Math.max(COVERAGE_GAP_FLOOR_DAYS, COVERAGE_GAP_MULTIPLE * spacing);
+          const flag = gap > threshold;
           checks.push({
             id: "day_coverage",
             label: "Order-date coverage",
             scope: p,
-            status: gap > 2 ? "fail" : "pass",
-            detail: `${p} last order ${last}, ${gap} day(s) before month end (${end}). Covers gross and order data only, not item data.`,
+            status: flag ? "warn" : "pass",
+            detail: flag
+              ? `${p} last order ${lo.lastDate}, a ${gap} day gap to month end (${end}). At ${orders} order(s) the usual spacing is about ${spacing.toFixed(1)} day(s), so a gap over ${threshold.toFixed(1)} days stands out. Could be a genuine quiet spell rather than missing data. Covers gross and order data only, not item data.`
+              : `${p} last order ${lo.lastDate}, a ${gap} day gap to month end (${end}), in line with its ${orders} order(s) this month. Covers gross and order data only, not item data.`,
           });
         }
       }

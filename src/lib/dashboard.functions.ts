@@ -64,17 +64,23 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     itemCategories[r.item_key] = r.category;
   }
 
-  // Max order date per platform per month (from platform_orders), for the day-coverage check.
-  const loMap = new Map<string, string>();
+  // Max order date and order count per platform per month (from platform_orders), for the
+  // day-coverage check. Count and last-date share this one source so the check's frequency
+  // (numerator) and trailing gap (denominator) stay consistent.
+  const loMap = new Map<string, { lastDate: string; orders: number }>();
   for (const r of (ordersData.data ?? []) as { platform: string; date: string }[]) {
     if (!r.date) continue;
     const key = `${r.platform}|${r.date.slice(0, 7)}`;
     const cur = loMap.get(key);
-    if (!cur || r.date > cur) loMap.set(key, r.date);
+    if (!cur) loMap.set(key, { lastDate: r.date, orders: 1 });
+    else {
+      cur.orders += 1;
+      if (r.date > cur.lastDate) cur.lastDate = r.date;
+    }
   }
-  const lastOrderDates = Array.from(loMap.entries()).map(([key, lastDate]) => {
+  const lastOrderDates = Array.from(loMap.entries()).map(([key, v]) => {
     const [platform, month] = key.split("|");
-    return { platform, month, lastDate };
+    return { platform, month, lastDate: v.lastDate, orders: v.orders };
   });
 
   return {
