@@ -39,11 +39,11 @@ export const NAV_GROUPS = [
 export const ADMIN_NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: () => void }) {
-  // Default = expanded on every load. `collapsed` is the pinned state (burger); `hovering`
-  // temporarily reveals the labels as an overlay flyout while collapsed.
+  // The burger pins the sidebar open (full labels) or collapsed (icon rail with tooltips).
+  // The sidebar is a normal in-flow flex item, so collapsing simply narrows it and the main
+  // content reflows to fill; there is no absolute overlay that can slide over the content.
   const [collapsed, setCollapsed] = useState(false);
-  const [hovering, setHovering] = useState(false);
-  const expanded = !collapsed || hovering;
+  const expanded = !collapsed;
 
   const navLink = (to: string, label: string, Icon: typeof LayoutDashboard) => (
     <Link
@@ -60,16 +60,10 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
 
   return (
     <>
-      {/* Desktop: sticky full-height rail. The flow width follows the PINNED state so the
-          hover flyout overlays the content instead of pushing it. */}
+      {/* Desktop: sticky in-flow rail. Width follows the collapsed state; main reflows to fill. */}
       <aside
-        className={`hidden md:block sticky top-0 self-start h-screen shrink-0 z-[60] transition-[width] duration-200 ease-out ${collapsed ? "w-14" : "w-64"}`}
+        className={`hidden md:flex flex-col sticky top-0 self-start h-screen shrink-0 border-r border-border bg-sidebar overflow-hidden transition-[width] duration-200 ease-out ${collapsed ? "w-14" : "w-64"}`}
       >
-        <div
-          onMouseEnter={() => setHovering(true)}
-          onMouseLeave={() => setHovering(false)}
-          className={`absolute inset-y-0 left-0 h-screen flex flex-col border-r border-border bg-sidebar overflow-hidden transition-[width] duration-200 ease-out ${expanded ? "w-64" : "w-14"} ${collapsed && hovering ? "shadow-xl" : ""}`}
-        >
           {/* Burger + logo */}
           <div className="flex items-center gap-2 px-3 pt-5 pb-1">
             <button
@@ -132,7 +126,6 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
               </div>
             )}
           </div>
-        </div>
       </aside>
 
       {/* Mobile: top strip nav (unchanged behavior; groups get a thin separator). */}

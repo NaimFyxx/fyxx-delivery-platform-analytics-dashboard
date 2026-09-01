@@ -493,23 +493,19 @@ function PublicDashboard() {
                infoId="net_profit_kept" />
         </div>
 
-        {/* All-time sales per platform — small brand-coloured chips (quiet background context), independent of the range filter. */}
+        {/* All-time sales per platform — one quiet line under the KPI row; only the platform
+            names carry brand colour, the numbers stay in the normal text colour. */}
         {allTime && (
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <AllTimeCard
-              platform="Talabat"
-              total={allTime.talabat}
-              fill="#FF5A00"
-              winner={allTime.talabat >= allTime.careem}
-              sinceMonth={allTime.firstMonth}
-            />
-            <AllTimeCard
-              platform="Careem"
-              total={allTime.careem}
-              fill="#1BD15D"
-              winner={allTime.careem > allTime.talabat}
-              sinceMonth={allTime.firstMonth}
-            />
+          <div className="text-[11px] text-muted-foreground mb-4">
+            All-time{allTime.firstMonth
+              ? ` since ${new Date(allTime.firstMonth + "-01T00:00:00").toLocaleString("en-US", { month: "short", year: "numeric" })}`
+              : ""}
+            {" · "}
+            <span className="font-semibold" style={{ color: "#FF5A00" }}>Talabat</span>{" "}
+            <span className="text-foreground">{fmtInt(allTime.talabat)} JOD</span>
+            {" · "}
+            <span className="font-semibold" style={{ color: "#1BD15D" }}>Careem</span>{" "}
+            <span className="text-foreground">{fmtInt(allTime.careem)} JOD</span>
           </div>
         )}
 
@@ -859,34 +855,6 @@ export function Kpi({
       </div>
       <div className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border">{prior}</div>
       {sub && <div className="text-[9.5px] text-muted-foreground mt-0.5">{sub}</div>}
-    </div>
-  );
-}
-
-/** All-time sales per platform as a small brand-coloured chip (~one KPI line tall). Dark TGR green
- *  text (#092727) reads well on both Talabat orange (~7:1) and Careem green (~14:1). "Top seller"
- *  marks the leader. Quiet background context, not a headline. */
-function AllTimeCard({ platform, total, fill, winner, sinceMonth }: {
-  platform: string; total: number; fill: string; winner: boolean; sinceMonth: string | null;
-}) {
-  const dim = "rgba(9,39,39,0.72)";
-  return (
-    <div className="inline-flex items-center gap-2 rounded-full pl-3 pr-2.5 py-1" style={{ background: fill, color: "#092727" }}>
-      <span className="text-[9.5px] uppercase tracking-[0.6px] font-bold">{platform}</span>
-      <span className="font-display text-[14px] font-bold leading-none">
-        {fmtInt(total)}<span className="text-[9px] font-semibold ml-0.5" style={{ color: dim }}>JOD</span>
-      </span>
-      {sinceMonth && (
-        <span className="text-[9px] font-medium" style={{ color: dim }}>since {monthLabel(sinceMonth)}</span>
-      )}
-      {winner && (
-        <span
-          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[8.5px] font-semibold"
-          style={{ background: "rgba(9,39,39,0.18)", color: "#092727" }}
-        >
-          Top seller
-        </span>
-      )}
     </div>
   );
 }
