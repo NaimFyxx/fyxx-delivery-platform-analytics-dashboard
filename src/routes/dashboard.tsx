@@ -359,6 +359,13 @@ function PublicDashboard() {
     });
   }, [data, rangeIsSingleMonth, rangeMonths, monthAggs, platforms, currentMonth, today]);
 
+  // Commission drag is a monthly figure by construction (payout and cost are only known per month,
+  // so the daily bars are all identical). In a single-month view we show that one number instead.
+  const singleMonthDrag = useMemo(
+    () => (rangeIsSingleMonth ? chartData.find((r) => r.drag != null)?.drag ?? null : null),
+    [rangeIsSingleMonth, chartData],
+  );
+
   // Total sales over time: one point per month = combined gross incl VAT, reusing monthAggs
   // (the exact aggregation behind Sales by Platform), so it reconciles to that chart. Respects
   // the range + platform filters. The in-progress month is flagged so it can render as partial
@@ -666,17 +673,37 @@ function PublicDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
-          <ChartCard title="The Commission Drag" sub="Margin points lost to platform fees" infoId="chart_commission_drag">
-            <ResponsiveContainer>
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                <CartesianGrid stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false}
-                       tickFormatter={(v) => `${v}pt`} />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)} pts`} />
-                <Bar dataKey="drag" fill="rgba(255,90,0,0.75)" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <ChartCard title="The Commission Drag" sub="Margin points lost to platform fees and discounts" infoId="chart_commission_drag">
+            {rangeIsSingleMonth ? (
+              <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                {singleMonthDrag != null ? (
+                  <>
+                    <div className="font-display text-[46px] font-bold leading-none" style={{ color: "var(--foreground)" }}>
+                      {singleMonthDrag.toFixed(1)}<span className="text-[20px] font-semibold text-muted-foreground ml-1">pts</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-3">
+                      Commission drag in {new Date(rangeMonths[0] + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" })}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1.5 max-w-xs leading-relaxed">
+                      Product margin minus net margin. It is one figure for the month and does not vary by day. Pick a wider range to see it move month to month.
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No data for this month.</div>
+                )}
+              </div>
+            ) : (
+              <ResponsiveContainer>
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                  <CartesianGrid stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false}
+                         tickFormatter={(v) => `${v}pt`} />
+                  <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)} pts`} />
+                  <Bar dataKey="drag" fill="rgba(255,90,0,0.75)" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </ChartCard>
         </div>
         </>

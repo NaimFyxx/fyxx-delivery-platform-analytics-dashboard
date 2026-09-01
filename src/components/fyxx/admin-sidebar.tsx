@@ -114,7 +114,7 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
               variant="ghost"
               onClick={onSignOut}
               title={!expanded ? "Sign out" : undefined}
-              className={`w-full ${expanded ? "justify-start" : "justify-center px-0"}`}
+              className={`w-full text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent ${expanded ? "justify-start" : "justify-center px-0"}`}
             >
               <LogOut className="size-4 shrink-0" />
               {expanded && <span className="ml-2">Sign out</span>}

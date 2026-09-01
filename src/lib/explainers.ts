@@ -215,7 +215,8 @@ export const EXPLAINERS: Record<string, Explainer> = {
   chart_commission_drag: {
     label: "Commission Drag",
     meaning:
-      "Margin percentage points lost to the platform's fees — the gap between Product margin and Net margin.",
+      "Margin percentage points lost between the menu price and the actual payout: the gap between product margin and net margin. It covers platform commission and payment fees plus the merchant-funded discounts you absorbed, so it is fees and discounts, not fees alone.",
+    note: "A single monthly figure by construction, so a one-month view shows one number rather than daily bars. Pick a wider range to see it trend.",
   },
   target_line: {
     label: "Target line",
