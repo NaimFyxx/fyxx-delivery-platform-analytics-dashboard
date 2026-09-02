@@ -5,6 +5,7 @@
  */
 import { exVat } from "./fyxx";
 import { cogsFor, costAsOf, canonicalItemName, type DbAliasMap } from "./costs";
+import { categoryFor, UNCATEGORISED } from "./categories";
 import { lastDayOfMonth, monthOfDate } from "./months";
 import type { DashboardData } from "./dashboard.functions";
 
@@ -211,6 +212,63 @@ export function runDataHealthChecks(
         ? `${unmatched.size} sold item(s) with no cost, contributing 0 to COGS: ${[...unmatched.values()].join(", ")}.`
         : "All sold items resolve to a cost.",
     });
+
+    // 7. Category coverage (month level). The real failure mode is items landing in Uncategorised
+    // because an alias did not resolve or no category is assigned, which silently distorts the
+    // category rollup and the report's best-selling-category signal. Report the uncategorised share
+    // of item revenue and name the items. Reuses categoryFor + canonicalItemName with dbAliases.
+    const rows = data.itemSales.filter((s) => s.month === m);
+    const byCat = new Map<string, number>(); // category -> revenue (also feeds the consistency guard)
+    const uncat = new Map<string, { name: string; rev: number; units: number }>();
+    let itemRev = 0;
+    let uncatRev = 0;
+    for (const s of rows) {
+      itemRev += s.revenue;
+      const cat = categoryFor(s.item, data.itemCategories, dbAliases);
+      byCat.set(cat, (byCat.get(cat) ?? 0) + s.revenue);
+      if (cat === UNCATEGORISED) {
+        uncatRev += s.revenue;
+        const key = canonicalItemName(s.item, dbAliases);
+        const e = uncat.get(key) ?? { name: s.item, rev: 0, units: 0 };
+        e.rev += s.revenue;
+        e.units += s.units;
+        if (s.item.length < e.name.length) e.name = s.item; // prefer the shorter display name
+        uncat.set(key, e);
+      }
+    }
+    if (rows.length) {
+      const share = itemRev > 0 ? (uncatRev / itemRev) * 100 : 0;
+      const n = uncat.size;
+      const names = [...uncat.values()]
+        .sort((a, b) => b.rev - a.rev)
+        .map((u) => `${u.name} (${money(u.rev)}, ${u.units} units)`)
+        .join("; ");
+      checks.push({
+        id: "category_coverage",
+        label: "Category coverage",
+        status: n === 0 ? "pass" : share > 5 ? "fail" : "warn",
+        detail:
+          n === 0
+            ? "Every sold item resolves to a category."
+            : `${n} item(s) uncategorised, ${money(uncatRev)} (${pct1(share)} of item revenue): ${names}.`,
+      });
+
+      // Consistency guard (low signal, like check 5): the category rollup sums to the item total.
+      // Tautological on current data since categoryFor maps every item to exactly one bucket; kept
+      // to catch a future divergent computation or float drift. Not a data check.
+      const catTotal = [...byCat.values()].reduce((s, v) => s + v, 0);
+      const diff = Math.abs(catTotal - itemRev);
+      checks.push({
+        id: "category_additivity",
+        label: "Category rollup consistency",
+        scope: "consistency guard",
+        status: diff > 0.01 ? "fail" : "pass",
+        detail:
+          diff > 0.01
+            ? `Category revenue total ${money(catTotal)} does not match item revenue ${money(itemRev)} (off by ${diff.toFixed(2)} JOD).`
+            : `Category totals reconcile to item revenue (${money(itemRev)}).`,
+      });
+    }
 
     return { month: m, complete, status: worstOf(checks.map((c) => c.status)), checks };
   });
