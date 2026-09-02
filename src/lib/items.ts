@@ -23,7 +23,7 @@ export function aggregateItems(args: {
   financials: { month: string; platform: string; gross: number; payout: number; discount: number }[];
   rangeMonths: string[];
   platforms: string[];
-  dbAliases?: DbAliasMap;
+  dbAliases: DbAliasMap;
 }): AggItem[] {
   const { itemSales, costs, prices, financials, rangeMonths, platforms, dbAliases } = args;
   const lastMonthEnd = rangeMonths.length ? `${rangeMonths[rangeMonths.length - 1]}-28` : "9999-12-31";

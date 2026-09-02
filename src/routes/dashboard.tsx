@@ -100,7 +100,7 @@ function PublicDashboard() {
       const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
       const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
+      const cogs = cogsFor(data.itemSales, data.costs, m, platforms, data.itemAliases);
       return { month: m, gross, payout, discount, cogs, orders };
     });
   }, [data, rangeMonths, platforms]);
@@ -118,7 +118,7 @@ function PublicDashboard() {
       const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
       const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
+      const cogs = cogsFor(data.itemSales, data.costs, m, platforms, data.itemAliases);
       return { month: m, gross, payout, discount, cogs, orders };
     });
   }, [data, allMonths, platforms]);
@@ -141,7 +141,7 @@ function PublicDashboard() {
       const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
       const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
       const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, platforms);
+      const cogs = cogsFor(data.itemSales, data.costs, m, platforms, data.itemAliases);
       return { month: m, gross, payout, discount, cogs, orders };
     });
   }, [data, range, rangeMonths, platforms, allMonths]);

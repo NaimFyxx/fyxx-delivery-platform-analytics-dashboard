@@ -41,6 +41,6 @@ export async function loadItemCategories(): Promise<CategoryMap> {
 
 /** Resolve an item's category, defaulting to Uncategorised. Uses the same canonical
  *  identity as the rest of the app so aliased/merged items share one category. */
-export function categoryFor(item: string, catMap: CategoryMap, dbAliases?: DbAliasMap): string {
+export function categoryFor(item: string, catMap: CategoryMap, dbAliases: DbAliasMap): string {
   return catMap[canonicalItemName(item, dbAliases)] ?? UNCATEGORISED;
 }

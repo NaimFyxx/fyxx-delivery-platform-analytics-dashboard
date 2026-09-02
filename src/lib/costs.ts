@@ -55,9 +55,9 @@ export type DbAliasMap = Record<string, string>;
  * Returns the canonical normalized name for an item.
  * Checks dbAliases first (if provided), then the hardcoded ALIASES map.
  */
-export function canonicalItemName(s: string, dbAliases?: DbAliasMap): string {
+export function canonicalItemName(s: string, dbAliases: DbAliasMap): string {
   const norm = normalizeItemName(s);
-  return dbAliases?.[norm] ?? ALIASES[norm] ?? norm;
+  return dbAliases[norm] ?? ALIASES[norm] ?? norm;
 }
 
 /** Base name with option/modifier decorations removed — any "(...)" or "[...]" group.
@@ -81,7 +81,7 @@ function decoredWords(s: string): string {
  *      (e.g. report "… [1 With Salad]" → the "(With Salad)" cost row)
  *   3. the bare base row (fallback when the report shows no option)
  */
-export function costAsOf(costs: CostRow[], item: string, asOfDate: string, dbAliases?: DbAliasMap): number | null {
+export function costAsOf(costs: CostRow[], item: string, asOfDate: string, dbAliases: DbAliasMap): number | null {
   // Resolve through aliases first so a merged item finds its canonical cost row.
   const resolved = canonicalItemName(item, dbAliases);
   const q = normalizeItemName(resolved);
@@ -132,7 +132,7 @@ export function priceAsOf(
   item: string,
   platform: string,
   asOf: string,
-  dbAliases?: DbAliasMap,
+  dbAliases: DbAliasMap,
 ): number | null {
   const canonItem = canonicalItemName(item, dbAliases);
   let best: { price: number; from: string } | null = null;
@@ -156,7 +156,7 @@ export function cogsFor(
   costs: CostRow[],
   month: string,
   platforms: string[],
-  dbAliases?: DbAliasMap,
+  dbAliases: DbAliasMap,
 ): number {
   const asOf = lastDayOfMonth(month);
   let total = 0;

@@ -100,6 +100,7 @@ function InsightsPage() {
       financials: data.financials,
       rangeMonths,
       platforms,
+      dbAliases: data.itemAliases,
     }).map((r) => ({ ...r, margin: r.productMargin ?? 0 }));
     agg.sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
@@ -131,9 +132,10 @@ function InsightsPage() {
   //     roll up under Uncategorised. ---
   const byCategory = useMemo(() => {
     const catMap = data?.itemCategories ?? {};
+    const aliases = data?.itemAliases ?? {};
     const acc = new Map<string, { category: string; revenue: number; units: number }>();
     for (const r of items) {
-      const c = categoryFor(r.item, catMap);
+      const c = categoryFor(r.item, catMap, aliases);
       const e = acc.get(c) ?? { category: c, revenue: 0, units: 0 };
       e.revenue += r.revenue;
       e.units += r.units;
@@ -1018,7 +1020,7 @@ function buildPromoSpend(
     b.customerPromos += f.discount;
     b.gross += f.gross;
     b.payout += f.payout;
-    b.cogs += cogsFor(data.itemSales, data.costs, f.month, [f.platform]);
+    b.cogs += cogsFor(data.itemSales, data.costs, f.month, [f.platform], data.itemAliases);
     // Talabat paid-ads + loyalty come from the Order Report (monthly_financials); Careem's equivalents
     // (ADVERTISEMENTS / CPLUS_FEE) come from monthly_adjustments above.
     if (f.platform === "Talabat") {

@@ -13,8 +13,9 @@ import { createServerFn } from "@tanstack/react-start";
  */
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { normalizeItemName } = await import("@/lib/costs");
 
-  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -56,7 +57,17 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     // Lightweight two-column read: just platform + date, reduced to a max order date per
     // platform per month for the data-health day-coverage check (gross / order coverage only).
     supabaseAdmin.from("platform_orders").select("platform,date").limit(100000),
+    // Item name aliases (raw report spelling -> canonical name), so every COGS/category/price
+    // lookup resolves the same items the report does. Carried in the DTO so no view has to
+    // remember to load it separately. Same normalization as loadDbAliases.
+    supabaseAdmin.from("item_aliases").select("raw_name,canonical_name"),
   ]);
+
+  // Normalized alias lookup: normalized raw_name -> normalized canonical_name.
+  const itemAliases: Record<string, string> = {};
+  for (const r of (aliasData.data ?? []) as { raw_name: string; canonical_name: string }[]) {
+    itemAliases[normalizeItemName(r.raw_name)] = normalizeItemName(r.canonical_name);
+  }
 
   // Canonical item name → assigned category. Missing item = Uncategorised (resolved in the UI).
   const itemCategories: Record<string, string> = {};
@@ -154,6 +165,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     })),
     itemCategories,
     lastOrderDates,
+    itemAliases,
   };
 });
 
