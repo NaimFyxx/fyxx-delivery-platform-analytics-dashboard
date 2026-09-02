@@ -399,10 +399,10 @@ function Stepper({
   onJump: (s: number) => void;
 }) {
   const steps = [
-    { n: 1, label: "Platform", sub: platform ?? "—" },
-    { n: 2, label: "Report", sub: reportLabel ?? "—" },
-    { n: 3, label: "Upload", sub: step >= 3 ? "in progress" : "—" },
-    { n: 4, label: "Preview & Confirm", sub: step === 4 ? "in progress" : "—" },
+    { n: 1, label: "Platform", sub: platform ?? "-" },
+    { n: 2, label: "Report", sub: reportLabel ?? "-" },
+    { n: 3, label: "Upload", sub: step >= 3 ? "in progress" : "-" },
+    { n: 4, label: "Preview & Confirm", sub: step === 4 ? "in progress" : "-" },
   ];
   return (
     <div className="mt-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -437,7 +437,7 @@ function Stepper({
                 {done ? <Check className="size-3" /> : s.n}
               </span>
               <span className={cn(active && "text-primary", done && "text-success")}>
-                Step {s.n} — {s.label}
+                Step {s.n}: {s.label}
               </span>
             </div>
             <div className="text-xs text-muted-foreground mt-1 truncate">{s.sub}</div>
@@ -457,7 +457,7 @@ function Step1Platform({
 }) {
   return (
     <Card className="p-6">
-      <div className="text-sm font-semibold mb-1">Step 1 — Which platform?</div>
+      <div className="text-sm font-semibold mb-1">Step 1: Which platform?</div>
       <p className="text-xs text-muted-foreground mb-4">
         Pick the delivery platform this report came from.
       </p>
@@ -508,7 +508,7 @@ function Step2Report({
     <TooltipProvider delayDuration={200}>
       <Card className="p-6">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-sm font-semibold">Step 2 — Which report?</div>
+        <div className="text-sm font-semibold">Step 2: Which report?</div>
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ChevronLeft className="size-3.5" /> Back
         </Button>
@@ -598,7 +598,7 @@ const isLive = (p: Platform, month: string) => month >= PLATFORM_LIVE_FROM[p];
 function CoverageCell({ ok, na }: { ok: boolean; na?: boolean }) {
   if (na) {
     // Platform wasn't live this month — neutral, not a red "missing" mark.
-    return <span className="block text-center text-muted-foreground/40" title="Not live this month">—</span>;
+    return <span className="block text-center text-muted-foreground/40" title="Not live this month">-</span>;
   }
   return ok ? (
     <Check className="size-4 text-success mx-auto" />
@@ -627,9 +627,9 @@ function CoverageMatrix({
   return (
     <Card className="p-5 mb-4">
       <div className="mb-3">
-        <div className="text-sm font-semibold">Coverage — all months</div>
+        <div className="text-sm font-semibold">Coverage: all months</div>
         <p className="text-[11px] text-muted-foreground mt-0.5">
-          All reports are required — a month isn't complete until every one is imported. Click a row
+          All reports are required. A month isn't complete until every one is imported. Click a row
           to load that month below.
         </p>
       </div>
@@ -685,7 +685,7 @@ function CoverageMatrix({
                     {isCurrent ? (
                       <Badge
                         variant="outline"
-                        title="The current month isn't finished — these figures are partial."
+                        title="The current month isn't finished. These figures are partial."
                         className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]"
                       >
                         In progress
@@ -703,8 +703,8 @@ function CoverageMatrix({
         </table>
       </div>
       <p className="text-[10.5px] text-muted-foreground mt-2.5">
-        The current month isn't finished — these figures are partial. Re-import once the month closes
-        to finalise it. Months before a platform went live show “—” (n/a).
+        The current month isn't finished. These figures are partial. Re-import once the month closes
+        to finalise it. Months before a platform went live show a dash (n/a).
       </p>
     </Card>
   );
@@ -736,7 +736,7 @@ function CompletenessPanel({
       { label: "Items (By Menu Item)", key: "items" },
       { label: "Financials (Order Level)", key: "financials" },
       { label: "Adjustments", key: "adjustments" },
-      { label: "Careem Plus — Customers", key: "plus" },
+      { label: "Careem Plus · Customers", key: "plus" },
       { label: "Customers (New / Retained / Reactivated)", key: "customers" },
     ],
   };
@@ -755,8 +755,8 @@ function CompletenessPanel({
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {isCurrent
-              ? "The current month isn't finished — these figures are partial. Re-import once the month closes to finalise it."
-              : "All reports are required — a month isn't complete until every one is imported."}
+              ? "The current month isn't finished. These figures are partial. Re-import once the month closes to finalise it."
+              : "All reports are required. A month isn't complete until every one is imported."}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -781,7 +781,7 @@ function CompletenessPanel({
                   return (
                     <li key={row.key} className="flex items-center gap-2 text-[12.5px]">
                       {!live ? (
-                        <span className="size-4 flex items-center justify-center text-muted-foreground/40">—</span>
+                        <span className="size-4 flex items-center justify-center text-muted-foreground/40">-</span>
                       ) : ok ? (
                         <Check className="size-4 text-success" />
                       ) : (
@@ -794,11 +794,11 @@ function CompletenessPanel({
               </ul>
               {!live ? (
                 <div className="mt-2 text-[10.5px] text-muted-foreground italic">
-                  {p} wasn't live in {month} — n/a.
+                  {p} wasn't live in {month}, n/a.
                 </div>
               ) : incomplete ? (
                 <div className="mt-2 text-[10.5px] text-muted-foreground italic">
-                  Margin incomplete — items / financials not yet imported for {month}.
+                  Margin incomplete: items / financials not yet imported for {month}.
                 </div>
               ) : null}
             </div>
@@ -1083,7 +1083,7 @@ function CsvFlow({
       {step === 3 && (
         <>
           <Card className="p-5 mt-4 space-y-4">
-            <div className="text-sm font-semibold">Step 3 — Upload {report.label}</div>
+            <div className="text-sm font-semibold">Step 3: Upload {report.label}</div>
             <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3">
               <div className="text-xs text-muted-foreground">{report.hint}</div>
               <a
@@ -1140,7 +1140,7 @@ function CsvFlow({
                 {manualFields.map((f) => (
                   <Field key={f.key} label={f.label}>
                     <div className="mb-1 text-[11px] text-destructive">
-                      Expected “{f.defaults[0]}” — not found in this file.
+                      Expected “{f.defaults[0]}” , not found in this file.
                     </div>
                     <Select
                       value={mapping[f.key] ?? "__none__"}
@@ -1154,10 +1154,10 @@ function CsvFlow({
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="— pick column —" />
+                        <SelectValue placeholder="Pick a column" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">— none —</SelectItem>
+                        <SelectItem value="__none__">None</SelectItem>
                         {headers.map((h) => (
                           <SelectItem key={h} value={h}>
                             {h}
@@ -1191,7 +1191,7 @@ function CsvFlow({
 
       {step === 4 && preview && (
         <Card className="p-5 mt-4 space-y-4">
-          <div className="text-sm font-semibold">Step 4 — Preview &amp; confirm</div>
+          <div className="text-sm font-semibold">Step 4: Preview &amp; confirm</div>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <CheckCircle2 className="size-4 text-success" /> Preview
@@ -1369,7 +1369,7 @@ function UnrecognizedPanel({
       <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
         <AlertCircle className="size-4 shrink-0" />
         {unresolvedCount > 0
-          ? `${unresolvedCount} unrecognized product${unresolvedCount > 1 ? "s" : ""} — resolve before confirming`
+          ? `${unresolvedCount} unrecognized product${unresolvedCount > 1 ? "s" : ""} , resolve before confirming`
           : "All products resolved"}
       </div>
       <div className="space-y-2">
@@ -1862,7 +1862,7 @@ async function buildTalabatOrders(
       Date: date,
       Gross: fmtJOD(gross),
       Payout: fmtJOD(net_payout),
-      Pro: is_loyalty == null ? "—" : is_loyalty ? "Yes" : "No",
+      Pro: is_loyalty == null ? "-" : is_loyalty ? "Yes" : "No",
       Status: status ?? "",
     });
   }
@@ -1883,7 +1883,7 @@ async function buildTalabatOrders(
   const notes = [
     `${orderRows.length} order(s) → platform_orders (idempotent by order id).`,
     `Monthly financials AND daily sales recomputed for ${months.join(", ")} from these orders (Delivered only).`,
-    "Daily Talabat sales now come from this Order Report — the Performance report no longer writes them.",
+    "Daily Talabat sales now come from this Order Report. The Performance report no longer writes them.",
     "Item revenue: upload the 'Sales by Menu Item' report to populate per-item margins correctly.",
     skipped ? `${skipped} row(s) skipped (no order id / date).` : "",
   ].filter(Boolean);
@@ -1962,10 +1962,10 @@ async function buildPerformance(
   }
 
   const notes = [
-    "Daily sales are no longer taken from the Performance report — import the Order Report for Talabat daily totals (it can't be broken by Performance dropping days).",
+    "Daily sales are no longer taken from the Performance report. Import the Order Report for Talabat daily totals (it can't be broken by Performance dropping days).",
     hasCust
       ? `Fills Customers: ${custRows.length} month(s) of new vs returning orders → monthly_customers (basis = orders).`
-      : "No new/returning customer columns found — this Performance file has nothing left to import.",
+      : "No new/returning customer columns found: this Performance file has nothing left to import.",
     skipped ? `${skipped} row(s) skipped (no valid date).` : "",
   ].filter(Boolean);
 
@@ -2195,7 +2195,7 @@ async function buildTalabatItems(
     willUpdate,
     skipped,
     notes: [
-      `${items.length} item(s) for ${month} on Talabat — revenue included.`,
+      `${items.length} item(s) for ${month} on Talabat, revenue included.`,
       `This import replaces all existing Talabat item rows for ${month}.`,
       skipped ? `${skipped} row(s) skipped (blank name).` : "",
     ].filter(Boolean),
@@ -2227,7 +2227,7 @@ async function buildCareemItems(
   // month on import, so a partial-week file would silently discard the rest.
   let blockReason: string | undefined;
   if (fromDateParsed && !fromDateParsed.endsWith("-01")) {
-    blockReason = `Partial-month export — this file starts ${fromDateParsed}, not the 1st of ${month}. Item sales replace the whole month, so re-export with the date range starting on the 1st.`;
+    blockReason = `Partial-month export: this file starts ${fromDateParsed}, not the 1st of ${month}. Item sales replace the whole month, so re-export with the date range starting on the 1st.`;
   }
 
   const { isRecognized, knownProducts } = await loadRecognitionData(month);
@@ -2284,7 +2284,7 @@ async function buildCareemItems(
     `All ${items.length} item(s) tagged with period ${month} on ${platform}.`,
     hasRevenue
       ? "Revenue (JOD) per item will be stored."
-      : "No revenue column mapped — revenue saves as 0 (Insights ranks by units).",
+      : "No revenue column mapped: revenue saves as 0 (Insights ranks by units).",
     skipped ? `${skipped} row(s) skipped (blank name).` : "",
   ].filter(Boolean);
   return {
@@ -2396,11 +2396,11 @@ async function buildAdjustments(
     previewRows,
     rowFlags: adjRows.map(() => false),
     coverRange,
-    requireConfirm: `I confirm this file covers the full month of ${months.join(" / ")} — existing adjustments will be replaced.`,
+    requireConfirm: `I confirm this file covers the full month of ${months.join(" / ")}; existing adjustments will be replaced.`,
   };
 }
 
-/** Careem Plus — Customers: daily cplus / non_cplus counts → daily_sales (by date). */
+/** Careem Plus · Customers: daily cplus / non_cplus counts → daily_sales (by date). */
 async function buildPlusCustomers(
   platform: Platform,
   m: Mapping,

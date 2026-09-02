@@ -93,7 +93,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     table: "platform_orders",
     monthSource: "from-rows",
     signature: ["Order ID", "Payout Amount", "Order Items"],
-    hint: "One row per order — money, items and Pro flag. Daily sales, monthly financials (and, with the item report, per-item margins) are all derived from it. This is the source of truth for Talabat daily sales — immune to the Performance report dropping days.",
+    hint: "One row per order: money, items and Pro flag. Daily sales, monthly financials (and, with the item report, per-item margins) are all derived from it. This is the source of truth for Talabat daily sales, immune to the Performance report dropping days.",
     fields: [
       { key: "order_id", label: "Order ID", defaults: ["Order ID"], required: true },
       {
@@ -155,7 +155,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     table: "monthly_customers",
     monthSource: "from-rows",
     signature: ["Date", "Gross Sales", "Successful Orders"],
-    hint: "Fills the new-vs-returning Customers slot — those counts live ONLY in this report. Daily sales are NOT taken from here (the Performance report can silently drop days); they come from the Order Report instead.",
+    hint: "Fills the new-vs-returning Customers slot: those counts live ONLY in this report. Daily sales are NOT taken from here (the Performance report can silently drop days); they come from the Order Report instead.",
     fields: [
       { key: "date", label: "Date", defaults: ["Date"], required: true },
       { key: "sales_jod", label: "Gross Sales", defaults: ["Gross Sales"], required: true },
@@ -204,11 +204,11 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalUrl: T_MENU_ITEM,
     portalLabel: "Open Reports (Menu Item)",
     portalSteps:
-      "Reports → set the date range to a full calendar month (1st–last day) → scroll to the 'Sales by Menu Item' card → click the download icon (top-right of that card). The file downloads as popularDishes_<dates>.csv with columns Dish / Total / Sales.",
+      "Reports → set the date range to a full calendar month (1st to last day) → scroll to the 'Sales by Menu Item' card → click the download icon (top-right of that card). The file downloads as popularDishes_<dates>.csv with columns Dish / Total / Sales.",
     table: "monthly_item_sales",
     monthSource: "from-rows",
     signature: ["Dish", "Total", "Sales"],
-    hint: "Per-item revenue and unit counts for the month. Replaces the whole month's Talabat item rows on import — always export a full calendar month.",
+    hint: "Per-item revenue and unit counts for the month. Replaces the whole month's Talabat item rows on import, always export a full calendar month.",
     fields: [
       { key: "item_name", label: "Dish (item name)", defaults: ["Dish"], required: true },
       { key: "units", label: "Total (units sold)", defaults: ["Total"], required: true },
@@ -229,7 +229,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     table: "platform_orders",
     monthSource: "from-rows",
     signature: ["REFERENCE_ID", "TRANSACTION_DATE", "TOTAL_PAYOUT_AMOUNT"],
-    hint: "One row per order — money + payout. Daily totals and monthly financials are derived from it. Only FOOD_ORDER rows are kept.",
+    hint: "One row per order: money + payout. Daily totals and monthly financials are derived from it. Only FOOD_ORDER rows are kept.",
     fields: [
       { key: "entry_type", label: "ENTRY_TYPE (filter)", defaults: ["ENTRY_TYPE"], required: true },
       {
@@ -305,12 +305,12 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalUrl: C_PERF,
     portalLabel: "Open Business Performance",
     portalSteps:
-      "Analytics & reports → Sales Performance → Gross sales breakdown → 'By menu item' → Export. The file has columns menu_item / orders / sales (no dates) — pick the month in the wizard above.",
+      "Analytics & reports → Sales Performance → Gross sales breakdown → 'By menu item' → Export. The file has columns menu_item / orders / sales (no dates), pick the month in the wizard above.",
     table: "monthly_item_sales",
     // The export has no FromDate/ToDate — use the month selected in the wizard.
     monthSource: "none",
     signature: ["menu_item|Name", "orders|Orders"],
-    hint: "Careem item-level sales (menu_item / orders / sales). Uses the month selected in the wizard — re-importing updates each item for that month.",
+    hint: "Careem item-level sales (menu_item / orders / sales). Uses the month selected in the wizard, re-importing updates each item for that month.",
     fields: [
       { key: "item_name", label: "Item name", defaults: ["menu_item", "Name"], required: true },
       { key: "units", label: "Orders (units)", defaults: ["orders", "Orders"], required: true },
@@ -338,7 +338,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     // (CATEGORY / TRANSACTION_DATE / TOTAL_AMOUNT / REFERENCE_ID). The friendly
     // on-screen labels are accepted too as a fallback. "A|B" = either header satisfies it.
     signature: ["CATEGORY|Type of deduction", "TOTAL_AMOUNT|Amount"],
-    hint: "Native finance export — fee deductions (Careem Plus contribution + tax, bank transfer fee + tax, customer-complaint clawbacks). Carry-over / cashout (positive) lines are excluded. Subtracted from the order-derived payout.",
+    hint: "Native finance export: fee deductions (Careem Plus contribution + tax, bank transfer fee + tax, customer-complaint clawbacks). Carry-over / cashout (positive) lines are excluded. Subtracted from the order-derived payout.",
     fields: [
       {
         key: "deduction_type",
@@ -372,7 +372,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
   "careem:plus_customers": {
     id: "careem:plus_customers",
     platform: "Careem",
-    label: "Careem Plus — Customers",
+    label: "Careem Plus · Customers",
     portalUrl: C_CUSTOMER_INSIGHTS,
     portalLabel: "Open Customer Insights",
     portalSteps:
@@ -380,7 +380,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     table: "daily_sales",
     monthSource: "from-rows",
     signature: ["date", "cplus", "non_cplus"],
-    hint: "Daily Careem Plus vs non-Plus customer counts (Careem exports no Plus sales/orders — only these counts). Written into daily_sales; powers the Careem+ customer-mix insight.",
+    hint: "Daily Careem Plus vs non-Plus customer counts (Careem exports no Plus sales/orders, only these counts). Written into daily_sales; powers the Careem+ customer-mix insight.",
     fields: [
       { key: "date", label: "Date", defaults: ["date", "Date"], required: true },
       { key: "cplus_customers", label: "Careem Plus customers", defaults: ["cplus"], required: true },
@@ -396,7 +396,7 @@ export const REPORTS: Record<ReportId, ReportDef> = {
     portalUrl: C_CUSTOMER_INSIGHTS,
     portalLabel: "Open Customer Insights",
     portalSteps:
-      "Analytics & reports → Customer Insights → 'No. of customers' card → 'New, retained, reactivated' tab → set date range to a full calendar month → Export. ⚠ The correct file has columns date, new_user, retained_user, reactivated_user. A date, overall file (from Sales Performance) is the WRONG export and will not import here — it has no per-segment breakdown.",
+      "Analytics & reports → Customer Insights → 'No. of customers' card → 'New, retained, reactivated' tab → set date range to a full calendar month → Export. ⚠ The correct file has columns date, new_user, retained_user, reactivated_user. A date, overall file (from Sales Performance) is the WRONG export and will not import here, it has no per-segment breakdown.",
     table: "monthly_customers",
     monthSource: "from-rows",
     signature: ["Number of customers - New users|new_user", "Number of customers - Retained users|retained_user"],
@@ -452,7 +452,7 @@ export function validateSignature(headers: string[], report: ReportDef): string 
   if (report.positional) {
     return headers.length >= 2
       ? null
-      : `That doesn't look like the ${report.label} export — expected a 2-column file (date + value).`;
+      : `That doesn't look like the ${report.label} export, expected a 2-column file (date + value).`;
   }
   const lower = headers.map((h) => h.toLowerCase().trim());
   // A signature entry may list alternatives as "A|B" — satisfied if ANY alternative is present.

@@ -73,7 +73,7 @@ export function useRangeFilter({ allMonths, today }: { allMonths: string[]; toda
     if (range === "all") return "all time";
     const lo = customFrom <= customTo ? customFrom : customTo;
     const hi = customFrom <= customTo ? customTo : customFrom;
-    return lo === hi ? fullMonthLabel(lo) : `${fullMonthLabel(lo)} – ${fullMonthLabel(hi)}`;
+    return lo === hi ? fullMonthLabel(lo) : `${fullMonthLabel(lo)} to ${fullMonthLabel(hi)}`;
   }, [range, customFrom, customTo]);
 
   return {

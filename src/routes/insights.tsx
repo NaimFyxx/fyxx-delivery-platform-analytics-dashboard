@@ -34,7 +34,7 @@ export const Route = createFileRoute("/insights")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Insights — The Green Room" },
+      { title: "Insights · The Green Room" },
       {
         name: "description",
         content: "Item-level, top product, and Careem+ / Talabat Pro tier insights.",
@@ -311,7 +311,7 @@ function InsightsPage() {
         ) : (
         <>
         {/* CUSTOMER TIERS — prominent */}
-        <SectionLabel>Customer Tiers — Careem+ &amp; Talabat Pro</SectionLabel>
+        <SectionLabel>Customer Tiers · Careem+ &amp; Talabat Pro</SectionLabel>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
           <TierCard
             title="Careem+ vs Regular"
@@ -320,7 +320,7 @@ function InsightsPage() {
             bg="linear-gradient(135deg, #0a3d2b, #0f5c3e)"
           >
             {!careemMix || !careemMix.has ? (
-              <Empty text="Import the Careem Plus — Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
+              <Empty text="Import the Careem Plus · Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
             ) : (
               <CustomerMixBody mix={careemMix} colorVar="var(--careem)" barColor="#5fd0a3" />
             )}
@@ -354,7 +354,7 @@ function InsightsPage() {
             <>
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <SpendKpi label="Total spend" value={fmtJOD0(promo.total)} />
-                <SpendKpi label="% of gross" value={promo.pctGross != null ? `${promo.pctGross.toFixed(1)}%` : "—"} />
+                <SpendKpi label="% of gross" value={promo.pctGross != null ? `${promo.pctGross.toFixed(1)}%` : "-"} />
                 <SpendKpi label="Biggest category" value={promo.biggest[0]} sub={fmtJOD0(promo.biggest[1])} />
               </div>
               <div className="h-[260px]">
@@ -390,14 +390,14 @@ function InsightsPage() {
             <div className="bg-card border border-border rounded-2xl p-4">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% Returning (repeat rate)<InfoTip id="repeat_rate" side="bottom" /></div>
               <div className="font-display text-3xl font-semibold">
-                {customerKpi.pctReturning != null ? `${customerKpi.pctReturning.toFixed(1)}%` : "—"}
+                {customerKpi.pctReturning != null ? `${customerKpi.pctReturning.toFixed(1)}%` : "-"}
               </div>
               <div className="text-[10.5px] text-muted-foreground mt-1">
                 {Math.round(customerKpi.totalReturning).toLocaleString()} returning /{" "}
                 {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
                 {customerKpi.hasMultipleBases && (
                   <span className="block mt-0.5 text-amber-600 dark:text-amber-400">
-                    Careem = customers · Talabat = orders — KPI shown for informational comparison only.
+                    Careem = customers · Talabat = orders. KPI shown for informational comparison only.
                   </span>
                 )}
               </div>
@@ -408,7 +408,7 @@ function InsightsPage() {
             <div className="bg-card border border-border rounded-2xl p-4">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% New<InfoTip id="new_customers" side="bottom" /></div>
               <div className="font-display text-3xl font-semibold">
-                {customerKpi.pctNew != null ? `${customerKpi.pctNew.toFixed(1)}%` : "—"}
+                {customerKpi.pctNew != null ? `${customerKpi.pctNew.toFixed(1)}%` : "-"}
               </div>
               <div className="text-[10.5px] text-muted-foreground mt-1">
                 {Math.round(customerKpi.totalNew).toLocaleString()} new /{" "}
@@ -442,13 +442,13 @@ function InsightsPage() {
         )}
 
         {/* TOP PRODUCTS */}
-        <SectionLabel>Top Products — Ranked by Units Sold</SectionLabel>
+        <SectionLabel>Top Products · Ranked by Units Sold</SectionLabel>
         <Panel
           title="Top 10 items"
           sub={
             anyRevenue
               ? "Ranked by revenue (JOD) from popular-dishes / gross-breakdown imports."
-              : "Ranked by units — no revenue values imported yet. Re-import with the Revenue column mapped to populate."
+              : "Ranked by units, no revenue values imported yet. Re-import with the Revenue column mapped to populate."
           }
           asOf={freshness.items}
         >
@@ -622,25 +622,25 @@ function InsightsPage() {
                       <td className="px-3 py-2 sticky left-0 z-10 bg-card border-r border-border">{r.item}</td>
                       <td className="px-3 py-2 text-right text-num">{r.units.toLocaleString()}</td>
                       <td className="px-3 py-2 text-right text-num font-semibold">
-                        {r.revenue > 0 ? Math.round(r.revenue).toLocaleString() : "—"}
+                        {r.revenue > 0 ? Math.round(r.revenue).toLocaleString() : "-"}
                       </td>
                       <td className="px-3 py-2 text-right text-num text-muted-foreground">
-                        {r.avgPrice != null ? r.avgPrice.toFixed(2) : "—"}
+                        {r.avgPrice != null ? r.avgPrice.toFixed(2) : "-"}
                       </td>
                       <td className="px-3 py-2 text-right text-num text-muted-foreground">
-                        {r.lastCost != null ? r.lastCost.toFixed(2) : "—"}
+                        {r.lastCost != null ? r.lastCost.toFixed(2) : "-"}
                       </td>
                       <td className="px-3 py-2 text-right text-num">
-                        {r.cogs > 0 ? Math.round(r.cogs).toLocaleString() : "—"}
+                        {r.cogs > 0 ? Math.round(r.cogs).toLocaleString() : "-"}
                       </td>
                       <td className="px-3 py-2 text-right text-num" style={{ color: r.revenue > 0 && r.cogs > 0 ? r.margin >= 45 ? "var(--careem)" : "#f5b400" : "var(--muted-foreground)" }}>
-                        {r.revenue > 0 && r.cogs > 0 ? `${r.margin.toFixed(1)}%` : "—"}
+                        {r.revenue > 0 && r.cogs > 0 ? `${r.margin.toFixed(1)}%` : "-"}
                       </td>
                       <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.commMargin != null ? r.commMargin >= 30 ? "var(--careem)" : r.commMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
-                        {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "—"}
+                        {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "-"}
                       </td>
                       <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.netMargin != null ? r.netMargin >= 30 ? "var(--careem)" : r.netMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
-                        {r.netMargin != null ? `${r.netMargin.toFixed(1)}%` : "—"}
+                        {r.netMargin != null ? `${r.netMargin.toFixed(1)}%` : "-"}
                       </td>
                     </tr>
                   ))}
@@ -734,7 +734,7 @@ function Panel({
           {sub && <div className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
         </div>
         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-          Data as of {asOf ?? "—"}
+          Data as of {asOf ?? "-"}
         </span>
       </div>
       {children}
@@ -766,7 +766,7 @@ function TierCard({
           {sub && <div className="text-[10.5px] text-white/60 mt-0.5">{sub}</div>}
         </div>
         <span className="text-[10px] text-white/50 whitespace-nowrap">
-          Data as of {asOf ?? "—"}
+          Data as of {asOf ?? "-"}
         </span>
       </div>
       {children}
@@ -901,7 +901,7 @@ function TierBody({
       />
       <div className="grid grid-cols-3 gap-2 pt-2">
         <MiniStat label={`${subLabel} AOV`} value={t.subAov.toFixed(2)} unit="JOD" accentColor={colorVar} />
-        <MiniStat label="Regular AOV" value={t.nonOrders > 0 ? t.regAov.toFixed(2) : "—"} unit={t.nonOrders > 0 ? "JOD" : ""} />
+        <MiniStat label="Regular AOV" value={t.nonOrders > 0 ? t.regAov.toFixed(2) : "-"} unit={t.nonOrders > 0 ? "JOD" : ""} />
         <MiniStat label="Overall AOV" value={t.overallAov.toFixed(2)} unit="JOD" />
       </div>
     </div>
@@ -1156,7 +1156,7 @@ function CustomerPanel({
           </div>
         </div>
         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-          Data as of {freshness ?? "—"}
+          Data as of {freshness ?? "-"}
         </span>
       </div>
 

@@ -340,7 +340,7 @@ function AnomalyNote({ gross, discount, payout, cogs }: { gross: number; discoun
           <span className="text-foreground font-medium">{fmtJOD(payout)}</span>. You still paid{" "}
           <span className="text-foreground font-medium">{fmtJOD(cogs)}</span> in food cost, so net
           profit (= ex-VAT payout − COGS) is negative even though sales looked healthy. This is real
-          settlement data, not an error — the detail is in the platform's invoice/adjustments.
+          settlement data, not an error. The detail is in the platform's invoice/adjustments.
         </p>
       </PopoverContent>
     </Popover>

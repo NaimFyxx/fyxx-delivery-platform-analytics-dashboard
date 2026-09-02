@@ -15,7 +15,7 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "The Green Room — Delivery Pace" },
+      { title: "The Green Room · Delivery Pace" },
       { name: "description", content: "Live pace and KPIs for The Green Room. Talabat & Careem." },
     ],
   }),

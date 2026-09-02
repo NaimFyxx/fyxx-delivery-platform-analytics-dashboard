@@ -144,7 +144,7 @@ export function AddProductDialog({
         .upsert({ item_key: canonicalItemName(nm, dbAliases), category }, { onConflict: "item_key" });
       if (catRes.error) throw catRes.error;
 
-      await logImport({ platform: "—", report_type: "invoice", file_name: `new product: ${nm}` });
+      await logImport({ platform: "-", report_type: "invoice", file_name: `new product: ${nm}` });
     },
     onSuccess: () => {
       toast.success(`Added “${name.trim()}”`);

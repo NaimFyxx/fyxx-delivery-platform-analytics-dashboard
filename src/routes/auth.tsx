@@ -46,7 +46,7 @@ function AuthPage() {
     setLoading(false);
     if (error) return toast.error(error.message);
     localStorage.setItem(UNLOCK_KEY, "1");
-    toast.success("Account created — signing you in");
+    toast.success("Account created, signing you in");
     nav({ to: "/dashboard" });
   }
 
@@ -65,7 +65,7 @@ function AuthPage() {
             </h1>
             <p className="mt-4 text-muted-foreground max-w-md">
               Talabat and Careem performance, side by side. Sales, payouts,
-              margin and targets — without the spreadsheet gymnastics.
+              margin and targets, without the spreadsheet gymnastics.
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80">

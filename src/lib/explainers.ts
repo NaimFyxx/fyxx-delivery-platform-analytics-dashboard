@@ -9,7 +9,7 @@ export interface Explainer {
 
 /** Shared note explaining Careem food-basket vs the portal's GMV headline. */
 const CAREEM_BASKET_NOTE =
-  "Careem = your food-basket revenue (menu value of items sold). This runs ~10–11% below Careem's portal “Total Sales / GMV”, which also includes delivery & platform fees that aren't your revenue. Both are correct — they measure different things. Talabat already matches because it reports food sales, not GMV.";
+  "Careem = your food-basket revenue (menu value of items sold). This runs ~10-11% below Careem's portal “Total Sales / GMV”, which also includes delivery & platform fees that aren't your revenue. Both are correct: they measure different things. Talabat already matches because it reports food sales, not GMV.";
 
 export const EXPLAINERS: Record<string, Explainer> = {
   // Sales & basket
@@ -22,7 +22,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   aov: {
     label: "Avg Basket (AOV)",
-    meaning: "Average order value — how much an average order is worth.",
+    meaning: "Average order value: how much an average order is worth.",
     formula: "gross sales ÷ orders",
     example: "737 ÷ 24 ≈ 30.7 JOD.",
   },
@@ -100,7 +100,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   avg_price_unit: {
     label: "Avg price / unit",
-    meaning: "Average realized selling price per unit — what customers actually paid after discounts and combos.",
+    meaning: "Average realized selling price per unit: what customers actually paid after discounts and combos.",
     formula: "revenue ÷ units",
     example: "305 ÷ 30 ≈ 10.17 JOD.",
   },
@@ -120,7 +120,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   pace_prorated: {
     label: "% of pace",
-    meaning: "Where you are vs where you'd need to be by today to finish the month on target. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the target you've hit — that's the big number on the left.)",
+    meaning: "Where you are vs where you'd need to be by today to finish the month on target. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the target you have hit. That is the big number on the left.)",
     formula: "sales ÷ (target × dayOfMonth ÷ daysInMonth) × 100",
     example: "Day 27/30 → you'd expect 1,485; at 771 that's 52% of pace (well behind).",
   },
@@ -147,7 +147,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   // Financials
   discount: {
     label: "Discount",
-    meaning: "Partner-funded promos and vouchers you absorbed — the inconsistent spend across months.",
+    meaning: "Partner-funded promos and vouchers you absorbed: the inconsistent spend across months.",
     formula: "Σ |partner-funded discounts + vouchers|",
     example: "Jun Talabat = 86.73 JOD.",
   },
@@ -170,7 +170,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   // Customers
   new_customers: {
     label: "New customers",
-    meaning: "First-ever orders in the period — customers placing their debut order. Careem counts unique customers; Talabat reports order counts (not unique customers), so 'All platforms' blends the two bases.",
+    meaning: "First-ever orders in the period: customers placing their debut order. Careem counts unique customers; Talabat reports order counts (not unique customers), so 'All platforms' blends the two bases.",
     formula: "count(new)",
   },
   returning_customers: {
@@ -185,12 +185,12 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   retained: {
     label: "Retained",
-    meaning: "Returning customers who kept ordering without lapsing — loyal regulars.",
+    meaning: "Returning customers who kept ordering without lapsing: loyal regulars.",
     formula: "returning − reactivated",
   },
   repeat_rate: {
     label: "Repeat rate",
-    meaning: "Share of returning (non-first-time) customers. Careem measures this by unique customers; Talabat by orders, since Talabat only reports order-level data — so 'All platforms' blends the two bases.",
+    meaning: "Share of returning (non-first-time) customers. Careem measures this by unique customers; Talabat by orders, since Talabat only reports order-level data, so 'All platforms' blends the two bases.",
     formula: "returning ÷ total × 100",
     example: "14 returning / 20 total = 70%.",
   },
@@ -199,7 +199,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   chart_sales_by_platform: {
     label: "Sales by Platform",
     meaning:
-      "Gross sales (incl VAT) per platform — monthly bars over the selected range, daily view when a single month is chosen.",
+      "Gross sales (incl VAT) per platform: monthly bars over the selected range, daily view when a single month is chosen.",
     note: CAREEM_BASKET_NOTE,
   },
   chart_margin_trend: {
@@ -220,6 +220,6 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   target_line: {
     label: "Target line",
-    meaning: "The monthly sales-target reference line — where you need to be by end of month.",
+    meaning: "The monthly sales-target reference line: where you need to be by end of month.",
   },
 };

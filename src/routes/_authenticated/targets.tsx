@@ -203,7 +203,7 @@ function TargetsPage() {
                     Combined <span className="font-semibold text-foreground">{fmtJOD(cActual)}</span> / {fmtJOD(cTarget)}
                   </span>
                   <span className="text-num font-semibold" style={{ color: combinedPct >= 1 ? "var(--careem)" : undefined }}>
-                    {cTarget > 0 ? fmtPct(combinedPct) : "—"}
+                    {cTarget > 0 ? fmtPct(combinedPct) : "-"}
                   </span>
                 </div>
 

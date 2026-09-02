@@ -29,7 +29,8 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
           className={cn("w-full justify-start text-left font-normal", !valid && "text-muted-foreground", className)}
         >
           <CalendarIcon className="mr-2 size-4" />
-          {valid ? format(valid, "PPP") : <span>{placeholder}</span>}
+          {/* Short unambiguous form ("2 Sep 2026") so the value fits the field on the Date/Platform/Amount row. */}
+          {valid ? format(valid, "d MMM yyyy") : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

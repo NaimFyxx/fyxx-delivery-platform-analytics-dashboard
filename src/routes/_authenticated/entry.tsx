@@ -29,7 +29,7 @@ function Entry() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-4">
-        <PageHeader title="Data entry" description="Pace tracker entries feed the pace bar only — they are separate from imported data. Item costs, menu prices and targets are also entered here." />
+        <PageHeader title="Data entry" description="Pace tracker entries feed the pace bar only. They are separate from imported data. Item costs, menu prices and targets are also entered here." />
         <div className="pt-1 shrink-0 hidden md:block">
           <AddProductDialog />
         </div>
@@ -209,7 +209,7 @@ function DailySalesForm() {
             return (
               <div key={p} className={`inline-flex items-center text-xs ${lagging ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
                 <span className="font-semibold">{p}</span>
-                <span className="ml-1">— {last ? `last entered: ${fmtDayMonYear(last)}` : "no entries yet."}</span>
+                <span className="ml-1">· {last ? `last entered ${fmtDayMonYear(last)}` : "no entries yet."}</span>
                 {lagging && <span className="ml-1">· {behind} days behind ⚠</span>}
                 {lagging && behind <= 31 && (
                   <button
@@ -232,7 +232,7 @@ function DailySalesForm() {
             <Input type="number" step="0.001" min="0" value={sales} onChange={(e) => setSales(e.target.value)} required />
             <p className="text-[10.5px] leading-snug text-muted-foreground">
               {platform === "Careem"
-                ? "Enter the food-basket total from the Order Level export (TOTAL_AMOUNT) — NOT the Careem app's “Total Sales / GMV” figure, which is ~10–11% higher (it includes delivery & platform fees). Easiest and safest: use the CSV import below."
+                ? "Enter the food-basket total from the Order Level export (TOTAL_AMOUNT), NOT the Careem app's “Total Sales / GMV” figure, which is ~10-11% higher (it includes delivery & platform fees). Easiest and safest: use the CSV import below."
                 : "Talabat's “Sales” figure is correct as-is (it's the food subtotal)."}
             </p>
           </Field>
@@ -251,7 +251,7 @@ function DailySalesForm() {
                 <>You last entered <strong>{platform}</strong> on {fmtDayMonYear(gap.prevLatest)}.
                 Fill {gap.missing.length === 1
                   ? fmtDayMonYear(gap.missing[0])
-                  : `${fmtDayMonYear(gap.missing[0])} – ${fmtDayMonYear(gap.missing[gap.missing.length - 1])}`}
+                  : `${fmtDayMonYear(gap.missing[0])} to ${fmtDayMonYear(gap.missing[gap.missing.length - 1])}`}
                 {" "}({gap.missing.length} day{gap.missing.length > 1 ? "s" : ""}) with 0 sales / 0 orders?</>
               )}
             </DialogDescription>
@@ -324,7 +324,7 @@ function DailySalesForm() {
           ) : r.orders != null ? (
             fmtInt(r.orders)
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           ),
           <DeleteBtn key="d" onClick={() => del.mutate(r.id)} />,
         ])}
@@ -353,7 +353,7 @@ const PACE_IMPORT: Record<
     grossCols: ["TOTAL_AMOUNT"],
     entryTypeCols: ["ENTRY_TYPE"],
     statusCols: ["STATUS"],
-    note: "Careem: from the Order Level export — sums TOTAL_AMOUNT (gross) for delivered FOOD_ORDER rows, grouped by TRANSACTION_DATE.",
+    note: "Careem: from the Order Level export: sums TOTAL_AMOUNT (gross) for delivered FOOD_ORDER rows, grouped by TRANSACTION_DATE.",
   },
 };
 
@@ -453,7 +453,7 @@ function PaceCsvImport({ onImported }: { onImported: () => void }) {
     <Card className="p-5">
       <div className="text-sm font-semibold mb-1">Or import a CSV</div>
       <p className="text-xs text-muted-foreground mb-3">
-        Upload a Talabat or Careem order-detail export — it sums gross sales per day and writes one
+        Upload a Talabat or Careem order-detail export: it sums gross sales per day and writes one
         figure per date into the pace tracker (same as entering it by hand). Re-importing replaces
         those dates.
       </p>
@@ -518,7 +518,7 @@ function PaceCsvImport({ onImported }: { onImported: () => void }) {
             className="bg-gradient-primary text-primary-foreground"
           >
             {importMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-            Confirm — write {preview.length} day(s) to {platform}
+            Confirm: write {preview.length} day(s) to {platform}
           </Button>
         </div>
       )}
@@ -678,7 +678,7 @@ function ItemCostsForm() {
         item_name: name, cost_exvat: Number(cost), effective_from: from,
       });
       if (error) throw error;
-      await logImport({ platform: "—", report_type: "invoice", file_name: `cost: ${name}` });
+      await logImport({ platform: "-", report_type: "invoice", file_name: `cost: ${name}` });
     },
     onSuccess: () => { toast.success("Cost version added"); setCost(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -796,7 +796,7 @@ function TargetsForm() {
       if (payload.length === 0) throw new Error("Enter a target for at least one platform");
       const { error } = await supabase.from("targets").upsert(payload, { onConflict: "month,platform" });
       if (error) throw error;
-      await logImport({ platform: "—", report_type: "invoice", file_name: `target: ${month}` });
+      await logImport({ platform: "-", report_type: "invoice", file_name: `target: ${month}` });
     },
     onSuccess: () => { toast.success("Targets saved"); setTalT(""); setCarT(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
@@ -1025,7 +1025,7 @@ function ClearMonthForm() {
           Deletes <strong>all imported rows</strong> for the chosen month and platform from
           daily_sales, platform_orders, monthly_item_sales, monthly_financials, monthly_adjustments,
           and monthly_customers.
-          This cannot be undone — the data must be re-imported.
+          This cannot be undone. The data must be re-imported.
         </p>
       </div>
 

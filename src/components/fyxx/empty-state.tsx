@@ -6,7 +6,7 @@ export function EmptyState({ label }: { label: string }) {
     <div className="rounded-2xl border border-border bg-card p-10 md:p-14 text-center">
       <h3 className="font-display text-lg font-semibold">No data for this period</h3>
       <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-        Nothing has been entered for {label} yet — check back later.
+        Nothing has been entered for {label} yet. Check back later.
       </p>
     </div>
   );
