@@ -5,8 +5,8 @@
  * browser (which embeds the web fonts as vectors so the output matches the template).
  * No calculation, margin/VAT logic, importer or aggregation is changed here.
  */
-import { exVat } from "./fyxx";
-import { cogsFor, canonicalItemName, normalizeItemName, type DbAliasMap } from "./costs";
+import { canonicalItemName, normalizeItemName, type DbAliasMap } from "./costs";
+import { moneyTrail, type MoneyTrail, type MoneyTrailInput } from "./money-trail";
 import { categoryFor } from "./categories";
 import { TGR_LOGO, TALABAT_LOGO, CAREEM_LOGO } from "./report-logos";
 import type { DashboardData } from "./dashboard.functions";
@@ -24,28 +24,12 @@ const monthShortUpper = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleStri
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-// ---------- period math (mirrors the Financials page) ----------
-type PeriodTotals = {
-  gross: number; payout: number; discount: number; netSales: number; commFees: number;
-  cogs: number; payoutExVat: number; netProfit: number; netMargin: number; prodMargin: number;
-};
-
-function periodTotals(data: DashboardData, months: string[], platforms: string[], dbAliases: DbAliasMap): PeriodTotals {
-  let gross = 0, payout = 0, discount = 0;
-  for (const f of data.financials) {
-    if (!months.includes(f.month) || !platforms.includes(f.platform)) continue;
-    gross += f.gross; payout += f.payout; discount += f.discount;
-  }
-  let cogs = 0;
-  for (const m of months) cogs += cogsFor(data.itemSales, data.costs, m, platforms, dbAliases);
-  const netSales = gross - discount;
-  const commFees = netSales - payout;
-  const payoutExVat = exVat(payout);
-  const netProfit = payoutExVat - cogs;
-  const netMargin = payoutExVat > 0 ? netProfit / payoutExVat : 0;
-  const grossExVat = exVat(gross);
-  const prodMargin = grossExVat > 0 ? (grossExVat - cogs) / grossExVat : 0;
-  return { gross, payout, discount, netSales, commFees, cogs, payoutExVat, netProfit, netMargin, prodMargin };
+// ---------- period math ----------
+// The report renders the shared money trail. It does not compute its own totals; `periodTotals`
+// here is a thin wrapper over moneyTrail so the report cannot diverge from Overview/Financials.
+function periodTotals(data: DashboardData, months: string[], platforms: PlatformName[], dbAliases: DbAliasMap): MoneyTrail {
+  const input: MoneyTrailInput = { ...data, itemAliases: dbAliases };
+  return moneyTrail(input, months, platforms);
 }
 
 function finGross(data: DashboardData, month: string, platform: string): number {
@@ -225,11 +209,11 @@ export function buildReportModel(
       splitCar: money0(carMonthGross),
       netProfit: money0(month.netProfit),
       netMargin: pct1(month.netMargin),
-      prodMargin: pct1(month.prodMargin),
+      prodMargin: pct1(month.productMargin),
     },
     money: [
       { label: "Gross sales (incl VAT)", month: money2(month.gross), ytd: money2(ytd.gross), cls: "name" },
-      { label: "Less: discounts", month: paren(month.discount), ytd: paren(ytd.discount), cls: "name sub" },
+      { label: "Less: discounts", month: paren(month.discounts), ytd: paren(ytd.discounts), cls: "name sub" },
       { label: "Net sales (NSV)", month: money2(month.netSales), ytd: money2(ytd.netSales), cls: "name" },
       { label: "Less: commissions &amp; fees", month: paren(month.commFees), ytd: paren(ytd.commFees), cls: "name sub" },
       { label: "Payout received", month: money2(month.payout), ytd: money2(ytd.payout), cls: "name" },

@@ -24,10 +24,10 @@ import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { Header, Segmented, SectionLabel, type PlatformKey } from "./dashboard";
 import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
-import { platformsFromFilter, exVat, fmtJOD0 } from "@/lib/fyxx";
-import { cogsFor } from "@/lib/costs";
+import { platformsFromFilter, fmtJOD0, type Platform } from "@/lib/fyxx";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 import { aggregateItems } from "@/lib/items";
+import { moneyTrail } from "@/lib/money-trail";
 import { categoryFor } from "@/lib/categories";
 
 export const Route = createFileRoute("/insights")({
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/insights")({
 
 type SortKey = "item" | "units" | "revenue" | "avgPrice" | "cogs" | "cost" | "margin" | "commMargin" | "netMargin";
 
-function InsightsPage() {
+export function InsightsPage() {
   const { adminUser, sessionChecked, handleSignOut } = useSoftGate();
 
   const fetchData = useServerFn(getDashboardData);
@@ -997,11 +997,14 @@ function buildPromoSpend(
 ) {
   if (!data || !rangeMonths.length) return null;
   const inRange = new Set(rangeMonths);
-  type Bucket = { customerPromos: number; paidAds: number; promoSharing: number; loyaltySubsidy: number; gross: number; payout: number; cogs: number };
+  const plats = platforms as Platform[];
+  // Marketing spend only. Gross, payout, COGS and net margin come from the shared money trail below,
+  // never recomputed here. These four categories are Insights-specific (adjustments + Talabat fees).
+  type Bucket = { customerPromos: number; paidAds: number; promoSharing: number; loyaltySubsidy: number };
   const byMonth = new Map<string, Bucket>();
   const ensure = (m: string) => {
     let b = byMonth.get(m);
-    if (!b) { b = { customerPromos: 0, paidAds: 0, promoSharing: 0, loyaltySubsidy: 0, gross: 0, payout: 0, cogs: 0 }; byMonth.set(m, b); }
+    if (!b) { b = { customerPromos: 0, paidAds: 0, promoSharing: 0, loyaltySubsidy: 0 }; byMonth.set(m, b); }
     return b;
   };
 
@@ -1018,9 +1021,6 @@ function buildPromoSpend(
     if (!inRange.has(f.month) || !platforms.includes(f.platform)) continue;
     const b = ensure(f.month);
     b.customerPromos += f.discount;
-    b.gross += f.gross;
-    b.payout += f.payout;
-    b.cogs += cogsFor(data.itemSales, data.costs, f.month, [f.platform], data.itemAliases);
     // Talabat paid-ads + loyalty come from the Order Report (monthly_financials); Careem's equivalents
     // (ADVERTISEMENTS / CPLUS_FEE) come from monthly_adjustments above.
     if (f.platform === "Talabat") {
@@ -1033,8 +1033,7 @@ function buildPromoSpend(
   const rows = Array.from(byMonth.keys()).sort().map((m) => {
     const b = byMonth.get(m)!;
     const spend = b.customerPromos + b.paidAds + b.promoSharing + b.loyaltySubsidy;
-    const payoutExVat = exVat(b.payout);
-    const netMargin = payoutExVat > 0 ? ((payoutExVat - b.cogs) / payoutExVat) * 100 : null;
+    const t = moneyTrail(data, [m], plats); // gross + net margin from the shared trail
     return {
       label: monthLabel(m),
       customerPromos: b.customerPromos,
@@ -1042,8 +1041,8 @@ function buildPromoSpend(
       promoSharing: b.promoSharing,
       loyaltySubsidy: b.loyaltySubsidy,
       spend,
-      pctGross: b.gross > 0 ? (spend / b.gross) * 100 : null,
-      netMargin,
+      pctGross: t.gross > 0 ? (spend / t.gross) * 100 : null,
+      netMargin: t.payoutExVat > 0 ? t.netMargin * 100 : null,
     };
   });
 
@@ -1057,9 +1056,7 @@ function buildPromoSpend(
     }),
     { spend: 0, customerPromos: 0, paidAds: 0, promoSharing: 0, loyaltySubsidy: 0 },
   );
-  const gross = data.financials
-    .filter((f) => inRange.has(f.month) && platforms.includes(f.platform))
-    .reduce((s, f) => s + f.gross, 0);
+  const gross = moneyTrail(data, rangeMonths, plats).gross;
   const cats: [string, number][] = [
     ["Customer promos", total.customerPromos],
     ["Paid ads", total.paidAds],

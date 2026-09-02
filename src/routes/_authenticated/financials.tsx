@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { getDashboardData } from "@/lib/dashboard.functions";
+import { moneyTrail } from "@/lib/money-trail";
 import { PageHeader } from "@/components/fyxx/page-header";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { EmptyState } from "@/components/fyxx/empty-state";
@@ -19,11 +21,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
-import { fmtJOD, fmtPct, exVat, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
+import { fmtJOD, fmtPct, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { monthLabel, type RangeKey } from "@/lib/months";
 import { useRangeFilter } from "@/hooks/use-range-filter";
-import { cogsFor } from "@/lib/costs";
-import { loadDbAliases } from "@/lib/aliases";
 import { Segmented } from "../dashboard";
 
 export const Route = createFileRoute("/_authenticated/financials")({
@@ -31,40 +31,11 @@ export const Route = createFileRoute("/_authenticated/financials")({
   component: Financials,
 });
 
-function Financials() {
-  const { data } = useQuery({
-    queryKey: ["financials_page"],
-    queryFn: async () => {
-      // COGS is computed live from monthly_item_sales × versioned item_costs — the SAME
-      // path as the Overview (cogsFor) — not the never-populated monthly_financials.cogs column.
-      const [fin, items, costs] = await Promise.all([
-        supabase.from("monthly_financials").select("*").order("month", { ascending: false }),
-        supabase.from("monthly_item_sales").select("month,platform,item_name,units"),
-        supabase.from("item_costs").select("item_name,cost_exvat,effective_from"),
-      ]);
-      if (fin.error) throw fin.error;
-      return {
-        financials: fin.data ?? [],
-        itemSales: (items.data ?? []).map((r) => ({
-          month: r.month,
-          platform: r.platform as string,
-          item: r.item_name,
-          units: r.units,
-        })),
-        costs: (costs.data ?? []).map((r) => ({
-          item: r.item_name,
-          cost: Number(r.cost_exvat),
-          effective_from: r.effective_from,
-        })),
-      };
-    },
-  });
-
-  const { data: dbAliases = {} } = useQuery({
-    queryKey: ["item_aliases"],
-    queryFn: loadDbAliases,
-    staleTime: 60_000,
-  });
+export function Financials() {
+  // Same shared source as the Overview and the report. Every figure below renders moneyTrail's
+  // output: this page does not compute its own gross, COGS, VAT or margins.
+  const fetchData = useServerFn(getDashboardData);
+  const { data } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchData(), refetchOnWindowFocus: false });
 
   const [platformFilter, setPlatformFilter] = useState<PlatformKey>("All");
   const allRows = useMemo(() => data?.financials ?? [], [data]);
@@ -81,44 +52,28 @@ function Financials() {
   const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
     useRangeFilter({ allMonths, today });
 
-  const rows = allRows.filter(
-    (r) => (platformFilter === "All" || r.platform === platformFilter) && rangeMonths.includes(r.month),
-  );
+  // Newest month first, one row per (month, platform), respecting the platform filter.
+  const rows = allRows
+    .filter((r) => (platformFilter === "All" || r.platform === platformFilter) && rangeMonths.includes(r.month))
+    .sort((a, b) => (a.month === b.month ? a.platform.localeCompare(b.platform) : b.month.localeCompare(a.month)));
+  const plats = (platformFilter === "All" ? ["Talabat", "Careem"] : [platformFilter]) as Platform[];
 
-  // Per-row figures (COGS the Overview way: live from item sales × versioned costs, ex-VAT).
+  // Per-row figures: each row is one (month, platform) slice of the shared money trail.
   const rowData = rows.map((r) => {
-    const gross = Number(r.gross_sales);
-    const payout = Number(r.actual_payout);
-    const discount = Number(r.discount ?? 0); // partner-funded promos (menu gross − discount = net)
-    const netSales = gross - discount;
-    const cogs = cogsFor(data?.itemSales ?? [], data?.costs ?? [], r.month, [r.platform], dbAliases);
-    const net = exVat(gross);
-    const payoutExVat = exVat(payout);
-    // Margins are ex-VAT throughout (cost is ex-VAT; payout/gross are stripped).
-    const fee = net > 0 ? (net - payoutExVat) / net : 0;
-    const profit = payoutExVat - cogs;
-    const margin = payoutExVat > 0 ? profit / payoutExVat : 0;
-    return { r, gross, payout, discount, netSales, cogs, net, payoutExVat, fee, profit, margin };
+    const t = moneyTrail(data!, [r.month], [r.platform as Platform]);
+    const fee = t.grossExVat > 0 ? (t.grossExVat - t.payoutExVat) / t.grossExVat : 0;
+    return {
+      r, gross: t.gross, payout: t.payout, discount: t.discounts, netSales: t.netSales,
+      cogs: t.cogs, fee, profit: t.netProfit, margin: t.netMargin,
+    };
   });
 
-  // TOTALS over the currently-filtered rows. Fee % and margin % are blended from the summed
-  // figures (not averaged). Net sales (ex-VAT) = net sales ÷ 1.16 (NSV is reported ex-VAT).
-  const totals = rowData.reduce(
-    (t, d) => ({
-      gross: t.gross + d.gross,
-      discount: t.discount + d.discount,
-      netSales: t.netSales + d.netSales,
-      payout: t.payout + d.payout,
-      cogs: t.cogs + d.cogs,
-      net: t.net + d.net,
-      payoutExVat: t.payoutExVat + d.payoutExVat,
-      profit: t.profit + d.profit,
-    }),
-    { gross: 0, discount: 0, netSales: 0, payout: 0, cogs: 0, net: 0, payoutExVat: 0, profit: 0 },
-  );
-  const totalFee = totals.net > 0 ? (totals.net - totals.payoutExVat) / totals.net : 0;
-  const totalMargin = totals.payoutExVat > 0 ? totals.profit / totals.payoutExVat : 0;
-  const totalNetSalesExVat = exVat(totals.netSales);
+  // TOTALS: the range trail for the selected platforms (fee % and margin % blended from the sums).
+  const tt = moneyTrail(data ?? { financials: [], itemSales: [], costs: [], daily: [], itemAliases: {} }, rangeMonths, plats);
+  const totals = { gross: tt.gross, discount: tt.discounts, netSales: tt.netSales, payout: tt.payout, cogs: tt.cogs, profit: tt.netProfit };
+  const totalFee = tt.grossExVat > 0 ? (tt.grossExVat - tt.payoutExVat) / tt.grossExVat : 0;
+  const totalMargin = tt.netMargin;
+  const totalNetSalesExVat = tt.netSalesExVat;
 
   // Client-side CSV of exactly the rows/totals shown, for the active range + platform filters.
   // JOD to 3 decimals (fils), percentages as displayed, ISO month. No figure is recomputed.
@@ -226,7 +181,7 @@ function Financials() {
               {rowData.map((d) => {
                 const r = d.r;
                 return (
-                  <TableRow key={r.id}>
+                  <TableRow key={`${r.month}-${r.platform}`}>
                     <TableCell className="font-medium">{r.month}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={platformBg(r.platform as Platform)}>

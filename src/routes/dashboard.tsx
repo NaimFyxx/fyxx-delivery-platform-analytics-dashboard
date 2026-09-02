@@ -17,15 +17,29 @@ import {
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
-import { cogsFor } from "@/lib/costs";
-import { exVat, fmtJOD0, fmtInt, platformsFromFilter, type PlatformKey } from "@/lib/fyxx";
+import { fmtJOD0, fmtInt, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { monthOfDate, monthLabel, prevMonth, lastDayOfMonth, type RangeKey } from "@/lib/months";
+import { moneyTrail, moneyTrailPerMonth, type MoneyTrail, type MoneyTrailInput } from "@/lib/money-trail";
 import { useRangeFilter } from "@/hooks/use-range-filter";
-// Re-exported so other routes keep importing these from here.
-export { costAsOf, cogsFor } from "@/lib/costs";
-export { exVat } from "@/lib/fyxx";
+// Re-exported so other routes keep importing these from here. The money-trail primitives (cogsFor,
+// exVat) are deliberately NOT re-exported: surfaces render moneyTrail's output, they do not recompute.
 export { monthOfDate, lastDayOfMonth, prevMonth, monthLabel, monthsBetween, nextMonth, type RangeKey } from "@/lib/months";
 export { type PlatformKey, platformsFromFilter } from "@/lib/fyxx";
+
+// Empty input so the per-month/range memos can run before data has loaded (returns a zero trail).
+const EMPTY_MONEY_INPUT: MoneyTrailInput = { financials: [], itemSales: [], costs: [], daily: [], itemAliases: {} };
+/** A month's slice of the trail in the flat shape the charts and tables consume. */
+function aggOf(t: MoneyTrail) {
+  return {
+    month: t.months[0], gross: t.gross, payout: t.payout, discount: t.discounts, cogs: t.cogs, orders: t.orders,
+    productMargin: t.productMargin, commMargin: t.commMargin, netMargin: t.netMargin, netProfit: t.netProfit,
+  };
+}
+/** KPI card view-model: same figures, margins as percentages for display. */
+function kpiView(t: MoneyTrail) {
+  return { gross: t.gross, aov: t.aov, orders: t.orders, netProfit: t.netProfit, prodMargin: t.productMargin * 100, netMargin: t.netMargin * 100 };
+}
+type MonthAgg = ReturnType<typeof aggOf>;
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -40,9 +54,8 @@ export const Route = createFileRoute("/dashboard")({
   component: PublicDashboard,
 });
 
-export type MonthAgg = { month: string; gross: number; payout: number; discount: number; cogs: number; orders: number };
 
-function PublicDashboard() {
+export function PublicDashboard() {
   const { adminUser, sessionChecked, handleSignOut } = useSoftGate();
 
   const fetchData = useServerFn(getDashboardData);
@@ -54,6 +67,7 @@ function PublicDashboard() {
 
   const [platform, setPlatform] = useState<PlatformKey>("All");
   const platforms: string[] = platformsFromFilter(platform);
+  const plats = platforms as Platform[]; // same values, typed for the money-trail calls
 
   // Reference "today" — derived from the latest daily sales date, falls back to real today.
   const today = useMemo(() => {
@@ -86,81 +100,33 @@ function PublicDashboard() {
     );
   }, [data, rangeMonths]);
 
-  // --- Aggregations per month, respecting platform filter ---
-  const monthAggs: MonthAgg[] = useMemo(() => {
-    if (!data) return [];
-    return rangeMonths.map((m) => {
-      const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
-      const finGross = finRows.reduce((s, r) => s + r.gross, 0);
-      const payout = finRows.reduce((s, r) => s + r.payout, 0);
-      const discount = finRows.reduce((s, r) => s + r.discount, 0);
-      // Prefer monthly_financials.gross; fall back to summed daily_sales for that month.
-      const dailyRows = data.daily
-        .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
-      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
-      const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, platforms, data.itemAliases);
-      return { month: m, gross, payout, discount, cogs, orders };
-    });
-  }, [data, rangeMonths, platforms]);
+  // --- Money trail per month + range totals: the single shared computation (moneyTrail). Every
+  //     figure below renders its output; nothing here recomputes gross, COGS, VAT or margins. ---
+  const monthAggs: MonthAgg[] = useMemo(
+    () => moneyTrailPerMonth(data ?? EMPTY_MONEY_INPUT, rangeMonths, plats).map(aggOf),
+    [data, rangeMonths, platforms],
+  );
+  // Full history (all months, not just the range) so the trend charts always show the whole timeline.
+  const allMonthAggs: MonthAgg[] = useMemo(
+    () => moneyTrailPerMonth(data ?? EMPTY_MONEY_INPUT, allMonths, plats).map(aggOf),
+    [data, allMonths, platforms],
+  );
 
-  // Full-history month aggs — same logic but over ALL months (not rangeMonths).
-  // Used by the trend charts so they always show the complete timeline regardless of the date pills.
-  const allMonthAggs: MonthAgg[] = useMemo(() => {
-    if (!data) return [];
-    return allMonths.map((m) => {
-      const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
-      const finGross = finRows.reduce((s, r) => s + r.gross, 0);
-      const payout = finRows.reduce((s, r) => s + r.payout, 0);
-      const discount = finRows.reduce((s, r) => s + r.discount, 0);
-      const dailyRows = data.daily.filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform));
-      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
-      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
-      const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, platforms, data.itemAliases);
-      return { month: m, gross, payout, discount, cogs, orders };
-    });
-  }, [data, allMonths, platforms]);
-
-  // Prior equal-length period totals (for KPI deltas).
-  const priorAggs: MonthAgg[] | null = useMemo(() => {
-    if (!data || !rangeMonths.length) return null;
-    if (range === "all") return null;
+  const totals = useMemo(() => moneyTrail(data ?? EMPTY_MONEY_INPUT, rangeMonths, plats), [data, rangeMonths, platforms]);
+  // Prior equal-length period, for the KPI deltas.
+  const priorTotals = useMemo(() => {
+    if (!data || range === "all" || !rangeMonths.length) return null;
     const len = rangeMonths.length;
     const firstIdx = allMonths.indexOf(rangeMonths[0]);
     if (firstIdx === -1 || firstIdx < len) return null;
-    const priorMonths = allMonths.slice(firstIdx - len, firstIdx);
-    return priorMonths.map((m) => {
-      const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
-      const finGross = finRows.reduce((s, r) => s + r.gross, 0);
-      const payout = finRows.reduce((s, r) => s + r.payout, 0);
-      const discount = finRows.reduce((s, r) => s + r.discount, 0);
-      const dailyRows = data.daily
-        .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-      const dailyGross = dailyRows.reduce((s, d) => s + d.sales, 0);
-      const orders = dailyRows.reduce((s, d) => s + (d.orders ?? 0), 0);
-      const gross = finGross > 0 ? finGross : dailyGross;
-      const cogs = cogsFor(data.itemSales, data.costs, m, platforms, data.itemAliases);
-      return { month: m, gross, payout, discount, cogs, orders };
-    });
+    return moneyTrail(data, allMonths.slice(firstIdx - len, firstIdx), plats);
   }, [data, range, rangeMonths, platforms, allMonths]);
 
-  const totals = useMemo(() => sum(monthAggs), [monthAggs]);
-  const priorTotals = useMemo(() => (priorAggs ? sum(priorAggs) : null), [priorAggs]);
-
-  // All-time totals (ignore filters — everything since day one)
-  const kpis = computeKpis(totals);
-  const priorKpis = priorTotals ? computeKpis(priorTotals) : null;
+  const kpis = kpiView(totals);
+  const priorKpis = priorTotals ? kpiView(priorTotals) : null;
 
   // Margin % with a near-zero denominator guard and outlier clamp.
   // Returns null so Recharts gaps the line rather than spiking off-scale.
-  function pct(numer: number, denom: number): number | null {
-    if (denom < 1) return null; // < 1 JOD is too noisy to divide
-    const v = (numer / denom) * 100;
-    return v < -500 || v > 500 ? null : v;
-  }
-
   // Monthly margin series — always uses ALL months (not rangeMonths) so the trend chart never
   // blanks when a single month is selected. Platform filter still applies via allMonthAggs.
   const marginTrend = useMemo(
@@ -168,14 +134,22 @@ function PublicDashboard() {
       allMonthAggs.map((a, i, arr) => {
         const win = arr.slice(Math.max(0, i - 2), i + 1);
         const trailEnough = win.length >= 2;
-        const validProds = win.map((w) => pct(exVat(w.gross) - w.cogs, exVat(w.gross))).filter((v): v is number => v !== null);
-        const validComms = win.map((w) => pct(exVat(w.payout + w.discount) - w.cogs, exVat(w.payout + w.discount))).filter((v): v is number => v !== null);
-        const validNets = win.map((w) => pct(exVat(w.payout) - w.cogs, exVat(w.payout))).filter((v): v is number => v !== null);
+        // Margins come from the trail (fractions). cm converts to a percentage with the same
+        // near-zero guard the chart used before (base < 1.16 JOD means ex-VAT base < 1 JOD) and the
+        // same off-scale clamp, so a noisy month gaps the line instead of spiking.
+        const cm = (frac: number, base: number): number | null => {
+          if (base < 1.16) return null;
+          const v = frac * 100;
+          return v < -500 || v > 500 ? null : v;
+        };
+        const validProds = win.map((w) => cm(w.productMargin, w.gross)).filter((v): v is number => v !== null);
+        const validComms = win.map((w) => cm(w.commMargin, w.payout + w.discount)).filter((v): v is number => v !== null);
+        const validNets = win.map((w) => cm(w.netMargin, w.payout)).filter((v): v is number => v !== null);
         return {
           label: monthLabel(a.month),
-          prod: pct(exVat(a.gross) - a.cogs, exVat(a.gross)),
-          comm: pct(exVat(a.payout + a.discount) - a.cogs, exVat(a.payout + a.discount)),
-          net: pct(exVat(a.payout) - a.cogs, exVat(a.payout)),
+          prod: cm(a.productMargin, a.gross),
+          comm: cm(a.commMargin, a.payout + a.discount),
+          net: cm(a.netMargin, a.payout),
           prodTrail: trailEnough && validProds.length >= 2 ? validProds.reduce((s, v) => s + v, 0) / validProds.length : null,
           commTrail: trailEnough && validComms.length >= 2 ? validComms.reduce((s, v) => s + v, 0) / validComms.length : null,
           netTrail: trailEnough && validNets.length >= 2 ? validNets.reduce((s, v) => s + v, 0) / validNets.length : null,
@@ -311,23 +285,22 @@ function PublicDashboard() {
         byDay[day] = byDay[day] ?? { Talabat: 0, Careem: 0 };
         byDay[day][d.platform as "Talabat" | "Careem"] += d.sales;
       });
-      // Monthly totals for ratio-based payout/cost approximation
+      // A margin is a ratio, constant across the month, so the per-day product and net lines are the
+      // month's margins from the trail; per-day net profit allocates the month's net profit in
+      // proportion to that day's gross. Nothing is recomputed from raw figures.
       const agg = monthAggs[0];
-      const grossTotal = Object.values(byDay).reduce((s, v) => s + v.Talabat + v.Careem, 0);
-      const payoutRatio = grossTotal > 0 ? agg.payout / grossTotal : 0;
-      const costRatio = grossTotal > 0 ? agg.cogs / exVat(grossTotal) : 0;
+      const prodPct = agg.gross > 1.16 ? agg.productMargin * 100 : null;
+      const netPct = agg.gross > 1.16 ? agg.netMargin * 100 : null;
       const arr = [];
       for (let d = 1; d <= endDay; d++) {
         const v = byDay[d] ?? { Talabat: 0, Careem: 0 };
         const gross = v.Talabat + v.Careem;
-        const payout = gross * payoutRatio;
-        const cogs = exVat(gross) * costRatio;
-        const prod = pct(exVat(gross) - cogs, exVat(gross));
-        const net = pct(exVat(payout) - cogs, exVat(payout));
+        const prod = gross > 1.16 ? prodPct : null;
+        const net = gross > 1.16 ? netPct : null;
         arr.push({
           label: `${monthLabel(m).split(" ")[0]} ${d}`,
           Talabat: v.Talabat, Careem: v.Careem,
-          gross, prod, net, profit: exVat(payout) - cogs,
+          gross, prod, net, profit: agg.gross > 0 ? agg.netProfit * (gross / agg.gross) : 0,
           drag: prod != null && net != null ? prod - net : null, target: 45,
           avg7d: 0, // filled below
         });
@@ -347,9 +320,9 @@ function PublicDashboard() {
       const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
         data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
       const agg = monthAggs.find((a) => a.month === m)!;
-      const prod = pct(exVat(agg.gross) - agg.cogs, exVat(agg.gross));
-      const net = pct(exVat(agg.payout) - agg.cogs, exVat(agg.payout));
-      const profit = exVat(agg.payout) - agg.cogs;
+      const prod = agg.gross > 1.16 ? agg.productMargin * 100 : null;
+      const net = agg.payout > 1.16 ? agg.netMargin * 100 : null;
+      const profit = agg.netProfit;
       return {
         label: monthLabel(m),
         Talabat: platforms.includes("Talabat") ? talabat : 0,
@@ -374,18 +347,10 @@ function PublicDashboard() {
   // calendar month only, so a completed month is never flagged just because it is the newest data.
   const salesTrend = useMemo(() => {
     if (!data) return [];
-    const base = allMonths.map((m) => {
-      const finRows = data.financials.filter((f) => f.month === m && platforms.includes(f.platform));
-      const talabat = finRows.filter((r) => r.platform === "Talabat").reduce((s, r) => s + r.gross, 0) ||
-        data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Talabat" && platforms.includes("Talabat")).reduce((s, d) => s + d.sales, 0);
-      const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
-        data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
-      const total = (platforms.includes("Talabat") ? talabat : 0) + (platforms.includes("Careem") ? careem : 0);
-      const orders = data.daily
-        .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
-        .reduce((s, d) => s + (d.orders ?? 0), 0);
-      return { month: m, label: monthLabel(m), total, orders, partial: m === realMonth };
-    });
+    // Combined gross and orders per month come straight from the trail (allMonthAggs), not recomputed.
+    const base = allMonthAggs.map((a) => ({
+      month: a.month, label: monthLabel(a.month), total: a.gross, orders: a.orders, partial: a.month === realMonth,
+    }));
     const completed = base.filter((r) => !r.partial);
     // 3-month floor = lowest combined monthly gross across the month and the two before it.
     // Only over "real" trading months: any month with fewer than 5 orders (the Oct 2025 launch
@@ -431,7 +396,7 @@ function PublicDashboard() {
       if (pIdx > 0) rows[pIdx - 1].totalPartial = rows[pIdx - 1].total;
     }
     return rows;
-  }, [data, allMonths, platforms, realMonth]);
+  }, [data, allMonthAggs, realMonth]);
 
   // Current floor and the month it was set (start of the trailing run at the current value), for
   // the caption. Plain and factual: this is where the base sits now, not a target.
@@ -1287,24 +1252,6 @@ function SalesTrendTooltip({ active, payload }: {
 }
 
 // ---------- math ----------
-export function sum(rows: { gross: number; payout: number; cogs: number; orders: number }[]) {
-  return rows.reduce(
-    (acc, r) => ({
-      gross: acc.gross + r.gross,
-      payout: acc.payout + r.payout,
-      cogs: acc.cogs + r.cogs,
-      orders: acc.orders + r.orders,
-    }),
-    { gross: 0, payout: 0, cogs: 0, orders: 0 },
-  );
-}
-export function computeKpis(t: { gross: number; payout: number; cogs: number; orders: number }) {
-  const prodMargin = t.gross > 0 ? ((exVat(t.gross) - t.cogs) / exVat(t.gross)) * 100 : 0;
-  const netMargin = t.payout > 0 ? ((exVat(t.payout) - t.cogs) / exVat(t.payout)) * 100 : 0;
-  const netProfit = exVat(t.payout) - t.cogs;
-  const aov = t.orders > 0 ? t.gross / t.orders : 0;
-  return { gross: t.gross, payout: t.payout, cogs: t.cogs, orders: t.orders, prodMargin, netMargin, netProfit, aov };
-}
 function pctDelta(cur: number, prev: number) {
   if (!prev || !isFinite(prev)) return null;
   const change = ((cur - prev) / prev) * 100;

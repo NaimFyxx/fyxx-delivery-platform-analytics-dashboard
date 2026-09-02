@@ -6,6 +6,8 @@
 import { exVat } from "./fyxx";
 import { cogsFor, costAsOf, canonicalItemName, type DbAliasMap } from "./costs";
 import { categoryFor, UNCATEGORISED } from "./categories";
+import { moneyTrail } from "./money-trail";
+import { aggregateItems } from "./items";
 import { lastDayOfMonth, monthOfDate } from "./months";
 import type { DashboardData } from "./dashboard.functions";
 
@@ -80,6 +82,10 @@ export function runDataHealthChecks(
     data.financials
       .filter((f) => f.month === m && f.platform === p)
       .reduce((s, f) => s + f.payout, 0);
+  const dailyGrossOf = (m: string, p: string) =>
+    data.daily
+      .filter((d) => monthOfDate(d.date) === m && d.platform === p)
+      .reduce((s, d) => s + d.sales, 0);
   const itemRevOf = (m: string, p: string) =>
     data.itemSales
       .filter((i) => i.month === m && i.platform === p)
@@ -194,6 +200,28 @@ export function runDataHealthChecks(
           });
         }
       }
+
+      // 8. Gross source agreement. The money trail uses monthly_financials gross, falling back to
+      // summed daily only when financials is absent. This confirms the fallback is harmless: for a
+      // complete month with both sources, they should agree. If they diverge the app shows the
+      // financials figure and this names the daily figure it would otherwise have shown.
+      if (complete) {
+        const day = dailyGrossOf(m, p);
+        if (day > 0) {
+          const diff = Math.abs(gross - day);
+          const rel = gross > 0 ? diff / gross : 1;
+          checks.push({
+            id: "gross_source",
+            label: "Gross source agreement",
+            scope: p,
+            status: rel > 0.01 ? "warn" : "pass",
+            detail:
+              rel > 0.01
+                ? `${p} financials gross ${money(gross)} vs summed daily ${money(day)} differ by ${money(diff)} (${pct1(rel * 100)}). The app shows the financials figure; the daily fallback would show the other.`
+                : `${p} financials gross ${money(gross)} matches summed daily ${money(day)} within 1%.`,
+          });
+        }
+      }
     }
 
     // 3. Every sold item has a cost (month level, both platforms).
@@ -267,6 +295,35 @@ export function runDataHealthChecks(
           diff > 0.01
             ? `Category revenue total ${money(catTotal)} does not match item revenue ${money(itemRev)} (off by ${diff.toFixed(2)} JOD).`
             : `Category totals reconcile to item revenue (${money(itemRev)}).`,
+      });
+    }
+
+    // 9. COGS reconciliation. Items stays outside the money trail by design (per-item granularity),
+    // so this is the assertion that keeps it honest: the sum of the per-item COGS the Items page
+    // computes (aggregateItems) must equal the trail's COGS for the month. Any gap means the two
+    // cost paths have drifted apart, the exact class of bug this refactor is meant to prevent.
+    {
+      const trailCogs = moneyTrail(data, [m], [...PLATFORMS]).cogs;
+      const perItem = aggregateItems({
+        itemSales: data.itemSales,
+        costs: data.costs,
+        prices: [],
+        financials: data.financials,
+        rangeMonths: [m],
+        platforms: [...PLATFORMS],
+        dbAliases,
+      });
+      const itemCogs = perItem.reduce((s, r) => s + r.cogs, 0);
+      const cogsDiff = Math.abs(itemCogs - trailCogs);
+      checks.push({
+        id: "cogs_reconciliation",
+        label: "Per-item COGS reconciles to the money trail",
+        scope: "consistency guard",
+        status: cogsDiff > 0.01 ? "fail" : "pass",
+        detail:
+          cogsDiff > 0.01
+            ? `Items COGS ${money(itemCogs)} does not match the money trail COGS ${money(trailCogs)} (off by ${cogsDiff.toFixed(2)} JOD). The per-item and aggregate cost paths have diverged.`
+            : `Per-item COGS sums to the money trail COGS (${money(trailCogs)}).`,
       });
     }
 
