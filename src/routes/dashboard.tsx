@@ -31,9 +31,9 @@ export const Route = createFileRoute("/dashboard")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "The Green Room — Delivery Dashboard" },
+      { title: "The Green Room · Delivery Dashboard" },
       { name: "description", content: "Live Talabat & Careem performance for The Green Room. Shareable read-only." },
-      { property: "og:title", content: "The Green Room — Delivery Dashboard" },
+      { property: "og:title", content: "The Green Room · Delivery Dashboard" },
       { property: "og:description", content: "Live Talabat & Careem performance for The Green Room." },
     ],
   }),
@@ -381,9 +381,21 @@ function PublicDashboard() {
       const careem = finRows.filter((r) => r.platform === "Careem").reduce((s, r) => s + r.gross, 0) ||
         data.daily.filter((d) => monthOfDate(d.date) === m && d.platform === "Careem" && platforms.includes("Careem")).reduce((s, d) => s + d.sales, 0);
       const total = (platforms.includes("Talabat") ? talabat : 0) + (platforms.includes("Careem") ? careem : 0);
-      return { month: m, label: monthLabel(m), total, partial: m === realMonth };
+      const orders = data.daily
+        .filter((d) => monthOfDate(d.date) === m && platforms.includes(d.platform))
+        .reduce((s, d) => s + (d.orders ?? 0), 0);
+      return { month: m, label: monthLabel(m), total, orders, partial: m === realMonth };
     });
     const completed = base.filter((r) => !r.partial);
+    // 3-month floor = lowest combined monthly gross across the month and the two before it.
+    // Only over "real" trading months: any month with fewer than 5 orders (the Oct 2025 launch
+    // week was 3 orders on one platform) is excluded so it never drags a window down. The series
+    // starts once three eligible months exist.
+    const eligible = completed.filter((r) => r.orders >= 5);
+    const floorByMonth = new Map<string, number>();
+    for (let i = 2; i < eligible.length; i++) {
+      floorByMonth.set(eligible[i].month, Math.min(eligible[i].total, eligible[i - 1].total, eligible[i - 2].total));
+    }
     const rows = base.map((r) => {
       let avg3: number | null = null;
       if (!r.partial) {
@@ -396,8 +408,22 @@ function PublicDashboard() {
         totalSolid: r.partial ? null : (r.total as number | null),
         totalPartial: null as number | null,
         avg3,
+        floor: floorByMonth.get(r.month) ?? null,
+        floorStepUp: false,
+        floorPrev: null as number | null,
       };
     });
+    // Mark floor step-ups: a month whose floor is higher than the previous month that had one.
+    // These are the "new higher low" moments worth seeing. Decreases and flat months are not marked.
+    let prevFloor: number | null = null;
+    for (const row of rows) {
+      if (row.floor == null) continue;
+      if (prevFloor != null && row.floor > prevFloor) {
+        row.floorStepUp = true;
+        row.floorPrev = prevFloor;
+      }
+      prevFloor = row.floor;
+    }
     // Dashed connector into the in-progress month: anchor it to the previous point.
     const pIdx = rows.findIndex((r) => r.partial);
     if (pIdx >= 0) {
@@ -407,13 +433,16 @@ function PublicDashboard() {
     return rows;
   }, [data, allMonths, platforms, realMonth]);
 
-  // Running-minimum floor over completed months in the visible range (excludes in-progress).
-  const salesFloor = useMemo(() => {
-    const completed = salesTrend.filter((r) => !r.partial);
-    if (completed.length < 2) return null;
-    let min = completed[0];
-    for (const r of completed) if (r.total < min.total) min = r;
-    return { value: min.total, label: min.label };
+  // Current floor and the month it was set (start of the trailing run at the current value), for
+  // the caption. Plain and factual: this is where the base sits now, not a target.
+  const salesFloorNow = useMemo(() => {
+    const withFloor = salesTrend.filter((r) => r.floor != null);
+    if (!withFloor.length) return null;
+    const value = withFloor[withFloor.length - 1].floor as number;
+    let i = withFloor.length - 1;
+    while (i > 0 && withFloor[i - 1].floor === value) i--;
+    const sinceMonth = new Date(`${withFloor[i].month}-01T00:00:00`).toLocaleString("en-US", { month: "long" });
+    return { value, sinceMonth };
   }, [salesTrend]);
 
   if (!sessionChecked || isLoading || !data) {
@@ -481,7 +510,7 @@ function PublicDashboard() {
                prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.gross)}` : platformContext(platform)}
                sub={`avg ${fmtJOD0(kpis.gross / activeDays)}/day`}
                infoId="sales_incl_vat" />
-          <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "—"} unit="JOD"
+          <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "-"} unit="JOD"
                delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
                prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"}
                sub={`avg ${(kpis.orders / activeDays).toFixed(1)} orders/day`}
@@ -516,7 +545,7 @@ function PublicDashboard() {
           </div>
         )}
 
-        <SectionLabel>Analytics — Controlled by the Range &amp; Platform Filters Above</SectionLabel>
+        <SectionLabel>Analytics · Controlled by the Range &amp; Platform Filters Above</SectionLabel>
         <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform" footnote="Careem shown on food-basket basis (your revenue), ~11% below Careem's GMV headline. See tooltip.">
           <ResponsiveContainer>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -539,10 +568,18 @@ function PublicDashboard() {
           <SectionLabel>Total Sales · Monthly</SectionLabel>
           <ChartCard
             title="Total sales over time"
+            action={
+              salesFloorNow ? (
+                <div className="text-[11px] text-muted-foreground text-right leading-tight">
+                  Current floor <span className="font-semibold text-foreground">{fmtJOD0(salesFloorNow.value)}</span>
+                  <div className="text-[10px]">since {salesFloorNow.sinceMonth}</div>
+                </div>
+              ) : undefined
+            }
             sub={
               platform === "All"
-                ? "Combined monthly gross incl VAT (Talabat + Careem), full monthly history, not affected by the date filter above"
-                : `${platform} monthly gross incl VAT, full monthly history, not affected by the date filter above`
+                ? "Combined monthly gross incl VAT (Talabat + Careem), full monthly history, not affected by the date filter above. The 3-month floor is the lowest total across each month and the two before it; a yellow point marks where that floor steps up."
+                : `${platform} monthly gross incl VAT, full monthly history, not affected by the date filter above. The 3-month floor is the lowest total across each month and the two before it; a yellow point marks where that floor steps up.`
             }
           >
             <ResponsiveContainer>
@@ -552,18 +589,13 @@ function PublicDashboard() {
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(Number(v)).toLocaleString()} />
                 <Tooltip content={<SalesTrendTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {salesFloor && (
-                  <ReferenceLine
-                    y={salesFloor.value}
-                    stroke="var(--muted-foreground)"
-                    strokeDasharray="6 4"
-                    label={{ value: `Floor ${fmtJOD0(salesFloor.value)} (${salesFloor.label})`, fill: "var(--muted-foreground)", fontSize: 10, position: "insideBottomRight" }}
-                  />
-                )}
                 <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3.5, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress" stroke="var(--primary)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} legendType="none" />
                 {salesTrend.some((r) => r.avg3 !== null) && (
                   <Line isAnimationActive={false} type="monotone" dataKey="avg3" name="3-month average" stroke="#C8B89B" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
+                )}
+                {salesTrend.some((r) => r.floor !== null) && (
+                  <Line isAnimationActive={false} type="monotone" dataKey="floor" name="3-month floor" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeOpacity={0.65} dot={<FloorDot />} activeDot={{ r: 4 }} connectNulls={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -576,7 +608,7 @@ function PublicDashboard() {
             <SectionLabel>Margin Trend · Monthly</SectionLabel>
             <ChartCard
               title="Margin over Time"
-              sub="Product → After commission → Net margin — full monthly history; not affected by the date filter above"
+              sub="Product → After commission → Net margin. Full monthly history; not affected by the date filter above"
               infoId="chart_margin_trend"
               action={
                 marginTrend.some((d) => d.netTrail !== null) ? (
@@ -631,7 +663,7 @@ function PublicDashboard() {
             <SectionLabel>Order Volume Trend · Monthly</SectionLabel>
             <ChartCard
               title="Order Volume Trend"
-              sub="Avg orders/day (left) vs avg sales/day JOD (right) — full history; not affected by the date filter above"
+              sub="Avg orders/day (left) vs avg sales/day JOD (right), full history; not affected by the date filter above"
               infoId="chart_order_volume"
               action={
                 orderVolumeTrend.some((d) => d.ordersTrail !== null) ? (
@@ -786,7 +818,7 @@ export function Header({
             <img src={careemLogo} alt="Careem" className="h-5 w-auto" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-display text-[17px] font-semibold leading-none truncate">The Green Room — Delivery Dashboard</h1>
+            <h1 className="font-display text-[17px] font-semibold leading-none truncate">The Green Room · Delivery Dashboard</h1>
             <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
           </div>
         </div>
@@ -825,7 +857,7 @@ function useFreshness(today: string, last: string | null): { text: string; color
   const nice = new Date(last).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   if (days <= 1) return { text: `Data current as of ${nice}`, color: "var(--careem)" };
   if (days <= 3) return { text: `Updated ${days} days ago (${nice})`, color: "var(--primary)" };
-  return { text: `⚠ Stale — last update ${days} days ago (${nice})`, color: "var(--destructive)" };
+  return { text: `⚠ Stale, last update ${days} days ago (${nice})`, color: "var(--destructive)" };
 }
 
 export function Segmented<T extends string>({
@@ -1143,7 +1175,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
         <div className="text-right leading-none">
           <span className="font-display text-[26px] font-bold align-middle"
                 style={{ color: pctColor(pace.totalAchievement) }}>
-            {targetSet ? Math.round(pace.totalAchievement) + "%" : "—"}
+            {targetSet ? Math.round(pace.totalAchievement) + "%" : "-"}
           </span>
           <InfoTip id="pace_pct" side="bottom" />
           {reached || missed ? (
@@ -1186,7 +1218,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           <span className="text-num font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
           <span className="text-muted-foreground">/ {fmtJOD0(careem?.target ?? 0)}</span>
           <span className="text-num font-semibold" style={{ color: pctColor(careem?.achievement ?? 0) }}>
-            {careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "—"}
+            {careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "-"}
           </span>
           <InfoTip id="target_pct" side="top" />
         </span>
@@ -1196,7 +1228,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           <span className="text-num font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
           <span className="text-muted-foreground">/ {fmtJOD0(talabat?.target ?? 0)}</span>
           <span className="text-num font-semibold" style={{ color: pctColor(talabat?.achievement ?? 0) }}>
-            {talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "—"}
+            {talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "-"}
           </span>
           <InfoTip id="target_pct" side="top" />
         </span>
@@ -1224,10 +1256,18 @@ function PartialDot(props: { cx?: number; cy?: number; payload?: { partial?: boo
   return <circle cx={cx} cy={cy} r={4} fill="var(--card)" stroke="var(--primary)" strokeWidth={2} />;
 }
 
-/** Tooltip for the Total sales trend: month, exact combined total, and the 3-month average. */
+/** Emphasized point on the 3-month floor line, only where the floor steps up (a new higher low). */
+function FloorDot(props: { cx?: number; cy?: number; payload?: { floorStepUp?: boolean } }) {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null || !payload?.floorStepUp) return <g />;
+  return <circle cx={cx} cy={cy} r={4.5} fill="#EEC36A" stroke="var(--card)" strokeWidth={1.5} />;
+}
+
+/** Tooltip for the Total sales trend: month, exact combined total, the 3-month average, and the
+ *  3-month floor (with a note when it steps up). */
 function SalesTrendTooltip({ active, payload }: {
   active?: boolean;
-  payload?: { payload: { label: string; total: number; partial: boolean; avg3: number | null } }[];
+  payload?: { payload: { label: string; total: number; partial: boolean; avg3: number | null; floor: number | null; floorStepUp: boolean; floorPrev: number | null } }[];
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
@@ -1238,6 +1278,10 @@ function SalesTrendTooltip({ active, payload }: {
       </div>
       <div style={{ color: "var(--foreground)" }}>{fmtJOD0(p.total)}</div>
       {p.avg3 != null && <div style={{ color: "#C8B89B" }}>3-month avg {fmtJOD0(p.avg3)}</div>}
+      {p.floor != null && <div style={{ color: "var(--muted-foreground)" }}>3-month floor {fmtJOD0(p.floor)}</div>}
+      {p.floorStepUp && p.floorPrev != null && (
+        <div style={{ color: "#EEC36A", fontWeight: 600 }}>New floor: {fmtJOD0(p.floor as number)}, up from {fmtJOD0(p.floorPrev)}</div>
+      )}
     </div>
   );
 }
