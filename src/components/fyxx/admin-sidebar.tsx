@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { BarChart2, FileText, LayoutDashboard, LineChart, LogOut, Menu, PenSquare, Target, Upload, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,17 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
   // content reflows to fill; there is no absolute overlay that can slide over the content.
   const [collapsed, setCollapsed] = useState(false);
   const expanded = !collapsed;
+
+  // Keep the fixed pace bar clear of this in-flow rail: publish the rail width as --pace-bar-left on
+  // desktop, 0 on mobile (where the rail becomes a top bar) and on unmount (sign-out).
+  useEffect(() => {
+    const root = document.documentElement;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => root.style.setProperty("--pace-bar-left", mq.matches ? (collapsed ? "3.5rem" : "16rem") : "0px");
+    apply();
+    mq.addEventListener("change", apply);
+    return () => { mq.removeEventListener("change", apply); root.style.setProperty("--pace-bar-left", "0px"); };
+  }, [collapsed]);
 
   const navLink = (to: string, label: string, Icon: typeof LayoutDashboard) => (
     <Link
@@ -174,7 +185,8 @@ export function AdminShell({
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <AdminSidebar email={admin.email} onSignOut={onSignOut} />
-      <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+      {/* main is the admin scroll container; reserve room for the fixed pace bar so it never hides content. */}
+      <main className="flex-1 min-w-0 overflow-auto" style={{ paddingBottom: "var(--pace-bar-pad, 0px)" }}>{children}</main>
     </div>
   );
 }

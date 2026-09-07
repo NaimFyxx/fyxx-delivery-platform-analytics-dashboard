@@ -20,7 +20,15 @@ import { EmptyState } from "@/components/fyxx/empty-state";
 import { fmtJOD0, fmtInt, platformsFromFilter, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { monthOfDate, monthLabel, prevMonth, lastDayOfMonth, type RangeKey } from "@/lib/months";
 import { moneyTrail, moneyTrailPerMonth, type MoneyTrail, type MoneyTrailInput } from "@/lib/money-trail";
+import { completeMonths } from "@/lib/report";
+import { paceBadgeState, PACE_BADGE_LABEL } from "@/lib/pace-badge";
+import { computePace, currentPaceMonth, type PaceData } from "@/lib/pace";
+import { usePaceView } from "@/lib/pace-view";
+// Re-exported so index.tsx and targets.tsx keep importing pace helpers from here.
+export { computePace, currentPaceMonth };
+export type { PaceData };
 import { useRangeFilter } from "@/hooks/use-range-filter";
+import { validateFilterSearch, retainFilterParams } from "@/lib/filter-search";
 // Re-exported so other routes keep importing these from here. The money-trail primitives (cogsFor,
 // exVat) are deliberately NOT re-exported: surfaces render moneyTrail's output, they do not recompute.
 export { monthOfDate, lastDayOfMonth, prevMonth, monthLabel, monthsBetween, nextMonth, type RangeKey } from "@/lib/months";
@@ -40,9 +48,12 @@ function kpiView(t: MoneyTrail) {
   return { gross: t.gross, aov: t.aov, orders: t.orders, netProfit: t.netProfit, prodMargin: t.productMargin * 100, netMargin: t.netMargin * 100 };
 }
 type MonthAgg = ReturnType<typeof aggOf>;
+const shortMonth = (m: string) => new Date(m + "-01T00:00:00").toLocaleString("en-US", { month: "short" });
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
+  validateSearch: validateFilterSearch,
+  search: { middlewares: [retainFilterParams] },
   head: () => ({
     meta: [
       { title: "The Green Room · Delivery Dashboard" },
@@ -65,11 +76,7 @@ export function PublicDashboard() {
     refetchOnWindowFocus: false,
   });
 
-  const [platform, setPlatform] = useState<PlatformKey>("All");
-  const platforms: string[] = platformsFromFilter(platform);
-  const plats = platforms as Platform[]; // same values, typed for the money-trail calls
-
-  // Reference "today" — derived from the latest daily sales date, falls back to real today.
+  // Reference "today" - derived from the latest daily sales date, falls back to real today.
   const today = useMemo(() => {
     const last = data?.daily.at(-1)?.date;
     return last ?? new Date().toISOString().slice(0, 10);
@@ -86,8 +93,11 @@ export function PublicDashboard() {
     return Array.from(set).sort();
   }, [data]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeIsSingleMonth, rangeLabel } =
+  // Range and platform filters live in the URL (persist across navigation).
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeIsSingleMonth, rangeLabel, platform, setPlatform } =
     useRangeFilter({ allMonths, today });
+  const platforms: string[] = platformsFromFilter(platform);
+  const plats = platforms as Platform[]; // same values, typed for the money-trail calls
 
   // Does any data fall within the selected range? Drives the "no data" empty state.
   const rangeHasData = useMemo(() => {
@@ -124,6 +134,21 @@ export function PublicDashboard() {
 
   const kpis = kpiView(totals);
   const priorKpis = priorTotals ? kpiView(priorTotals) : null;
+
+  // Monthly Average: the mean combined gross of the last three COMPLETED months, versus the three
+  // before them. A "what is the business running at now" figure, so it ignores the date filter (like
+  // Margin over Time). Gross comes from the money trail, never recomputed.
+  const monthlyAvg = useMemo(() => {
+    if (!data) return null;
+    const completed = completeMonths(data); // ascending YYYY-MM, excludes the in-progress month
+    if (completed.length < 3) return null;
+    const window6 = completed.slice(-6);
+    const gross = moneyTrailPerMonth(data, window6, plats).map((t) => t.gross);
+    const cur = gross.slice(-3).reduce((s, v) => s + v, 0) / 3;
+    const prior = window6.length === 6 ? gross.slice(0, 3).reduce((s, v) => s + v, 0) / 3 : null;
+    const changePct = prior && prior > 0 ? ((cur - prior) / prior) * 100 : null;
+    return { cur, prior, changePct, months: window6.slice(-3) };
+  }, [data, plats]);
 
   // Margin % with a near-zero denominator guard and outlier clamp.
   // Returns null so Recharts gaps the line rather than spiking off-scale.
@@ -231,6 +256,8 @@ export function PublicDashboard() {
   // A completed month is measured to its month end; the live month to today.
   const paceAsOf = paceMonth === realMonth ? paceToday : lastDayOfMonth(paceMonth);
   const pace = useMemo(() => data ? computePace(data, paceMonth, paceAsOf) : null, [data, paceMonth, paceAsOf]);
+  // The card shows on Overview unless the user chose "Bar only" (then the global bar stands in).
+  const { mode: paceViewMode } = usePaceView();
   // The toggle switches to the other of {current, previous}; label it with that month.
   const togglesToMonth = paceMonth === realMonth ? prevMonth(realMonth) : realMonth;
   const paceToggleLabel = `Show ${new Date(togglesToMonth + "-01T00:00:00").toLocaleString("en-US", { month: "long" })}`;
@@ -457,24 +484,31 @@ export function PublicDashboard() {
           />
         </div>
 
-        {/* PACE TRACKER — current month (holds the finished month for the first 3 days), all platforms, ignores filters */}
-        <PaceTracker
-          pace={pace}
-          currentMonth={paceMonth}
-          toggle={{ label: paceToggleLabel, onToggle: () => setShowOtherPaceMonth((v) => !v) }}
-        />
+        {/* PACE TRACKER: current month (holds the finished month for the first 3 days), all platforms, ignores filters */}
+        {paceViewMode !== "bar" && (
+          <PaceTracker
+            pace={pace}
+            currentMonth={paceMonth}
+            toggle={{ label: paceToggleLabel, onToggle: () => setShowOtherPaceMonth((v) => !v) }}
+          />
+        )}
 
         {!rangeHasData ? (
           <EmptyState label={rangeLabel} />
         ) : (
         <>
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-4">
           <Kpi label="Sales (incl VAT)" value={fmtInt(kpis.gross)} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
                prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.gross)}` : platformContext(platform)}
                sub={`avg ${fmtJOD0(kpis.gross / activeDays)}/day`}
                infoId="sales_incl_vat" />
+          <Kpi label="Monthly Average" value={monthlyAvg ? fmtInt(monthlyAvg.cur) : "-"} unit="JOD"
+               delta={monthlyAvg && monthlyAvg.prior != null ? pctDelta(monthlyAvg.cur, monthlyAvg.prior) : null}
+               prior={monthlyAvg && monthlyAvg.prior != null ? `Prior: ${fmtJOD0(monthlyAvg.prior)}` : "last 3 completed months"}
+               sub={monthlyAvg ? `${shortMonth(monthlyAvg.months[0])} to ${shortMonth(monthlyAvg.months[2])}` : undefined}
+               infoId="monthly_average" />
           <Kpi label="Avg Basket (AOV)" value={kpis.aov ? kpis.aov.toFixed(2) : "-"} unit="JOD"
                delta={priorKpis && priorKpis.aov ? pctDelta(kpis.aov, priorKpis.aov) : null}
                prior={priorKpis && priorKpis.aov ? `Prior: ${priorKpis.aov.toFixed(2)} JOD` : "sales ÷ orders"}
@@ -916,70 +950,6 @@ function ChartCard({ title, sub, children, action, infoId, footnote }: { title: 
   );
 }
 
-export type PaceData = {
-  rows: { platform: "Talabat" | "Careem"; sales: number; target: number; achievement: number }[];
-  totalSales: number; totalTarget: number; totalAchievement: number;
-  proRated: number; proRatedAch: number;
-  dayOfMonth: number; daysInMonth: number; workingDay: number;
-  dataThroughLabel: string | null;
-  dataThroughStale: boolean;
-  perPlatformThrough: { platform: "Talabat" | "Careem"; label: string }[];
-};
-
-export function computePace(data: DashboardData, currentMonth: string, today: string): PaceData {
-  const dayOfMonth = Number(today.slice(8, 10));
-  const [y, mm] = currentMonth.split("-").map(Number);
-  const daysInMonth = new Date(Date.UTC(y, mm, 0)).getUTCDate();
-
-  const workingDates = new Set(
-    data.paceDaily
-      .filter((d) => monthOfDate(d.date) === currentMonth && d.date <= today)
-      .map((d) => d.date),
-  );
-  const workingDay = workingDates.size;
-
-  const platformsOnSheet: ("Talabat" | "Careem")[] = ["Talabat", "Careem"];
-  const rows = platformsOnSheet.map((p) => {
-    const sales = data.paceDaily
-      .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
-      .reduce((s, d) => s + d.sales, 0);
-    const target = data.targets
-      .filter((t) => t.month === currentMonth && t.platform === p)
-      .reduce((s, t) => s + t.salesTarget, 0);
-    const achievement = target > 0 ? (sales / target) * 100 : 0;
-    return { platform: p, sales, target, achievement };
-  });
-
-  const totalSales = rows.reduce((s, r) => s + r.sales, 0);
-  const totalTarget = rows.reduce((s, r) => s + r.target, 0);
-  const totalAchievement = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
-  const proRated = totalTarget * (dayOfMonth / daysInMonth);
-  const proRatedAch = proRated > 0 ? (totalSales / proRated) * 100 : 0;
-
-  const latestByPlatform = (["Talabat", "Careem"] as const).map((p) => {
-    const dates = data.paceDaily
-      .filter((d) => monthOfDate(d.date) === currentMonth && d.platform === p)
-      .map((d) => d.date);
-    return { platform: p, latest: dates.length ? dates.sort().at(-1)! : null };
-  }).filter((x) => x.latest !== null) as { platform: "Talabat" | "Careem"; latest: string }[];
-  const dataThroughDate = latestByPlatform.length
-    ? latestByPlatform.reduce((min, x) => (x.latest < min ? x.latest : min), latestByPlatform[0].latest)
-    : null;
-  const dataThroughLabel = dataThroughDate
-    ? new Date(dataThroughDate + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-    : null;
-  const dataThroughStale = dataThroughDate !== null && dataThroughDate < today;
-  const perPlatformThrough = latestByPlatform.map((x) => ({
-    platform: x.platform,
-    label: new Date(x.latest + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
-  }));
-
-  return {
-    rows, totalSales, totalTarget, totalAchievement, proRated, proRatedAch,
-    dayOfMonth, daysInMonth, workingDay,
-    dataThroughLabel, dataThroughStale, perPlatformThrough,
-  };
-}
 
 function AvgDayTooltip({ active, payload, unit, fmt }: {
   active?: boolean;
@@ -1093,13 +1063,15 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   const segCareem = segFill * segCareemShare;
   const segCappedTalabat = segFill * (1 - segCareemShare);
 
-  // Combined target status (combined figure vs combined target only). Once cumulative >= target the
-  // month is settled: "Target reached" on any day, and it cannot reverse. A completed month left
-  // under target reads "Target missed". Otherwise the in-progress pace figure stands.
-  const targetSet = pace.totalTarget > 0;
-  const reached = targetSet && pace.totalSales >= pace.totalTarget;
+  // Combined status: the combined figure against combined base and (optional) stretch. Reached
+  // states are permanent (cumulative cannot fall); a completed month under base reads "Target
+  // missed"; otherwise the in-progress pace figure stands. Percentage below is percent of base.
   const complete = pace.dayOfMonth >= pace.daysInMonth;
-  const missed = complete && targetSet && !reached;
+  const badge = paceBadgeState({ totalSales: pace.totalSales, base: pace.base, stretch: pace.stretch, complete });
+  const targetSet = pace.base > 0;
+  const isReached = badge === "base_reached" || badge === "stretch_reached";
+  const isStretch = badge === "stretch_reached";
+  const isMissed = badge === "missed";
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
@@ -1143,13 +1115,14 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
             {targetSet ? Math.round(pace.totalAchievement) + "%" : "-"}
           </span>
           <InfoTip id="pace_pct" side="bottom" />
-          {reached || missed ? (
+          {isReached || isMissed ? (
             <span
               className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold align-middle ${
-                reached ? "bg-success/10 text-success border-success/30" : "bg-muted text-muted-foreground border-border"
+                isStretch ? "" : isReached ? "bg-success/10 text-success border-success/30" : "bg-muted text-muted-foreground border-border"
               }`}
+              style={isStretch ? { background: "#EEC36A", color: "#092727", borderColor: "rgba(9,39,39,0.25)" } : undefined}
             >
-              {reached ? "Target reached" : "Target missed"}
+              {PACE_BADGE_LABEL[badge]}
             </span>
           ) : (
             <>
@@ -1197,8 +1170,12 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           </span>
           <InfoTip id="target_pct" side="top" />
         </span>
-        <span className="ml-auto text-muted-foreground text-num">
-          Combined <span className="text-foreground font-semibold">{fmtInt(pace.totalSales)}</span> / {fmtJOD0(pace.totalTarget)}
+        <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground text-num">
+          Combined <span className="text-foreground font-semibold">{fmtInt(pace.totalSales)}</span>
+          {" / base "}{fmtInt(pace.base)}
+          {pace.stretch != null && <>{" · stretch "}{fmtInt(pace.stretch)}</>}
+          {" JOD"}
+          <InfoTip id="pace_base_stretch" side="top" />
         </span>
       </div>
     </div>

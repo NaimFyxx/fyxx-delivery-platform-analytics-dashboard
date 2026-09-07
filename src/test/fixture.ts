@@ -91,6 +91,7 @@ export function buildFixture(): DashboardData {
     itemCategories: {},
     lastOrderDates: [],
     itemAliases: {},
+    stretchTargets: [],
   };
 }
 

@@ -15,7 +15,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { normalizeItemName } = await import("@/lib/costs");
 
-  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData, stretchData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -61,6 +61,11 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     // lookup resolves the same items the report does. Carried in the DTO so no view has to
     // remember to load it separately. Same normalization as loadDbAliases.
     supabaseAdmin.from("item_aliases").select("raw_name,canonical_name"),
+    // Combined stretch target per month (optional upside on top of the per-platform base targets).
+    // Defensive by design: if the table is absent (migration not yet run) supabase-js returns an
+    // error tuple, not a throw, so `data ?? []` yields no stretch and every month shows base-only.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- not in generated types yet (like pace_daily)
+    (supabaseAdmin as any).from("monthly_stretch_targets").select("month,stretch_jod"),
   ]);
 
   // Normalized alias lookup: normalized raw_name -> normalized canonical_name.
@@ -166,6 +171,10 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     itemCategories,
     lastOrderDates,
     itemAliases,
+    stretchTargets: ((stretchData.data ?? []) as { month: string; stretch_jod: number }[]).map((r) => ({
+      month: r.month,
+      stretch: Number(r.stretch_jod),
+    })),
   };
 });
 

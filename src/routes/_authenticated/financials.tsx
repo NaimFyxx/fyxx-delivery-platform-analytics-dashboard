@@ -24,10 +24,13 @@ import { Download } from "lucide-react";
 import { fmtJOD, fmtPct, platformBg, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { monthLabel, type RangeKey } from "@/lib/months";
 import { useRangeFilter } from "@/hooks/use-range-filter";
+import { validateFilterSearch, retainFilterParams } from "@/lib/filter-search";
 import { Segmented } from "../dashboard";
 
 export const Route = createFileRoute("/_authenticated/financials")({
   head: () => ({ meta: [{ title: "Financials · TGR" }] }),
+  validateSearch: validateFilterSearch,
+  search: { middlewares: [retainFilterParams] },
   component: Financials,
 });
 
@@ -37,7 +40,6 @@ export function Financials() {
   const fetchData = useServerFn(getDashboardData);
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchData(), refetchOnWindowFocus: false });
 
-  const [platformFilter, setPlatformFilter] = useState<PlatformKey>("All");
   const allRows = useMemo(() => data?.financials ?? [], [data]);
 
   const allMonths = useMemo(
@@ -49,7 +51,8 @@ export function Financials() {
     return last ? `${last}-28` : new Date().toISOString().slice(0, 10);
   }, [allMonths]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
+  // Range and platform filters live in the URL (persist across navigation).
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel, platform: platformFilter, setPlatform: setPlatformFilter } =
     useRangeFilter({ allMonths, today });
 
   // Newest month first, one row per (month, platform), respecting the platform filter.

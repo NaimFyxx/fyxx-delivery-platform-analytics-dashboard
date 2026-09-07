@@ -17,6 +17,10 @@ vi.mock("@tanstack/react-router", async (orig) => {
       React.createElement("a", { href: typeof to === "string" ? to : "#", ...rest }, children),
     useRouter: () => ({ invalidate: () => {} }),
     useNavigate: () => () => {},
+    useSearch: () => ({}), // filters read from the URL; empty means the smart default
+    useRouterState: (opts?: { select?: (s: unknown) => unknown }) =>
+      opts?.select ? opts.select({ location: { pathname: "/dashboard" } }) : { location: { pathname: "/dashboard" } },
+    retainSearchParams: () => () => ({}),
     Outlet: () => null,
   };
 });
@@ -41,6 +45,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 import { PublicDashboard } from "@/routes/dashboard";
 import { InsightsPage } from "@/routes/insights";
 import { Financials } from "@/routes/_authenticated/financials";
+import { PaceBar } from "@/components/fyxx/pace-dock";
 
 function mountPage(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
@@ -54,12 +59,32 @@ beforeEach(() => vi.setSystemTime(new Date("2026-09-15T12:00:00Z")));
 afterEach(() => vi.useRealTimers());
 
 describe("Overview (Dashboard) renders August figures from the money trail", () => {
-  it("mounts and shows August net margin 53.2% and net profit 318", async () => {
+  it("mounts and shows August net margin 53.2% and net profit 318, plus the Monthly Average card", async () => {
     mountPage(React.createElement(PublicDashboard));
     await waitFor(() => expect(screen.getByText("Net Profit Kept")).toBeInTheDocument());
     expect(screen.getByText("53.2")).toBeInTheDocument(); // net margin
     expect(screen.getByText("318")).toBeInTheDocument(); // net profit (fmtInt of 317.51)
     expect(screen.getByText("68.0")).toBeInTheDocument(); // product margin
+    expect(screen.getByText("Monthly Average")).toBeInTheDocument(); // new KPI card present
+  });
+});
+
+describe("Pace bar renders the base/stretch badge", () => {
+  it("shows Stretch reached and the base+stretch row", () => {
+    const pace = {
+      rows: [
+        { platform: "Talabat" as const, sales: 700, target: 590, achievement: 0 },
+        { platform: "Careem" as const, sales: 500, target: 410, achievement: 0 },
+      ],
+      totalSales: 1200, totalTarget: 1000, totalAchievement: 120, proRated: 0, proRatedAch: 0,
+      dayOfMonth: 20, daysInMonth: 30, workingDay: 18, dataThroughLabel: null, dataThroughStale: false,
+      perPlatformThrough: [], base: 1000, stretch: 1150,
+    };
+    mountPage(React.createElement(PaceBar, { pace, month: "2026-09" }));
+    expect(screen.getByText("Stretch reached")).toBeInTheDocument();
+    expect(screen.getByText("120%")).toBeInTheDocument(); // percent of base, not stretch
+    expect(screen.getByText("1,000")).toBeInTheDocument(); // base value
+    expect(screen.getByText("1,150")).toBeInTheDocument(); // stretch value
   });
 });
 

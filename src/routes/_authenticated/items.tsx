@@ -25,9 +25,12 @@ import { AddProductDialog } from "@/components/fyxx/add-product-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Segmented } from "../dashboard";
 import { useRangeFilter } from "@/hooks/use-range-filter";
+import { validateFilterSearch, retainFilterParams } from "@/lib/filter-search";
 
 export const Route = createFileRoute("/_authenticated/items")({
   head: () => ({ meta: [{ title: "Items · TGR" }] }),
+  validateSearch: validateFilterSearch,
+  search: { middlewares: [retainFilterParams] },
   component: Items,
 });
 
@@ -113,9 +116,8 @@ function buildZeroSalesRows(args: {
 }
 
 function Items() {
-  const [platform, setPlatform] = useState<PlatformKey>("All");
   const [q, setQ] = useState("");
-  // Category filter — "All" shows every category; stacks with the range + platform filters.
+  // Category filter: "All" shows every category; stacks with the range + platform filters.
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   // Reveal catalogue items that have no sales in the current view (e.g. newly added products).
   const [showZero, setShowZero] = useState(false);
@@ -142,7 +144,8 @@ function Items() {
     return last ? `${last}-28` : new Date().toISOString().slice(0, 10);
   }, [allMonths]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
+  // Range and platform filters live in the URL (persist across navigation).
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel, platform, setPlatform } =
     useRangeFilter({ allMonths, today });
 
   const { data: sales = [] } = useQuery({

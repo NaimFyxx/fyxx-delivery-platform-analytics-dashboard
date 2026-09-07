@@ -11,6 +11,8 @@ import { useEffect, useMemo, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { PaceViewProvider } from "@/lib/pace-view";
+import { PaceDock } from "@/components/fyxx/pace-dock";
 
 // A stale-chunk error is what a lazily loaded route throws when the browser is still running the
 // previous build's shell and asks for a chunk filename that a fresh publish has removed. It is a
@@ -199,9 +201,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster richColors position="top-right" />
+      <PaceViewProvider>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        {/* Additive global pace dock (gear + optional bar). Never blocks or breaks page content. */}
+        <PaceDock />
+        <Toaster richColors position="top-right" />
+      </PaceViewProvider>
     </QueryClientProvider>
   );
 }

@@ -114,15 +114,15 @@ export const EXPLAINERS: Record<string, Explainer> = {
   // Pace tracker
   pace_pct: {
     label: "Pace %",
-    meaning: "How far you are toward the monthly target so far.",
-    formula: "sales ÷ target × 100",
-    example: "698 ÷ 1,650 ≈ 42%.",
+    meaning: "How far you are toward the combined base target so far. Always measured against base, never stretch.",
+    formula: "sales ÷ base × 100",
+    example: "248 ÷ 1,000 ≈ 25%.",
   },
   pace_prorated: {
     label: "% of pace",
-    meaning: "Where you are vs where you'd need to be by today to finish the month on target. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the target you have hit. That is the big number on the left.)",
-    formula: "sales ÷ (target × dayOfMonth ÷ daysInMonth) × 100",
-    example: "Day 27/30 → you'd expect 1,485; at 771 that's 52% of pace (well behind).",
+    meaning: "Where you are vs where you'd need to be by today to finish the month on base. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the base you have hit. That is the big number on the left.)",
+    formula: "sales ÷ (base × dayOfMonth ÷ daysInMonth) × 100",
+    example: "Day 27/30 → you'd expect 900; at 771 that's 86% of pace (a little behind).",
   },
   working_days: {
     label: "Working days (WD)",
@@ -139,9 +139,30 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   target_pct: {
     label: "Target achievement %",
-    meaning: "How far actual sales are vs this platform's monthly target.",
-    formula: "actual ÷ target × 100",
+    meaning: "How far actual sales are vs this platform's monthly base target.",
+    formula: "actual ÷ base × 100",
     example: "680 ÷ 1,000 = 68%.",
+  },
+  pace_base_stretch: {
+    label: "Base and stretch",
+    meaning:
+      "Base is the number you expect to hit (the two platform targets summed); stretch is an optional combined upside for the month. The badge reads Base reached, then Stretch reached, once cumulative sales cross each, and those stay set for the rest of the month. The percentage and pace are always measured against base.",
+    formula: "base = Talabat target + Careem target; stretch = combined stretch",
+    example: "Base 1,000, stretch 1,150. At 1,000 the badge reads Base reached.",
+  },
+  pace_bar: {
+    label: "Pace bar",
+    meaning:
+      "The same month-to-date pace as the Overview card, pinned to the bottom so it follows you between pages. The track runs from 0 to stretch (0 to base when no stretch is set), with a yellow tick at base and a muted tick at stretch. Choose whether it shows with the gear button, bottom right.",
+    formula: "cumulative combined sales vs base and stretch",
+    example: "248 of base 1,000 with the fill about a quarter along.",
+  },
+  monthly_average: {
+    label: "Monthly Average",
+    meaning:
+      "The average combined gross of the last three completed months, and how that compares with the three months before them. A 'what is the business running at now' figure, so it ignores the date filter above.",
+    formula: "mean(gross of last 3 completed months); change vs mean of the 3 before",
+    example: "Jun 837, Jul 760, Aug 1,011 → 869 JOD, down 5.4% on Mar to May.",
   },
 
   // Financials
@@ -220,6 +241,6 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   target_line: {
     label: "Target line",
-    meaning: "The monthly sales-target reference line: where you need to be by end of month.",
+    meaning: "The monthly base sales-target reference line: where you need to be by end of month.",
   },
 };

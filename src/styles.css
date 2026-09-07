@@ -76,6 +76,11 @@
      Talabat orange #FF5A00, Careem green #00493E. */
   color-scheme: light;
   --radius: 0.75rem;
+  /* Left inset for the fixed pace bar: 0 by default (guests, mobile); the admin sidebar sets it to
+     its own width on desktop so the bar never underlaps the sidebar. */
+  --pace-bar-left: 0px;
+  /* Bottom room reserved for the fixed pace bar (0 when it is not showing); the dock sets it. */
+  --pace-bar-pad: 0px;
   --background: #f4efe7;
   --foreground: #092727;
   --card: #ffffff;
@@ -133,6 +138,8 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
+    /* Keep window-scrolled (guest) content clear of the fixed pace bar. */
+    padding-bottom: var(--pace-bar-pad, 0px);
   }
 
   h1, h2, h3, h4 {

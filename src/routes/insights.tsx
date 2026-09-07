@@ -26,12 +26,15 @@ import { Header, Segmented, SectionLabel, type PlatformKey } from "./dashboard";
 import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
 import { platformsFromFilter, fmtJOD0, type Platform } from "@/lib/fyxx";
 import { useRangeFilter } from "@/hooks/use-range-filter";
+import { validateFilterSearch, retainFilterParams } from "@/lib/filter-search";
 import { aggregateItems } from "@/lib/items";
 import { moneyTrail } from "@/lib/money-trail";
 import { categoryFor } from "@/lib/categories";
 
 export const Route = createFileRoute("/insights")({
   ssr: false,
+  validateSearch: validateFilterSearch,
+  search: { middlewares: [retainFilterParams] },
   head: () => ({
     meta: [
       { title: "Insights · The Green Room" },
@@ -56,9 +59,6 @@ export function InsightsPage() {
     refetchOnWindowFocus: false,
   });
 
-  const [platform, setPlatform] = useState<PlatformKey>("All");
-  const platforms: string[] = platformsFromFilter(platform);
-
   const today = useMemo(() => {
     const last = data?.daily.at(-1)?.date;
     return last ?? new Date().toISOString().slice(0, 10);
@@ -73,8 +73,10 @@ export function InsightsPage() {
     return Array.from(set).sort();
   }, [data]);
 
-  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel } =
+  // Range and platform filters live in the URL (persist across navigation).
+  const { range, setRange, customFrom, customTo, handleCustomFrom, handleCustomTo, rangeMonths, rangeLabel, platform, setPlatform } =
     useRangeFilter({ allMonths, today });
+  const platforms: string[] = platformsFromFilter(platform);
 
   // Does any data fall within the selected range? Drives the "no data" empty state.
   const rangeHasData = useMemo(() => {

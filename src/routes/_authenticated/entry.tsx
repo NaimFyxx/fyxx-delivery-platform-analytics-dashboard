@@ -762,9 +762,10 @@ function ItemCostsForm() {
 /* ---------- Targets ---------- */
 function TargetsForm() {
   const [month, setMonth] = useState(currentMonth());
-  // Targets differ per platform, so both are entered together in one pass.
+  // Per-platform base targets (entered together), plus one optional combined stretch for the month.
   const [talT, setTalT] = useState("");
   const [carT, setCarT] = useState("");
+  const [stretch, setStretch] = useState("");
   const invalidate = useInvalidateAll();
 
   const filter = useListFilter();
@@ -776,6 +777,18 @@ function TargetsForm() {
       return data ?? [];
     },
   });
+  const { data: stretchRows = [] } = useQuery({
+    queryKey: ["entry_stretch"],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types yet
+      const { data } = await (supabase as any).from("monthly_stretch_targets").select("month,stretch_jod");
+      return (data ?? []) as { month: string; stretch_jod: number }[];
+    },
+  });
+  const currentStretch = (m: string) => {
+    const r = stretchRows.find((x) => x.month === m);
+    return r ? `current: ${fmtInt(Number(r.stretch_jod))}` : "optional";
+  };
   const months = useMemo(
     () => Array.from(new Set(rows.map((r) => r.month))).sort().reverse(),
     [rows],
@@ -793,12 +806,20 @@ function TargetsForm() {
       const payload: { month: string; platform: Platform; sales_target_jod: number }[] = [];
       if (talT.trim() !== "") payload.push({ month, platform: "Talabat", sales_target_jod: Number(talT) });
       if (carT.trim() !== "") payload.push({ month, platform: "Careem", sales_target_jod: Number(carT) });
-      if (payload.length === 0) throw new Error("Enter a target for at least one platform");
-      const { error } = await supabase.from("targets").upsert(payload, { onConflict: "month,platform" });
-      if (error) throw error;
+      const hasStretch = stretch.trim() !== "";
+      if (payload.length === 0 && !hasStretch) throw new Error("Enter a base target or a combined stretch");
+      if (payload.length > 0) {
+        const { error } = await supabase.from("targets").upsert(payload, { onConflict: "month,platform" });
+        if (error) throw error;
+      }
+      if (hasStretch) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types yet
+        const { error } = await (supabase as any).from("monthly_stretch_targets").upsert({ month, stretch_jod: Number(stretch) }, { onConflict: "month" });
+        if (error) throw error;
+      }
       await logImport({ platform: "-", report_type: "invoice", file_name: `target: ${month}` });
     },
-    onSuccess: () => { toast.success("Targets saved"); setTalT(""); setCarT(""); invalidate(); },
+    onSuccess: () => { toast.success("Targets saved"); setTalT(""); setCarT(""); setStretch(""); invalidate(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -814,11 +835,16 @@ function TargetsForm() {
   return (
     <div className="space-y-6 mt-4">
       <Card className="p-5">
-        <p className="text-xs text-muted-foreground mb-3">Enter both platforms in one pass. Leave a field blank to keep that platform's current target unchanged.</p>
-        <form className="grid gap-4 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+        <p className="text-xs text-muted-foreground mb-3">
+          The two platform figures are the <b>base</b>, the number you expect to hit; their sum is the combined base the pace
+          badge tracks. The <b>combined stretch</b> is one optional upside figure for the month. Leave a field blank to keep its
+          current value unchanged. A month with a base but no stretch behaves exactly as before.
+        </p>
+        <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
-          <Field label="Talabat target (JOD)"><Input type="number" step="0.001" min="0" value={talT} onChange={(e) => setTalT(e.target.value)} placeholder={currentFor("Talabat")} /></Field>
-          <Field label="Careem target (JOD)"><Input type="number" step="0.001" min="0" value={carT} onChange={(e) => setCarT(e.target.value)} placeholder={currentFor("Careem")} /></Field>
+          <Field label="Talabat base (JOD)"><Input type="number" step="0.001" min="0" value={talT} onChange={(e) => setTalT(e.target.value)} placeholder={currentFor("Talabat")} /></Field>
+          <Field label="Careem base (JOD)"><Input type="number" step="0.001" min="0" value={carT} onChange={(e) => setCarT(e.target.value)} placeholder={currentFor("Careem")} /></Field>
+          <Field label="Combined stretch (optional)"><Input type="number" step="0.001" min="0" value={stretch} onChange={(e) => setStretch(e.target.value)} placeholder={currentStretch(month)} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
