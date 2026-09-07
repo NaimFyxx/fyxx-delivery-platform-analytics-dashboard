@@ -169,18 +169,10 @@ export const REPORTS: Record<ReportId, ReportDef> = {
       },
     ],
     optionalFields: [
-      {
-        key: "pro_orders",
-        label: "Pro Orders (loyalty)",
-        defaults: ["Pro Orders"],
-        required: false,
-      },
-      {
-        key: "pro_sales",
-        label: "Pro Revenue (loyalty)",
-        defaults: ["Pro Revenue"],
-        required: false,
-      },
+      // Pro Orders / Pro Revenue are intentionally NOT mapped here. Talabat still exports them, but
+      // the Pro split is sourced per-order from the Order Report's "Is Pro Order" flag (into
+      // daily_sales), and nothing reads a Performance Pro column. Offering them in the mapper only
+      // implied the panel came from here, which it does not. Any such columns in the file are ignored.
       // Customer columns carried by the same Performance export → monthly_customers (basis = orders).
       {
         key: "new_orders",

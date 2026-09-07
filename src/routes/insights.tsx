@@ -260,7 +260,7 @@ export function InsightsPage() {
     );
   }
 
-  // Use monthly_financials for sales — same source as the dashboard pill.
+  // Use monthly_financials for sales: same source as the dashboard pill.
   return (
     <AdminShell admin={adminUser} onSignOut={handleSignOut}>
     <div className="min-h-screen bg-background text-foreground">
@@ -312,7 +312,7 @@ export function InsightsPage() {
           <EmptyState label={rangeLabel} />
         ) : (
         <>
-        {/* CUSTOMER TIERS — prominent */}
+        {/* CUSTOMER TIERS, prominent */}
         <SectionLabel>Customer Tiers · Careem+ &amp; Talabat Pro</SectionLabel>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
           <TierCard
@@ -858,7 +858,7 @@ function buildTiers(
   const totalOrders = rows.reduce((s, r) => s + r.orders, 0);
   const subSales = rows.reduce((s, r) => s + getSubSales(r), 0);
   const subOrders = rows.reduce((s, r) => s + getSubOrders(r), 0);
-  // Clamp regular figures — Plus data can cover a different date window than overall,
+  // Clamp regular figures: Plus data can cover a different date window than overall,
   // making subSales > totalSales and producing negative regular AOV / >100% share.
   const regSales = Math.max(0, totalSales - subSales);
   const regOrders = Math.max(0, totalOrders - subOrders);
@@ -910,7 +910,7 @@ function TierBody({
   );
 }
 
-/** Careem Plus vs regular customer mix — counts + % share (Careem exports no Plus sales/orders). */
+/** Careem Plus vs regular customer mix: counts + % share (Careem exports no Plus sales/orders). */
 function CustomerMixBody({
   mix, colorVar, barColor,
 }: {
