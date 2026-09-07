@@ -109,3 +109,87 @@ describe("data health check 2: order-count floor gates the COGS band", () => {
     expect(c.status).toBe("fail");
   });
 });
+
+// Check 10 (pace_reconcile): the hand-typed pace sheet against the imported gross for a complete,
+// tracked, imported platform-month. Same food-basket gross incl VAT on both sides. now = 2026-09-15,
+// so 2026-07 is complete. Helpers build a single platform-month of synthetic data.
+describe("data health check 10: pace sheet vs imported sales", () => {
+  const MONTH = "2026-07"; // complete relative to 2026-09-15
+  const NOW = new Date("2026-09-15T00:00:00Z");
+
+  // Fill every day of the month with 0 (so the pace sheet counts as tracked), then overlay bulk days.
+  const coverAllDays = (month: string, bulk: Record<string, number>): Record<string, number> => {
+    const [y, m] = month.split("-").map(Number);
+    const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const out: Record<string, number> = {};
+    for (let d = 1; d <= days; d++) out[`${month}-${String(d).padStart(2, "0")}`] = 0;
+    return { ...out, ...bulk };
+  };
+
+  const mkData = (opts: {
+    paceByDate: Record<string, number>;
+    importedGross: number;
+    importedByDate?: Record<string, number>;
+    platform?: "Talabat" | "Careem";
+    month?: string;
+  }): DashboardData => {
+    const platform = opts.platform ?? "Careem";
+    const month = opts.month ?? MONTH;
+    const paceDaily = Object.entries(opts.paceByDate).map(([date, sales]) => ({ date, platform, sales, orders: null }));
+    const daily = Object.entries(opts.importedByDate ?? {}).map(([date, sales]) => ({
+      date, platform, sales, orders: 0, cplusSales: 0, cplusOrders: 0, cplusAov: 0, cplusCustomers: 0, nonCplusCustomers: 0, proSales: 0, proOrders: 0,
+    }));
+    const financials = [{ month, platform, gross: opts.importedGross, payout: opts.importedGross * 0.8, discount: 0, cogsManual: 0, adsFee: 0, boostedFee: 0, marketingFees: 0 }];
+    return {
+      paceDaily, daily, financials, costs: [{ item: "unit", cost: 1, effective_from: "2025-01-01" }],
+      itemSales: [], targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
+      adjustments: [], itemCategories: {}, lastOrderDates: [], itemAliases: {}, stretchTargets: [],
+    };
+  };
+
+  const check = (data: DashboardData, platform: "Talabat" | "Careem" = "Careem", month = MONTH) =>
+    runDataHealthChecks(data, {}, NOW).months.find((mo) => mo.month === month)
+      ?.checks.find((c) => c.id === "pace_reconcile" && c.scope === platform);
+
+  it("fails when pace is above imports (the 1-September incident: 1,011 vs 781)", () => {
+    const c = check(mkData({ paceByDate: coverAllDays(MONTH, { [`${MONTH}-12`]: 1011 }), importedGross: 781, importedByDate: { [`${MONTH}-12`]: 781 } }));
+    expect(c?.status).toBe("fail");
+    expect(c?.detail).toContain("1,011");
+    expect(c?.detail).toContain("781");
+    expect(c?.detail).toContain("above");
+    expect(c?.detail).toContain("a double entry or an import gap");
+    expect(c?.detail).toContain(`${MONTH}-12`); // names the largest single day
+  });
+
+  it("fails when pace is below imports and calls it a missed entry", () => {
+    const c = check(mkData({ paceByDate: coverAllDays(MONTH, { [`${MONTH}-05`]: 455 }), importedGross: 500, importedByDate: { [`${MONTH}-05`]: 500 } }));
+    expect(c?.status).toBe("fail"); // 45 JOD, 9%
+    expect(c?.detail).toContain("below");
+    expect(c?.detail).toContain("a missed pace entry");
+  });
+
+  it("passes a small month whose gap is under the 40 JOD floor even at high percent", () => {
+    const c = check(mkData({ paceByDate: coverAllDays(MONTH, { [`${MONTH}-10`]: 235 }), importedGross: 200, importedByDate: { [`${MONTH}-10`]: 200 } }));
+    expect(c?.status).toBe("pass"); // 35 JOD gap (17.5%) but below the floor, so it does not fire
+  });
+
+  it("passes when the two agree closely", () => {
+    const c = check(mkData({ paceByDate: coverAllDays(MONTH, { [`${MONTH}-12`]: 1005 }), importedGross: 1000, importedByDate: { [`${MONTH}-12`]: 1000 } }));
+    expect(c?.status).toBe("pass");
+  });
+
+  it("is skipped on a month the pace sheet did not track (older, sparse history)", () => {
+    const c = check(mkData({ paceByDate: { [`${MONTH}-10`]: 500 }, importedGross: 500 })); // 1 day only
+    expect(c).toBeUndefined();
+  });
+
+  it("is skipped on the in-progress month (pace legitimately runs ahead of imports)", () => {
+    const c = check(mkData({ paceByDate: coverAllDays("2026-09", { "2026-09-10": 900 }), importedGross: 400, month: "2026-09" }), "Careem", "2026-09");
+    expect(c).toBeUndefined();
+  });
+
+  it("is skipped when imports are absent (not imported yet is a coverage gap, not a mismatch)", () => {
+    const c = check(mkData({ paceByDate: coverAllDays(MONTH, { [`${MONTH}-12`]: 900 }), importedGross: 0 }));
+    expect(c).toBeUndefined();
+  });
+});

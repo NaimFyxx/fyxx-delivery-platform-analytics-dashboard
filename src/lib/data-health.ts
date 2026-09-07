@@ -42,6 +42,15 @@ const COVERAGE_GAP_MULTIPLE = 3; // gap must exceed 3x the platform's usual spac
 // a single order. Set below Careem August's 13 orders (a genuine partial-item failure that must still
 // fire) and above the tiny in-progress / launch months (3 to 8 orders) that are just noise.
 const COGS_MIN_ORDERS = 10;
+// Check 10 (pace sheet vs imports). Both sides are the same food-basket gross incl VAT, so on a
+// complete month they should agree closely; the bands are tighter than the other checks. Escalate
+// only when BOTH the absolute floor and the percentage are exceeded, so a small month never fires on
+// a few dinars. The floor is the binding constraint on these small per-platform months (a warn at 2%
+// would trip on 20 JOD of a 1,000 JOD month, doing no work), so it is set above one order of noise.
+const PACE_MIN_JOD = 40; // below this absolute gap the month never fires, whatever the percentage
+const PACE_WARN_PCT = 2;
+const PACE_FAIL_PCT = 5;
+const PACE_COVERAGE_SLACK_DAYS = 3; // pace must cover all but this many days to count as tracked
 
 const worst = (a: HealthStatus, b: HealthStatus): HealthStatus =>
   a === "fail" || b === "fail" ? "fail" : a === "warn" || b === "warn" ? "warn" : "pass";
@@ -238,6 +247,67 @@ export function runDataHealthChecks(
               rel > 0.01
                 ? `${p} financials gross ${money(gross)} vs summed daily ${money(day)} differ by ${money(diff)} (${pct1(rel * 100)}). The app shows the financials figure; the daily fallback would show the other.`
                 : `${p} financials gross ${money(gross)} matches summed daily ${money(day)} within 1%.`,
+          });
+        }
+      }
+
+      // 10. Pace sheet vs imported sales. The pace tracker runs on pace_daily, typed in by hand, and
+      // nothing else validates it, so a missed, duplicated or mistyped day silently skews the pace
+      // bar. Compare the hand-entered gross against the imported gross (reusing the money trail, not
+      // recomputing) for the same platform-month, but only where the comparison is fair: a complete
+      // month (both sides should now cover it in full), imports actually present (an un-imported
+      // month is a coverage gap, not a mismatch, and would only mean the import has not run yet), and
+      // the pace sheet tracked for essentially the whole month (older months predate pace tracking
+      // and would fire spuriously). Same food-basket gross incl VAT on both sides.
+      if (complete) {
+        const importedGross = moneyTrail(data, [m], [p]).gross;
+        const paceRows = data.paceDaily.filter((d) => monthOfDate(d.date) === m && d.platform === p);
+        const paceGross = paceRows.reduce((s, d) => s + d.sales, 0);
+        const paceDays = new Set(paceRows.map((d) => d.date)).size;
+        const daysInMonth = Number(lastDayOfMonth(m).slice(-2));
+        const tracked = paceDays >= daysInMonth - PACE_COVERAGE_SLACK_DAYS;
+        if (importedGross > 0 && tracked) {
+          const diff = paceGross - importedGross; // signed: + pace above imports, - pace below
+          const abs = Math.abs(diff);
+          const pct = (abs / importedGross) * 100;
+          const material = abs >= PACE_MIN_JOD; // floor stops small months firing on noise
+          const s10: HealthStatus =
+            material && pct > PACE_FAIL_PCT ? "fail" : material && pct > PACE_WARN_PCT ? "warn" : "pass";
+
+          // Largest single-day gap, from imported daily_sales vs the pace sheet (same per-day basis).
+          // Check 8 ties daily_sales to the financials gross the month total uses, so this locates
+          // the day behind the month divergence rather than introducing a second imported source.
+          const dayGap = new Map<string, { pace: number; imp: number }>();
+          for (const d of paceRows) {
+            const e = dayGap.get(d.date) ?? { pace: 0, imp: 0 };
+            e.pace += d.sales;
+            dayGap.set(d.date, e);
+          }
+          for (const d of data.daily) {
+            if (monthOfDate(d.date) !== m || d.platform !== p) continue;
+            const e = dayGap.get(d.date) ?? { pace: 0, imp: 0 };
+            e.imp += d.sales;
+            dayGap.set(d.date, e);
+          }
+          let worst: { date: string; gap: number } | null = null;
+          for (const [date, v] of dayGap) {
+            const g = Math.abs(v.pace - v.imp);
+            if (!worst || g > worst.gap) worst = { date, gap: g };
+          }
+
+          const dir = diff >= 0 ? "above" : "below";
+          const cause = diff >= 0 ? "a double entry or an import gap" : "a missed pace entry";
+          const dayHint =
+            worst && worst.gap > 0 ? ` Largest single day ${money(worst.gap)} on ${worst.date}.` : "";
+          checks.push({
+            id: "pace_reconcile",
+            label: "Pace vs imported sales",
+            scope: p,
+            status: s10,
+            detail:
+              s10 === "pass"
+                ? `${p} pace ${money(paceGross)} matches imported ${money(importedGross)} (${money(abs)} apart, ${pct1(pct)}).`
+                : `${p} pace ${money(paceGross)} is ${money(abs)} ${dir} imported ${money(importedGross)} (${pct1(pct)}), suggests ${cause}.${dayHint}`,
           });
         }
       }
