@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useRouterState } from "@tanstack/react-router";
@@ -30,13 +30,6 @@ export function PaceDock() {
   const { month, asOf } = currentPaceMonth();
   const pace = data ? computePace(data, month, asOf) : null; // null while loading/errored: no throw
   const showBar = barEligible && pace != null;
-
-  // Reserve bottom room for the fixed bar (and release it when the bar is gone).
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--pace-bar-pad", showBar ? "116px" : "0px");
-    return () => root.style.setProperty("--pace-bar-pad", "0px");
-  }, [showBar]);
 
   // Close on click outside or Escape.
   useEffect(() => {
@@ -74,8 +67,23 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
   const isMissed = badge === "missed";
   const badgeText = PACE_BADGE_LABEL[badge] ?? (targetSet ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set");
 
+  // Reserve exactly the bar's height as bottom room, remeasured on resize/wrap (the bar is taller on
+  // phones where the percentage and badge drop to their own line). Released to 0 when the bar unmounts.
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    const root = document.documentElement;
+    if (!el) return;
+    const set = () => root.style.setProperty("--pace-bar-pad", `${Math.ceil(el.offsetHeight) + 10}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.setProperty("--pace-bar-pad", "0px"); };
+  }, []);
+
   return (
     <div
+      ref={barRef}
       className="fixed right-0 bottom-0 z-[70] px-4 py-2.5 md:px-6 md:py-3 text-[var(--cream)]"
       style={{ left: "var(--pace-bar-left)", background: "#092727", boxShadow: "0 -3px 22px rgba(9,39,39,.2)" }}
     >
