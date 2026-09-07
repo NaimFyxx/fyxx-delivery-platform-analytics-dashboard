@@ -336,7 +336,7 @@ export function InsightsPage() {
             {!talabatTiers ? (
               <Empty text="No Talabat data in this range." />
             ) : !talabatTiers.hasSub ? (
-              <Empty text="No Talabat Pro figures imported for this range. Import the Performance Report with the Pro Orders / Pro Revenue columns." />
+              <Empty text="No Pro orders in this range. This panel is built from the Talabat Order Report, which flags each order as Pro or not. There is Talabat order data for this range but none of it is flagged Pro, which almost always means none of the orders were Pro. (It can also mean these months were imported before the Pro flag was captured.)" />
             ) : (
               <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat)" barColor="#ff8c42" />
             )}
@@ -434,7 +434,7 @@ export function InsightsPage() {
         )}
         {!customerKpi && !data.customers.length && (
           <div className="bg-card border border-border rounded-2xl p-4 mb-2">
-            <Empty text="No customer data imported yet. Import the Careem 'New, Retained & Reactivated Customers' report and the Talabat 'Sales, Customers & Operations' report." />
+            <Empty text="No customer data imported yet. Import the Careem 'New, Retained & Reactivated Customers' report and the Talabat Performance Report, which carries the new vs returning customer counts." />
           </div>
         )}
         {!customerKpi && !!data.customers.length && (

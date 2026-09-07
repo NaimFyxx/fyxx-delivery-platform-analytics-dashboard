@@ -38,6 +38,10 @@ type Platform = (typeof PLATFORMS)[number];
 // run before it is worth a glance. Warn-only, never a failure.
 const COVERAGE_GAP_FLOOR_DAYS = 4; // a normal few-day tail never fires
 const COVERAGE_GAP_MULTIPLE = 3; // gap must exceed 3x the platform's usual spacing
+// Check 2 needs enough orders for the COGS ratio to be meaningful: below this the item mix swings on
+// a single order. Set below Careem August's 13 orders (a genuine partial-item failure that must still
+// fire) and above the tiny in-progress / launch months (3 to 8 orders) that are just noise.
+const COGS_MIN_ORDERS = 10;
 
 const worst = (a: HealthStatus, b: HealthStatus): HealthStatus =>
   a === "fail" || b === "fail" ? "fail" : a === "warn" || b === "warn" ? "warn" : "pass";
@@ -145,15 +149,30 @@ export function runDataHealthChecks(
           detail: `${p} COGS is ${pct1(cr)} of ex-VAT gross. Not enough history yet to set a band.`,
         });
       } else {
-        const dev = Math.abs(cr - med);
-        const s2: HealthStatus = dev > 8 ? "fail" : dev > 5 ? "warn" : "pass";
-        checks.push({
-          id: "cogs_band",
-          label: "COGS ratio in band",
-          scope: p,
-          status: s2,
-          detail: `${p} COGS is ${pct1(cr)} of ex-VAT gross vs median ${pct1(med)} (${dev.toFixed(1)} pts off).`,
-        });
+        // Minimum-data gate: on too few orders the COGS ratio swings on a single order's mix, so a
+        // deviation is noise, not a data problem. Report it for information rather than amber/red.
+        // Order data missing (orders === 0 on a month that predates order-level import) is treated as
+        // unknown sample, so the band still runs and an early complete month is never silenced.
+        const orders = data.lastOrderDates.find((l) => l.month === m && l.platform === p)?.orders ?? 0;
+        if (orders > 0 && orders < COGS_MIN_ORDERS) {
+          checks.push({
+            id: "cogs_band",
+            label: "COGS ratio in band",
+            scope: p,
+            status: "pass",
+            detail: `${p} COGS is ${pct1(cr)} of ex-VAT gross. Only ${orders} order(s) so far, too few to judge against the ${pct1(med)} median; shown for information.`,
+          });
+        } else {
+          const dev = Math.abs(cr - med);
+          const s2: HealthStatus = dev > 8 ? "fail" : dev > 5 ? "warn" : "pass";
+          checks.push({
+            id: "cogs_band",
+            label: "COGS ratio in band",
+            scope: p,
+            status: s2,
+            detail: `${p} COGS is ${pct1(cr)} of ex-VAT gross vs median ${pct1(med)} (${dev.toFixed(1)} pts off).`,
+          });
+        }
       }
 
       // 6. Commission drag stays positive (product margin >= net margin). Sign-error canary.
