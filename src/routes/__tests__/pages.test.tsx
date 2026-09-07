@@ -45,7 +45,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 import { PublicDashboard } from "@/routes/dashboard";
 import { InsightsPage } from "@/routes/insights";
 import { Financials } from "@/routes/_authenticated/financials";
-import { PaceBar } from "@/components/fyxx/pace-dock";
+import { PaceBar, isDockPath } from "@/components/fyxx/pace-dock";
 
 function mountPage(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
@@ -85,6 +85,19 @@ describe("Pace bar renders the base/stretch badge", () => {
     expect(screen.getByText("120%")).toBeInTheDocument(); // percent of base, not stretch
     expect(screen.getByText("1,000")).toBeInTheDocument(); // base value
     expect(screen.getByText("1,150")).toBeInTheDocument(); // stretch value
+  });
+});
+
+describe("Pace dock only renders on app pages (not sign-in or 404)", () => {
+  it("allows the pace, dashboard and admin pages", () => {
+    for (const p of ["/", "/dashboard", "/insights", "/financials", "/items", "/report", "/entry", "/targets", "/import"]) {
+      expect(isDockPath(p)).toBe(true);
+    }
+  });
+  it("blocks the sign-in page and any unknown (404) path", () => {
+    expect(isDockPath("/auth")).toBe(false);
+    expect(isDockPath("/nope")).toBe(false);
+    expect(isDockPath("/dashboard/extra")).toBe(false); // exact match only, no accidental prefix leak
   });
 });
 

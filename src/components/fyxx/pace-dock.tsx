@@ -9,11 +9,32 @@ import { usePaceView, type PaceViewMode } from "@/lib/pace-view";
 import { fmtInt } from "@/lib/fyxx";
 import { InfoTip } from "@/components/fyxx/info-tip";
 
+// The dock (gear + bar) belongs only on the app's own pace, dashboard and admin pages. It is mounted
+// in __root, which sits above every route including the public sign-in page, so without this gate it
+// leaked onto /auth and onto any unknown (404) path. That matters beyond layout: the bar reads the
+// public getDashboardData query (service-role, no session), so it would show real sales, targets and
+// the platform split to anyone sitting on the sign-in page. This is an allowlist on purpose: a route
+// not listed here gets no dock, so a future public page can never silently start showing it again.
+// The soft-gated share pages (/dashboard, /insights) and the guest pace landing (/) are legitimate
+// and stay. Admin pages live at the top level because /_authenticated is a pathless layout route.
+const DOCK_PATHS = new Set<string>([
+  "/", // guest landing / pace page (gear only; the page owns its own tracker, bar suppressed below)
+  "/dashboard", // public read-only share dashboard (the card owns the pace; gear only in "both")
+  "/insights", // soft-gated share insights
+  "/financials", "/items", "/report", "/entry", "/targets", "/import", // admin pages (behind /auth)
+]);
+
+/** Whether the pace dock may render on this path. Exported so the allowlist is unit-tested directly. */
+export function isDockPath(pathname: string): boolean {
+  return DOCK_PATHS.has(pathname);
+}
+
 /**
- * Global pace dock: the floating gear (every page, every mode) and the slim bottom bar (per the
- * chosen mode and page). Mounted once in __root. It is purely additive: while the dashboard query
- * is loading or errored it renders the gear only and no bar, and it never blocks page content or
- * throws. The gear works without pace data because the mode lives in PaceViewProvider, not here.
+ * Global pace dock: the floating gear and the slim bottom bar (per the chosen mode and page). Mounted
+ * once in __root. It is purely additive: while the dashboard query is loading or errored it renders
+ * the gear only and no bar, and it never blocks page content or throws. The gear works without pace
+ * data because the mode lives in PaceViewProvider, not here. It renders nothing outside DOCK_PATHS
+ * (the sign-in page and any 404), so no page but an app page ever shows it.
  */
 export function PaceDock() {
   const { mode, open, setOpen } = usePaceView();
@@ -21,11 +42,12 @@ export function PaceDock() {
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchData(), refetchOnWindowFocus: false });
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  const dockAllowed = isDockPath(pathname);
   // Overview (/dashboard) owns the card; the guest landing (/) is itself a pace page. The bar shows
-  // everywhere else in "both", and everywhere but the landing in "bar".
+  // everywhere else in "both", and everywhere but the landing in "bar" (and never off an app page).
   const onDashboard = pathname === "/dashboard";
   const onLanding = pathname === "/";
-  const barEligible = !onLanding && (mode === "bar" || (mode === "both" && !onDashboard));
+  const barEligible = dockAllowed && !onLanding && (mode === "bar" || (mode === "both" && !onDashboard));
 
   const { month, asOf } = currentPaceMonth();
   const pace = data ? computePace(data, month, asOf) : null; // null while loading/errored: no throw
@@ -40,6 +62,11 @@ export function PaceDock() {
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("click", onDoc); document.removeEventListener("keydown", onKey); };
   }, [open, setOpen]);
+
+  // Off an app page (sign-in, 404), render neither gear nor bar. The bar never mounts here, so its
+  // effect never runs and --pace-bar-pad stays 0; navigating in from an app page unmounts the bar,
+  // whose cleanup already reset the pad to 0, so the sign-in page keeps no gap.
+  if (!dockAllowed) return null;
 
   return (
     <>
