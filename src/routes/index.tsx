@@ -4,6 +4,7 @@ import { UNLOCK_KEY } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
+import { latestCoverageDate } from "@/lib/freshness";
 import {
   Header, PaceTracker,
   computePace,
@@ -35,16 +36,9 @@ function PaceLandingPage() {
   const [codeError, setCodeError] = useState(false);
   const nav = useNavigate();
 
-  const today = useMemo(() => {
-    const last = data?.daily.at(-1)?.date;
-    return last ?? new Date().toISOString().slice(0, 10);
-  }, [data]);
-  const currentMonth = monthOfDate(today);
-
   // Real calendar today (not data-derived) — a month only appears in history once it has ended.
   const calendarToday = new Date().toISOString().slice(0, 10);
   const calendarMonth = monthOfDate(calendarToday);
-  const lastDailyDate = data?.daily.at(-1)?.date ?? null;
 
   const pace = useMemo(() => data ? computePace(data, calendarMonth, calendarToday) : null, [data, calendarMonth, calendarToday]);
 
@@ -94,7 +88,7 @@ function PaceLandingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header today={today} lastDailyDate={lastDailyDate} showNav={false} />
+      <Header coverageDate={latestCoverageDate(data?.lastOrderDates ?? [])} showNav={false} />
       <div className="px-4 md:px-7 pt-5 md:pt-7 pb-12 max-w-5xl mx-auto">
         <PaceTracker pace={pace} currentMonth={calendarMonth} />
 

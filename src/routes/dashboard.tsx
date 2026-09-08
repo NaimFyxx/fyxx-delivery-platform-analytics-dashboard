@@ -7,6 +7,7 @@ import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
+import { latestCoverageDate } from "@/lib/freshness";
 type DashboardData = NonNullable<Awaited<ReturnType<typeof getDashboardData>>>;
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
@@ -448,7 +449,7 @@ export function PublicDashboard() {
   return (
     <AdminShell admin={adminUser} onSignOut={handleSignOut}>
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} statusChip={adminUser ? <DataHealthChip /> : null} />
+      <Header coverageDate={latestCoverageDate(data.lastOrderDates)} showNav={!adminUser} statusChip={adminUser ? <DataHealthChip /> : null} />
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
@@ -751,14 +752,18 @@ export function PublicDashboard() {
 
 // ---------- small UI primitives ----------
 export function Header({
-  today, lastDailyDate, showNav = true, statusChip,
+  coverageDate, showNav = true, statusChip,
 }: {
-  today: string;
-  lastDailyDate: string | null;
+  coverageDate: string | null;
   showNav?: boolean;
   statusChip?: ReactNode;
 }) {
-  const fresh = useFreshness(today, lastDailyDate);
+  // The reference "today" for freshness is the actual calendar date, NOT the latest data date. When
+  // both were the data date, days was always 0 and the label could only ever say "current" (the
+  // stale branches were dead). Now today and the coverage date genuinely differ, so a lagging import
+  // shows as "updated N days ago" or stale, which is the whole point of the label.
+  const today = new Date().toISOString().slice(0, 10);
+  const fresh = useFreshness(today, coverageDate);
   // Understated admin entry point, shown only to guests (signed-in admins use the sidebar).
   const signIn = showNav ? (
     <Link

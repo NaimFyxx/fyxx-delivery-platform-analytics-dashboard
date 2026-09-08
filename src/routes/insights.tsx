@@ -23,6 +23,7 @@ import {
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { Header, Segmented, SectionLabel, type PlatformKey } from "./dashboard";
+import { latestCoverageDate } from "@/lib/freshness";
 import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
 import { platformsFromFilter, fmtJOD0, type Platform } from "@/lib/fyxx";
 import { useRangeFilter } from "@/hooks/use-range-filter";
@@ -264,7 +265,7 @@ export function InsightsPage() {
   return (
     <AdminShell admin={adminUser} onSignOut={handleSignOut}>
     <div className="min-h-screen bg-background text-foreground">
-      <Header today={today} lastDailyDate={data.daily.at(-1)?.date ?? null} showNav={!adminUser} statusChip={adminUser ? <DataHealthChip /> : null} />
+      <Header coverageDate={latestCoverageDate(data.lastOrderDates)} showNav={!adminUser} statusChip={adminUser ? <DataHealthChip /> : null} />
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
@@ -736,7 +737,7 @@ function Panel({
           {sub && <div className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
         </div>
         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-          Data as of {asOf ?? "-"}
+          Imported on {asOf ?? "-"}
         </span>
       </div>
       {children}
@@ -768,7 +769,7 @@ function TierCard({
           {sub && <div className="text-[10.5px] text-white/60 mt-0.5">{sub}</div>}
         </div>
         <span className="text-[10px] text-white/50 whitespace-nowrap">
-          Data as of {asOf ?? "-"}
+          Imported on {asOf ?? "-"}
         </span>
       </div>
       {children}
@@ -1155,7 +1156,7 @@ function CustomerPanel({
           </div>
         </div>
         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-          Data as of {freshness ?? "-"}
+          Imported on {freshness ?? "-"}
         </span>
       </div>
 

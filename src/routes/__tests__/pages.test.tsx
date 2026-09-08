@@ -42,7 +42,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { PublicDashboard } from "@/routes/dashboard";
+import { PublicDashboard, Header } from "@/routes/dashboard";
 import { InsightsPage } from "@/routes/insights";
 import { Financials } from "@/routes/_authenticated/financials";
 import { PaceBar, isDockPath } from "@/components/fyxx/pace-dock";
@@ -85,6 +85,35 @@ describe("Pace bar renders the base/stretch badge", () => {
     expect(screen.getByText("120%")).toBeInTheDocument(); // percent of base, not stretch
     expect(screen.getByText("1,000")).toBeInTheDocument(); // base value
     expect(screen.getByText("1,150")).toBeInTheDocument(); // stretch value
+  });
+});
+
+describe("Header freshness reads the real calendar today against the coverage date", () => {
+  // The bug was today === coverage date, so days was always 0 and only "current" ever showed. These
+  // pin the real clock and pass a coverage date (the earlier platform's last order date), proving the
+  // staleness branches are now live. now = 2026-09-15 from beforeEach.
+  const mountHeader = (coverageDate: string | null) => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(React.createElement(QueryClientProvider, { client: qc },
+      React.createElement(Header, { coverageDate, showNav: false })));
+  };
+  // The Header renders the freshness text in both its mobile and desktop rows, so it appears twice.
+  const seen = (t: string) => expect(screen.getAllByText(t).length).toBeGreaterThan(0);
+  it("shows 'Data current as of' when coverage is today or yesterday", () => {
+    mountHeader("2026-09-14");
+    seen("Data current as of 14 Sept");
+  });
+  it("shows 'Updated N days ago' when the import is a few days behind", () => {
+    mountHeader("2026-09-12");
+    seen("Updated 3 days ago (12 Sept)");
+  });
+  it("shows a stale warning when the import is well behind", () => {
+    mountHeader("2026-09-05");
+    seen("⚠ Stale, last update 10 days ago (5 Sept)");
+  });
+  it("shows 'No data yet' when there is no order coverage", () => {
+    mountHeader(null);
+    seen("No data yet");
   });
 });
 
