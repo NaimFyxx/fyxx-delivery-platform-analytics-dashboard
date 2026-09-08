@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
 import { canonicalItemName, normalizeItemName, type DbAliasMap } from "@/lib/costs";
-import { trimPlusDatesToCoverage } from "@/lib/plus-trim";
+import { trimDatesToCoverage } from "@/lib/daily-coverage";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import {
   REPORTS,
@@ -1552,11 +1552,24 @@ function UnrecognizedRow({
    Read-back reconcile (run after upserts; keeps re-imports idempotent)
    ========================================================================= */
 
+/** The platform's most recent order date (max date in platform_orders), or null if none. */
+async function latestOrderDate(platform: Platform): Promise<string | null> {
+  const { data } = await supabase
+    .from("platform_orders")
+    .select("date")
+    .eq("platform", platform)
+    .order("date", { ascending: false })
+    .limit(1);
+  return (data?.[0] as { date?: string } | undefined)?.date ?? null;
+}
+
 /** Recompute Careem daily_sales (sales + orders) from per-order rows for the given dates. */
 async function reconcileCareemDaily(dates: string[]) {
-  const uniq = Array.from(new Set(dates));
-  for (let i = 0; i < uniq.length; i += 200) {
-    const chunkDates = uniq.slice(i, i + 200);
+  // Never write a daily_sales row past the imported sales (shared coverage trim). Careem's dates are
+  // order dates, so this is a no-op in practice, but it keeps every daily_sales writer consistent.
+  const { keep } = trimDatesToCoverage(Array.from(new Set(dates)), await latestOrderDate("Careem"));
+  for (let i = 0; i < keep.length; i += 200) {
+    const chunkDates = keep.slice(i, i + 200);
     const { data, error } = await supabase
       .from("platform_orders")
       .select("date,gross,status")
@@ -1598,9 +1611,13 @@ function datesInMonth(month: string): string[] {
  *  source of truth for daily sales. Dates are pre-seeded to 0 so a stale value on a now-empty day
  *  is cleared. Idempotent by (date, platform). Mirrors reconcileCareemDaily. */
 async function reconcileTalabatDaily(dates: string[]) {
-  const uniq = Array.from(new Set(dates));
-  for (let i = 0; i < uniq.length; i += 200) {
-    const chunkDates = uniq.slice(i, i + 200);
+  // The dates are every calendar day of each imported month (months.flatMap(datesInMonth)), so a
+  // full-month Order Report would otherwise seed and write zero rows for days that have not happened
+  // yet. Trim to the last order date so daily_sales never claims coverage past the imported sales.
+  // Past days that lost their orders stay in range and are still cleared to zero.
+  const { keep } = trimDatesToCoverage(Array.from(new Set(dates)), await latestOrderDate("Talabat"));
+  for (let i = 0; i < keep.length; i += 200) {
+    const chunkDates = keep.slice(i, i + 200);
     const { data, error } = await supabase
       .from("platform_orders")
       .select("date,gross,status,is_loyalty")
@@ -2424,15 +2441,9 @@ async function buildPlusCustomers(
   // past the imported sales (the export is a full calendar month and includes future days at zero,
   // which is what pushed the freshness label to month end). Fixed at the source so no reader of
   // daily_sales has to know about these rows. Guarded so importing Plus BEFORE the order data does
-  // not wipe a legitimate import: see trimPlusDatesToCoverage.
-  const { data: lastOrderRows } = await supabase
-    .from("platform_orders")
-    .select("date")
-    .eq("platform", platform)
-    .order("date", { ascending: false })
-    .limit(1);
-  const lastOrderDate: string | null = lastOrderRows?.[0]?.date ?? null;
-  const trim = trimPlusDatesToCoverage(Array.from(grouped.keys()), lastOrderDate);
+  // not wipe a legitimate import: see trimDatesToCoverage.
+  const lastOrderDate = await latestOrderDate(platform);
+  const trim = trimDatesToCoverage(Array.from(grouped.keys()), lastOrderDate);
   for (const d of trim.trimmed) grouped.delete(d);
 
   const dates = Array.from(grouped.keys());
