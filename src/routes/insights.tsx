@@ -61,7 +61,9 @@ export function InsightsPage() {
   });
 
   const today = useMemo(() => {
-    const last = data?.daily.at(-1)?.date;
+    // Latest day with actual sales; filter to rows with orders so the Careem Plus import's
+    // zero-sales, month-end-dated rows cannot push the reference date into the future.
+    const last = data?.daily.filter((d) => (d.orders ?? 0) > 0).at(-1)?.date;
     return last ?? new Date().toISOString().slice(0, 10);
   }, [data]);
 

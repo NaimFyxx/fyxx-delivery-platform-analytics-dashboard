@@ -77,9 +77,12 @@ export function PublicDashboard() {
     refetchOnWindowFocus: false,
   });
 
-  // Reference "today" - derived from the latest daily sales date, falls back to real today.
+  // Reference "today" - the latest day we actually have SALES for, falling back to real today. Filter
+  // to rows with orders so the Careem Plus import's zero-sales rows (dated to month end for a
+  // full-calendar-month export) cannot push this to a future date, which otherwise extended the
+  // current-month daily chart to month end with trailing zeros and dragged the 7-day average down.
   const today = useMemo(() => {
-    const last = data?.daily.at(-1)?.date;
+    const last = data?.daily.filter((d) => (d.orders ?? 0) > 0).at(-1)?.date;
     return last ?? new Date().toISOString().slice(0, 10);
   }, [data]);
   const currentMonth = monthOfDate(today);
@@ -285,9 +288,12 @@ export function PublicDashboard() {
   // Distinct dates with any data in range + platform filter (used for avg/day KPI sub-stats).
   const activeDays = useMemo(() => {
     if (!data) return 1;
+    // Days with actual orders, matching the order-volume chart helpers. Without the orders filter the
+    // Careem Plus import's zero-sales rows inflated this denominator and understated avg JOD/day and
+    // avg orders/day.
     const set = new Set(
       data.daily
-        .filter((d) => rangeMonths.includes(monthOfDate(d.date)) && platforms.includes(d.platform))
+        .filter((d) => rangeMonths.includes(monthOfDate(d.date)) && platforms.includes(d.platform) && (d.orders ?? 0) > 0)
         .map((d) => d.date),
     );
     return Math.max(1, set.size);
