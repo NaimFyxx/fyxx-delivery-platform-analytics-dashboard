@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { PLATFORMS, currentMonth, fmtJOD, fmtInt, type Platform } from "@/lib/fyxx";
 import { canonicalItemName, normalizeItemName, type DbAliasMap } from "@/lib/costs";
+import { trimPlusDatesToCoverage } from "@/lib/plus-trim";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import {
   REPORTS,
@@ -2419,6 +2420,21 @@ async function buildPlusCustomers(
       nonCplus: Math.round(num(r[m.non_cplus_customers])),
     });
   }
+  // Trim rows dated after the platform's latest order date, so Plus coverage never claims to run
+  // past the imported sales (the export is a full calendar month and includes future days at zero,
+  // which is what pushed the freshness label to month end). Fixed at the source so no reader of
+  // daily_sales has to know about these rows. Guarded so importing Plus BEFORE the order data does
+  // not wipe a legitimate import: see trimPlusDatesToCoverage.
+  const { data: lastOrderRows } = await supabase
+    .from("platform_orders")
+    .select("date")
+    .eq("platform", platform)
+    .order("date", { ascending: false })
+    .limit(1);
+  const lastOrderDate: string | null = lastOrderRows?.[0]?.date ?? null;
+  const trim = trimPlusDatesToCoverage(Array.from(grouped.keys()), lastOrderDate);
+  for (const d of trim.trimmed) grouped.delete(d);
+
   const dates = Array.from(grouped.keys());
   const existingSet = await existingKeys("daily_sales", "date", platform, dates);
 
@@ -2444,6 +2460,12 @@ async function buildPlusCustomers(
   const coverRange = allDates.length > 0 ? `${allDates[0]} → ${allDates[allDates.length - 1]}` : undefined;
   const notes = [
     "Writes Careem Plus vs non-Plus customer counts into daily_sales (does not touch sales / orders totals).",
+    trim.trimmed.length
+      ? `${trim.trimmed.length} row(s) after the last order date (${lastOrderDate}) trimmed, so Plus coverage never runs past the sales data.`
+      : "",
+    trim.importedFirst
+      ? "Order data for these dates is not imported yet, so nothing was trimmed. Re-import Plus after the Order data to align coverage."
+      : "",
     skipped ? `${skipped} row(s) skipped (no valid date).` : "",
   ].filter(Boolean);
   return {
