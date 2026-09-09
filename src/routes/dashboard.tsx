@@ -825,7 +825,7 @@ export function Header({
         </div>
         )}
         <div className="flex items-center justify-between gap-2">
-          <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
+          
           <div className="flex items-center gap-2 shrink-0">
             {statusChip}
             <div className="flex items-center gap-1 text-[12px] md:text-[10px]">
