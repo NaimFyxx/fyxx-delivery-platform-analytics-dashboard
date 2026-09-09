@@ -338,7 +338,9 @@ export function InsightsPage() {
                     <CartesianGrid stroke="var(--border)" vertical={false} />
                     <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                     <YAxis yAxisId="left" stroke="var(--muted-foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
-                    <YAxis yAxisId="right" orientation="right" stroke="var(--series-1)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={40} />
+                    {rangeMonths.length > 1 && (
+                      <YAxis yAxisId="right" orientation="right" stroke="var(--series-1)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={40} />
+                    )}
                     <Tooltip
                       contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                       formatter={(v: number, name: string) =>
@@ -350,7 +352,11 @@ export function InsightsPage() {
                     <Bar isAnimationActive={false} yAxisId="left" dataKey="paidAds" name="Paid ads" stackId="s" fill="var(--series-3)" />
                     <Bar isAnimationActive={false} yAxisId="left" dataKey="promoSharing" name="Promo sharing" stackId="s" fill="var(--series-2)" />
                     <Bar isAnimationActive={false} yAxisId="left" dataKey="loyaltySubsidy" name="Loyalty subsidy" stackId="s" fill="var(--series-4)" radius={[3, 3, 0, 0]} />
-                    <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="var(--series-1)" strokeWidth={2} dot={{ fill: "var(--series-1)", r: 3 }} connectNulls={false} legendType={rangeMonths.length <= 1 ? "none" : "line"} />
+                    {/* At a single-month range the rate series is one point: a lone dot with no line
+                        and (below) no legend key. Draw neither by omitting the Line entirely. */}
+                    {rangeMonths.length > 1 && (
+                      <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="var(--series-1)" strokeWidth={2} dot={{ fill: "var(--series-1)", r: 3 }} connectNulls={false} />
+                    )}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -1130,18 +1136,20 @@ function CustomerPanel({
               axisLine={false}
               width={40}
             />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              stroke="var(--muted-foreground)"
-              fontSize={10}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v) => `${v}%`}
-              domain={[0, 100]}
-              allowDataOverflow
-              width={36}
-            />
+            {series.length > 1 && (
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                stroke="var(--muted-foreground)"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => `${v}%`}
+                domain={[0, 100]}
+                allowDataOverflow
+                width={36}
+              />
+            )}
             <Tooltip
               contentStyle={{
                 background: "var(--popover)",
@@ -1162,18 +1170,21 @@ function CustomerPanel({
             {showSplit && <Bar isAnimationActive={false} yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="var(--series-2)" />}
             {showSplit && <Bar isAnimationActive={false} yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
             {!showSplit && <Bar isAnimationActive={false} yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
-            <Line
-              isAnimationActive={false}
-              yAxisId="right"
-              type="monotone"
-              dataKey="repeatRate"
-              name="Repeat rate %"
-              stroke="var(--series-1)"
-              strokeWidth={2}
-              dot={{ fill: "var(--series-1)", r: 3 }}
-              connectNulls={false}
-              legendType={series.length <= 1 ? "none" : "line"}
-            />
+            {/* At a single-month range the rate series is one point: a lone dot with no line and no
+                legend key. Draw neither by omitting the Line entirely. */}
+            {series.length > 1 && (
+              <Line
+                isAnimationActive={false}
+                yAxisId="right"
+                type="monotone"
+                dataKey="repeatRate"
+                name="Repeat rate %"
+                stroke="var(--series-1)"
+                strokeWidth={2}
+                dot={{ fill: "var(--series-1)", r: 3 }}
+                connectNulls={false}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
