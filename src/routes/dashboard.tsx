@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { latestCoverageDate, freshnessLabel } from "@/lib/freshness";
+import { PaceSummaryLine } from "@/components/fyxx/pace-dock";
 type DashboardData = NonNullable<Awaited<ReturnType<typeof getDashboardData>>>;
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
@@ -1043,6 +1044,9 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   pace: PaceData | null; currentMonth: string;
   toggle?: { label: string; onToggle: () => void };
 }) {
+  // Mobile only: collapse the card to the same summary line the bar uses. Ephemeral, resets when the
+  // card unmounts (leaving Overview). Desktop ignores it via the hidden md:block split below.
+  const [expanded, setExpanded] = useState(false);
   if (!pace) return null;
 
   // "August 2026", not "Aug 26" (which scans as a day-of-month).
@@ -1097,7 +1101,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   const isStretch = badge === "stretch_reached";
   const isMissed = badge === "missed";
 
-  return (
+  const cardBody = (
     <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
@@ -1203,6 +1207,21 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
         </span>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* MOBILE: collapse to the same summary line the bar uses; tap to expand the full card. The
+          summary sits on a dark green pill so the collapsed card and the collapsed bar look the same. */}
+      <div className="md:hidden">
+        <div className="rounded-2xl px-4 py-2.5 mb-4" style={{ background: "#092727", color: "var(--primary-foreground)" }}>
+          <PaceSummaryLine pace={pace} month={currentMonth} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+        </div>
+        {expanded && cardBody}
+      </div>
+      {/* DESKTOP: the full card, unchanged. */}
+      <div className="hidden md:block">{cardBody}</div>
+    </>
   );
 }
 

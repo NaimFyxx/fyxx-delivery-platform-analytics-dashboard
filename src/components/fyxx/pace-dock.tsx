@@ -79,6 +79,50 @@ export function PaceDock() {
   );
 }
 
+/**
+ * The one-line pace summary: month, percentage of base, badge, chevron. Shared by the bar and the
+ * Overview card so both collapse to an identical line on mobile. Cream text on gold/green, meant to
+ * sit on the dark green pace surface (the bar, or the card's collapsed dark wrapper). The whole line
+ * is the toggle button.
+ */
+export function PaceSummaryLine({ pace, month, expanded, onToggle }: {
+  pace: PaceData; month: string; expanded: boolean; onToggle: () => void;
+}) {
+  const monthLong = new Date(month + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" });
+  const targetSet = pace.base > 0;
+  const complete = pace.dayOfMonth >= pace.daysInMonth;
+  const badge = paceBadgeState({ totalSales: pace.totalSales, base: pace.base, stretch: pace.stretch, complete });
+  const badgeText = PACE_BADGE_LABEL[badge] ?? (targetSet ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set");
+  const pct = paceBasePct(pace.totalSales, pace.base);
+  const isReached = badge === "base_reached" || badge === "stretch_reached";
+  const isStretch = badge === "stretch_reached";
+  const isMissed = badge === "missed";
+  const badgeStyle =
+    isStretch ? { background: "#EEC36A", color: "#092727" }
+    : isReached ? { background: "rgba(31,122,77,.28)", color: "#8ff0b8" }
+    : isMissed ? { background: "rgba(244,239,231,.13)", color: "rgba(244,239,231,.7)" }
+    : { background: "rgba(244,239,231,.15)", color: "#f4efe7" };
+  const pctColor = pct != null && pct >= 100 ? "#1BD15D" : "#EEC36A";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      aria-label={expanded ? "Collapse pace details" : "Expand pace details"}
+      className="w-full flex items-center gap-2 text-left"
+    >
+      <span className="font-display text-[14px] whitespace-nowrap" style={{ color: "#f4efe7" }}>{monthLong}</span>
+      <span className="ml-auto font-display text-[18px] leading-none" style={{ color: pctColor }}>
+        {targetSet && pct != null ? Math.round(pct) + "%" : "-"}
+      </span>
+      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap" style={badgeStyle}>
+        {badgeText}
+      </span>
+      <ChevronUp className="size-4 shrink-0" style={{ transform: expanded ? "none" : "rotate(180deg)", opacity: 0.85 }} />
+    </button>
+  );
+}
+
 export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
   const monthLong = new Date(month + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" });
   const targetSet = pace.base > 0;
@@ -120,13 +164,6 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
     const el = barRef.current;
     if (el) document.documentElement.style.setProperty("--pace-bar-pad", `${Math.ceil(el.offsetHeight) + 10}px`);
   }, [expanded]);
-
-  const badgeStyle =
-    isStretch ? { background: "#EEC36A", color: "#092727" }
-    : isReached ? { background: "rgba(31,122,77,.28)", color: "#8ff0b8" }
-    : isMissed ? { background: "rgba(244,239,231,.13)", color: "rgba(244,239,231,.7)" }
-    : { background: "rgba(244,239,231,.15)", color: "#f4efe7" };
-  const pctColor = pct != null && pct >= 100 ? "#1BD15D" : "#EEC36A";
 
   const detail = (
     <>
@@ -172,22 +209,7 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
     >
       {/* MOBILE: one-line summary, chevron expands the rest. Collapsed by default; resets on nav. */}
       <div className="md:hidden px-4 py-2.5">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          aria-label={expanded ? "Collapse pace details" : "Expand pace details"}
-          className="w-full flex items-center gap-2 text-left"
-        >
-          <span className="font-display text-[14px] whitespace-nowrap" style={{ color: "#f4efe7" }}>{monthLong}</span>
-          <span className="ml-auto font-display text-[18px] leading-none" style={{ color: pctColor }}>
-            {targetSet && pct != null ? Math.round(pct) + "%" : "-"}
-          </span>
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap" style={badgeStyle}>
-            {badgeText}
-          </span>
-          <ChevronUp className="size-4 shrink-0" style={{ transform: expanded ? "none" : "rotate(180deg)", opacity: 0.85 }} />
-        </button>
+        <PaceSummaryLine pace={pace} month={month} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
         {expanded && (
           <div className="mt-2">
             <div className="flex items-center gap-2 flex-wrap text-[10px]">
