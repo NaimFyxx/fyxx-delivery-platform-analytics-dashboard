@@ -79,5 +79,27 @@ export default tseslint.config(
       ],
     },
   },
+  // The chart-colour wall: series colours must be design tokens, never raw hex. This is the class of
+  // bug the 2026-09-09 audit found (var(--foreground) and var(--primary) both resolve to #092727 and
+  // were used as two series; five hex literals sat next to token refs meaning nothing). Recharts marks
+  // use `fill`/`stroke`, as JSX attributes or inside dot={{...}} objects. Reference --series-1..6 (or a
+  // platform / status / accent token) instead. barColor/gradient string props are not caught (the
+  // Careem+/Talabat Pro panels paint light tints on dark cards on purpose). See docs/chart-colour-audit.
+  {
+    files: ["src/routes/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name=/^(fill|stroke)$/] > Literal[value=/^#/]",
+          message: "Chart series colour must be a design token, e.g. stroke=\"var(--series-1)\", not a raw hex. See --series-* in styles.css.",
+        },
+        {
+          selector: "Property[key.name=/^(fill|stroke)$/] > Literal[value=/^#/]",
+          message: "Chart series colour must be a design token, e.g. fill: \"var(--series-1)\", not a raw hex. See --series-* in styles.css.",
+        },
+      ],
+    },
+  },
   eslintPluginPrettier,
 );

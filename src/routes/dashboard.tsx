@@ -543,16 +543,17 @@ export function PublicDashboard() {
               ? ` since ${new Date(allTime.firstMonth + "-01T00:00:00").toLocaleString("en-US", { month: "short", year: "numeric" })}`
               : ""}
             {" · "}
-            <span className="font-semibold" style={{ color: "#FF5A00" }}>Talabat</span>{" "}
+            <span className="font-semibold" style={{ color: "var(--talabat)" }}>Talabat</span>{" "}
             <span className="text-foreground">{fmtInt(allTime.talabat)} JOD</span>
             {" · "}
-            <span className="font-semibold" style={{ color: "#1BD15D" }}>Careem</span>{" "}
+            <span className="font-semibold" style={{ color: "var(--careem)" }}>Careem</span>{" "}
             <span className="text-foreground">{fmtInt(allTime.careem)} JOD</span>
           </div>
         )}
 
         <SectionLabel>Analytics · Controlled by the Range &amp; Platform Filters Above</SectionLabel>
         <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform" footnote="Careem shown on food-basket basis (your revenue), ~11% below Careem's GMV headline. See tooltip.">
+          {chartData.some((d) => (Number(d.Talabat) || 0) + (Number(d.Careem) || 0) > 0) ? (
           <ResponsiveContainer>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -560,13 +561,21 @@ export function PublicDashboard() {
               <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
               <Tooltip {...tooltipStyle} formatter={(v: number) => fmtJOD0(v)} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              {platforms.includes("Talabat") && <Bar dataKey="Talabat" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--talabat)" radius={[3, 3, 0, 0]} />}
-              {platforms.includes("Careem") && <Bar dataKey="Careem" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--careem)" radius={[3, 3, 0, 0]} />}
+              {/* isAnimationActive={false}: the enter animation could start before the responsive
+                  container was sized and never advance, leaving bars at height 0 and the line at 0
+                  length (the empty-chart render bug). Every other chart on the page disables it. */}
+              {platforms.includes("Talabat") && <Bar isAnimationActive={false} dataKey="Talabat" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--talabat)" radius={[3, 3, 0, 0]} />}
+              {platforms.includes("Careem") && <Bar isAnimationActive={false} dataKey="Careem" stackId={rangeIsSingleMonth ? "a" : undefined} fill="var(--careem)" radius={[3, 3, 0, 0]} />}
               {rangeIsSingleMonth && (
-                <Line type="monotone" dataKey="avg7d" name="7-day avg" stroke="#f5b400" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                <Line isAnimationActive={false} type="monotone" dataKey="avg7d" name="7-day avg" stroke="var(--series-2)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               )}
             </ComposedChart>
           </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-center px-4 text-sm text-muted-foreground">
+              No sales imported for {rangeLabel} yet.
+            </div>
+          )}
         </ChartCard>
 
         {salesTrend.length >= 1 && (
@@ -595,10 +604,10 @@ export function PublicDashboard() {
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(Number(v)).toLocaleString()} />
                 <Tooltip content={<SalesTrendTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3.5, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
-                <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress" stroke="var(--primary)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} legendType="none" />
+                <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--series-1)" strokeWidth={2.5} dot={{ r: 3.5, fill: "var(--series-1)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress (current month)" stroke="var(--series-1)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} />
                 {salesTrend.some((r) => r.avg3 !== null) && (
-                  <Line isAnimationActive={false} type="monotone" dataKey="avg3" name="3-month average" stroke="#C8B89B" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="avg3" name="3-month average" stroke="var(--series-4)" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
                 )}
                 {salesTrend.some((r) => r.floor !== null) && (
                   <Line isAnimationActive={false} type="monotone" dataKey="floor" name="3-month floor" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeOpacity={0.65} dot={<FloorDot />} activeDot={{ r: 4 }} connectNulls={false} />
@@ -652,12 +661,14 @@ export function PublicDashboard() {
                     label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }}
                   />
                   {/* Three clearly distinct colors: charcoal / taupe / green */}
-                  <Line isAnimationActive={false} type="monotone" dataKey="prod" name="Product margin" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line isAnimationActive={false} type="monotone" dataKey="comm" name="After commission" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line isAnimationActive={false} type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: "var(--primary)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="prodTrail" name="Product 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="commTrail" name="After commission 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="netTrail" name="Net 3m avg" stroke="var(--primary)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {/* Non-colour encoding (dash + width) so the three margins separate without relying
+                      on colour: Product solid/thick, After commission long-dash, Net short-dash. */}
+                  <Line isAnimationActive={false} type="monotone" dataKey="prod" name="Product margin" stroke="var(--series-1)" strokeWidth={2.5} dot={{ r: 4, fill: "var(--series-1)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="comm" name="After commission" stroke="var(--series-6)" strokeWidth={2} strokeDasharray="7 4" dot={{ r: 4, fill: "var(--series-6)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--series-2)" strokeWidth={2} strokeDasharray="2 3" dot={{ r: 4, fill: "var(--series-2)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="prodTrail" name="Product 3m avg" stroke="var(--series-1)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="commTrail" name="After commission 3m avg" stroke="var(--series-6)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="netTrail" name="Net 3m avg" stroke="var(--series-2)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -685,13 +696,14 @@ export function PublicDashboard() {
                   <CartesianGrid stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                   <YAxis yAxisId="orders" orientation="left" stroke="var(--foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
-                  <YAxis yAxisId="sales" orientation="right" stroke="#C8B89B" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
+                  <YAxis yAxisId="sales" orientation="right" stroke="var(--series-3)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
                   <Tooltip content={<OrderVolumeTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line isAnimationActive={false} yAxisId="orders" type="monotone" dataKey="ordersAvg" name="Avg orders/day" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 4, fill: "var(--foreground)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
-                  <Line isAnimationActive={false} yAxisId="sales" type="monotone" dataKey="salesAvg" name="Avg JOD/day" stroke="#C8B89B" strokeWidth={2} dot={{ r: 4, fill: "#C8B89B", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
-                  {showAvgTrailing && <Line isAnimationActive={false} yAxisId="orders" type="monotone" dataKey="ordersTrail" name="Orders 3m avg" stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
-                  {showAvgTrailing && <Line isAnimationActive={false} yAxisId="sales" type="monotone" dataKey="salesTrail" name="JOD 3m avg" stroke="#C8B89B" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {/* Two axes already separate these; dash on JOD/day adds a non-colour signal too. */}
+                  <Line isAnimationActive={false} yAxisId="orders" type="monotone" dataKey="ordersAvg" name="Avg orders/day" stroke="var(--series-1)" strokeWidth={2} dot={{ r: 4, fill: "var(--series-1)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  <Line isAnimationActive={false} yAxisId="sales" type="monotone" dataKey="salesAvg" name="Avg JOD/day" stroke="var(--series-3)" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: "var(--series-3)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  {showAvgTrailing && <Line isAnimationActive={false} yAxisId="orders" type="monotone" dataKey="ordersTrail" name="Orders 3m avg" stroke="var(--series-1)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
+                  {showAvgTrailing && <Line isAnimationActive={false} yAxisId="sales" type="monotone" dataKey="salesTrail" name="JOD 3m avg" stroke="var(--series-3)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -707,7 +719,7 @@ export function PublicDashboard() {
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => fmtJOD0(v)} />
-                <Bar dataKey="profit" fill="rgba(63,209,122,0.8)" radius={[3, 3, 0, 0]} />
+                <Bar isAnimationActive={false} dataKey="profit" fill="var(--series-4)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -738,7 +750,7 @@ export function PublicDashboard() {
                   <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false}
                          tickFormatter={(v) => `${v}pt`} />
                   <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)} pts`} />
-                  <Bar dataKey="drag" fill="rgba(255,90,0,0.75)" radius={[3, 3, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="drag" fill="var(--series-3)" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -1040,7 +1052,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   if (toggle && pace.totalTarget <= 0) {
     return (
       <div className="rounded-2xl border p-4 mb-4 shadow-sm"
-           style={{ background: "#EEC36A", borderColor: "rgba(9,39,39,0.25)", color: "#092727" }}>
+           style={{ background: "var(--accent)", borderColor: "rgba(9,39,39,0.25)", color: "var(--accent-foreground)" }}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">{monthTitle} · Combined</h3>
           <button
@@ -1060,8 +1072,8 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
     );
   }
 
-  const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "#FF5A00" : "#1BD15D";
-  const pctColor = (n: number) => n >= 100 ? "var(--careem)" : "#f5b400";
+  const colorFor = (p: "Talabat" | "Careem") => p === "Talabat" ? "var(--talabat)" : "var(--careem)";
+  const pctColor = (n: number) => n >= 100 ? "var(--careem)" : "var(--warning)";
   const careem = pace.rows.find((r) => r.platform === "Careem");
   const talabat = pace.rows.find((r) => r.platform === "Talabat");
 
@@ -1104,7 +1116,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
             <span
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border"
               title={pace.perPlatformThrough.map((x) => `${x.platform}: through ${x.label}`).join(" · ")}
-              style={{ color: pace.dataThroughStale ? "#f5b400" : "var(--muted-foreground)" }}
+              style={{ color: pace.dataThroughStale ? "var(--warning)" : "var(--muted-foreground)" }}
             >
               data through {pace.dataThroughLabel}
               <InfoTip id="data_through" side="bottom" />
@@ -1131,7 +1143,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
               className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold align-middle ${
                 isStretch ? "" : isReached ? "bg-success/10 text-success border-success/30" : "bg-muted text-muted-foreground border-border"
               }`}
-              style={isStretch ? { background: "#EEC36A", color: "#092727", borderColor: "rgba(9,39,39,0.25)" } : undefined}
+              style={isStretch ? { background: "var(--accent)", color: "var(--accent-foreground)", borderColor: "rgba(9,39,39,0.25)" } : undefined}
             >
               {PACE_BADGE_LABEL[badge]}
             </span>
@@ -1213,7 +1225,7 @@ function PartialDot(props: { cx?: number; cy?: number; payload?: { partial?: boo
 function FloorDot(props: { cx?: number; cy?: number; payload?: { floorStepUp?: boolean } }) {
   const { cx, cy, payload } = props;
   if (cx == null || cy == null || !payload?.floorStepUp) return <g />;
-  return <circle cx={cx} cy={cy} r={4.5} fill="#EEC36A" stroke="var(--card)" strokeWidth={1.5} />;
+  return <circle cx={cx} cy={cy} r={4.5} fill="var(--accent)" stroke="var(--card)" strokeWidth={1.5} />;
 }
 
 /** Tooltip for the Total sales trend: month, exact combined total, the 3-month average, and the
@@ -1230,10 +1242,10 @@ function SalesTrendTooltip({ active, payload }: {
         {p.label}{p.partial ? " (in progress)" : ""}
       </div>
       <div style={{ color: "var(--foreground)" }}>{fmtJOD0(p.total)}</div>
-      {p.avg3 != null && <div style={{ color: "#C8B89B" }}>3-month avg {fmtJOD0(p.avg3)}</div>}
+      {p.avg3 != null && <div style={{ color: "var(--series-4)" }}>3-month avg {fmtJOD0(p.avg3)}</div>}
       {p.floor != null && <div style={{ color: "var(--muted-foreground)" }}>3-month floor {fmtJOD0(p.floor)}</div>}
       {p.floorStepUp && p.floorPrev != null && (
-        <div style={{ color: "#EEC36A", fontWeight: 600 }}>New floor: {fmtJOD0(p.floor as number)}, up from {fmtJOD0(p.floorPrev)}</div>
+        <div style={{ color: "var(--accent)", fontWeight: 600 }}>New floor: {fmtJOD0(p.floor as number)}, up from {fmtJOD0(p.floorPrev)}</div>
       )}
     </div>
   );

@@ -368,7 +368,7 @@ export function InsightsPage() {
                     <CartesianGrid stroke="var(--border)" vertical={false} />
                     <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                     <YAxis yAxisId="left" stroke="var(--muted-foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
-                    <YAxis yAxisId="right" orientation="right" stroke="#f5b400" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={40} />
+                    <YAxis yAxisId="right" orientation="right" stroke="var(--series-1)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} width={40} />
                     <Tooltip
                       contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                       formatter={(v: number, name: string) =>
@@ -376,11 +376,11 @@ export function InsightsPage() {
                       }
                     />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />
-                    <Bar yAxisId="left" dataKey="customerPromos" name="Customer promos" stackId="s" fill="#C8B89B" />
-                    <Bar yAxisId="left" dataKey="paidAds" name="Paid ads" stackId="s" fill="#ff8c42" />
-                    <Bar yAxisId="left" dataKey="promoSharing" name="Promo sharing" stackId="s" fill="#5fd0a3" />
-                    <Bar yAxisId="left" dataKey="loyaltySubsidy" name="Loyalty subsidy" stackId="s" fill="#2E6E66" radius={[3, 3, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="#f5b400" strokeWidth={2} dot={{ fill: "#f5b400", r: 3 }} connectNulls={false} />
+                    <Bar yAxisId="left" dataKey="customerPromos" name="Customer promos" stackId="s" fill="var(--series-6)" />
+                    <Bar yAxisId="left" dataKey="paidAds" name="Paid ads" stackId="s" fill="var(--series-3)" />
+                    <Bar yAxisId="left" dataKey="promoSharing" name="Promo sharing" stackId="s" fill="var(--series-2)" />
+                    <Bar yAxisId="left" dataKey="loyaltySubsidy" name="Loyalty subsidy" stackId="s" fill="var(--series-4)" radius={[3, 3, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="var(--series-1)" strokeWidth={2} dot={{ fill: "var(--series-1)", r: 3 }} connectNulls={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -499,7 +499,7 @@ export function InsightsPage() {
                   />
                   <Bar dataKey={anyRevenue ? "revenue" : "units"} radius={[0, 3, 3, 0]}>
                     {topProducts.map((_, i) => (
-                      <Cell key={i} fill={i === 0 ? "var(--careem)" : "rgba(63,209,122,0.7)"} />
+                      <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -531,7 +531,7 @@ export function InsightsPage() {
                     />
                     <Bar dataKey="revenue" radius={[0, 3, 3, 0]}>
                       {revenueByCategory.map((_, i) => (
-                        <Cell key={i} fill={i === 0 ? "var(--careem)" : "rgba(63,209,122,0.7)"} />
+                        <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -560,7 +560,7 @@ export function InsightsPage() {
                     />
                     <Bar dataKey="units" radius={[0, 3, 3, 0]}>
                       {unitsByCategory.map((_, i) => (
-                        <Cell key={i} fill={i === 0 ? "#EEC36A" : "rgba(238,195,106,0.7)"} />
+                        <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -638,13 +638,13 @@ export function InsightsPage() {
                       <td className="px-3 py-2 text-right text-num">
                         {r.cogs > 0 ? Math.round(r.cogs).toLocaleString() : "-"}
                       </td>
-                      <td className="px-3 py-2 text-right text-num" style={{ color: r.revenue > 0 && r.cogs > 0 ? r.margin >= 45 ? "var(--careem)" : "#f5b400" : "var(--muted-foreground)" }}>
+                      <td className="px-3 py-2 text-right text-num" style={{ color: r.revenue > 0 && r.cogs > 0 ? r.margin >= 45 ? "var(--careem)" : "var(--warning)" : "var(--muted-foreground)" }}>
                         {r.revenue > 0 && r.cogs > 0 ? `${r.margin.toFixed(1)}%` : "-"}
                       </td>
-                      <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.commMargin != null ? r.commMargin >= 30 ? "var(--careem)" : r.commMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
+                      <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.commMargin != null ? r.commMargin >= 30 ? "var(--careem)" : r.commMargin >= 0 ? "var(--warning)" : "var(--destructive)" : "var(--muted-foreground)" }}>
                         {r.commMargin != null ? `${r.commMargin.toFixed(1)}%` : "-"}
                       </td>
-                      <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.netMargin != null ? r.netMargin >= 30 ? "var(--careem)" : r.netMargin >= 0 ? "#f5b400" : "var(--destructive)" : "var(--muted-foreground)" }}>
+                      <td className="px-3 py-2 text-right text-num font-semibold" style={{ color: r.netMargin != null ? r.netMargin >= 30 ? "var(--careem)" : r.netMargin >= 0 ? "var(--warning)" : "var(--destructive)" : "var(--muted-foreground)" }}>
                         {r.netMargin != null ? `${r.netMargin.toFixed(1)}%` : "-"}
                       </td>
                     </tr>
@@ -1209,18 +1209,18 @@ function CustomerPanel({
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconSize={8}
             />
-            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="#C8B89B" />
-            {showSplit && <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="rgba(46,110,102,0.45)" />}
-            {showSplit && <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />}
-            {!showSplit && <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="#2E6E66" radius={[3, 3, 0, 0]} />}
+            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="var(--series-6)" />
+            {showSplit && <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="var(--series-2)" />}
+            {showSplit && <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
+            {!showSplit && <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
             <Line
               yAxisId="right"
               type="monotone"
               dataKey="repeatRate"
               name="Repeat rate %"
-              stroke="#f5b400"
+              stroke="var(--series-1)"
               strokeWidth={2}
-              dot={{ fill: "#f5b400", r: 3 }}
+              dot={{ fill: "var(--series-1)", r: 3 }}
               connectNulls={false}
             />
           </ComposedChart>

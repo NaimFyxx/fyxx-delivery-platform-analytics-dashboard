@@ -824,8 +824,8 @@ function PriceHistoryDialog({
                     contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                     formatter={(v: number, name: string) => [fmtJOD3(Number(v)), name]}
                   />
-                  <Line isAnimationActive={false} type="stepAfter" dataKey="talAvg" name="Talabat" stroke="#FF5A00" strokeWidth={2} dot={{ r: 3, fill: "#FF5A00" }} connectNulls={false} />
-                  <Line isAnimationActive={false} type="stepAfter" dataKey="carAvg" name="Careem" stroke="#1BD15D" strokeWidth={2} dot={{ r: 3, fill: "#1BD15D" }} connectNulls={false} />
+                  <Line isAnimationActive={false} type="stepAfter" dataKey="talAvg" name="Talabat" stroke="var(--talabat)" strokeWidth={2} dot={{ r: 3, fill: "var(--talabat)" }} connectNulls={false} />
+                  <Line isAnimationActive={false} type="stepAfter" dataKey="carAvg" name="Careem" stroke="var(--careem)" strokeWidth={2} dot={{ r: 3, fill: "var(--careem)" }} connectNulls={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
