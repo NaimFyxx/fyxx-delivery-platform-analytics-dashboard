@@ -79,11 +79,13 @@ export default tseslint.config(
       ],
     },
   },
-  // The chart-colour wall: series colours must be design tokens, never raw hex. This is the class of
-  // bug the 2026-09-09 audit found (var(--foreground) and var(--primary) both resolve to #092727 and
-  // were used as two series; five hex literals sat next to token refs meaning nothing). Recharts marks
-  // use `fill`/`stroke`, as JSX attributes or inside dot={{...}} objects. Reference --series-1..6 (or a
-  // platform / status / accent token) instead. barColor/gradient string props are not caught (the
+  // The chart-colour wall: series colours must be a --series-* (or platform / status / accent) token,
+  // never a raw hex and never --primary / --foreground. This is the class of bug the 2026-09-09 audit
+  // found twice: --series-1 shares the brand ink value with --primary and --foreground, so using any of
+  // those aliases as a chart colour draws two "different" series identically. --series-1 is the one
+  // legitimate name for that ink in a chart; forbidding --primary/--foreground here makes the alias
+  // impossible to use as a second series by construction. Recharts marks use `fill`/`stroke`, as JSX
+  // attributes or inside dot={{...}} objects. barColor/gradient string props are not caught (the
   // Careem+/Talabat Pro panels paint light tints on dark cards on purpose). See docs/chart-colour-audit.
   {
     files: ["src/routes/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
@@ -97,6 +99,14 @@ export default tseslint.config(
         {
           selector: "Property[key.name=/^(fill|stroke)$/] > Literal[value=/^#/]",
           message: "Chart series colour must be a design token, e.g. fill: \"var(--series-1)\", not a raw hex. See --series-* in styles.css.",
+        },
+        {
+          selector: "JSXAttribute[name.name=/^(fill|stroke)$/] > Literal[value=/var\\(\\s*--(primary|foreground)\\b/]",
+          message: "Do not use var(--primary)/var(--foreground) as a chart colour: they alias --series-1 (same ink), so two series render identically. Use var(--series-1). See docs/chart-colour-audit.",
+        },
+        {
+          selector: "Property[key.name=/^(fill|stroke)$/] > Literal[value=/var\\(\\s*--(primary|foreground)\\b/]",
+          message: "Do not use var(--primary)/var(--foreground) as a chart colour: they alias --series-1 (same ink), so two series render identically. Use var(--series-1). See docs/chart-colour-audit.",
         },
       ],
     },

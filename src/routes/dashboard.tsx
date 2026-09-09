@@ -697,7 +697,7 @@ export function PublicDashboard() {
                 <LineChart data={orderVolumeTrend} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
                   <CartesianGrid stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="orders" orientation="left" stroke="var(--foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
+                  <YAxis yAxisId="orders" orientation="left" stroke="var(--muted-foreground)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(1)} />
                   <YAxis yAxisId="sales" orientation="right" stroke="var(--series-3)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(v).toString()} />
                   <Tooltip content={<OrderVolumeTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -1251,7 +1251,7 @@ const tooltipStyle = {
 function PartialDot(props: { cx?: number; cy?: number; payload?: { partial?: boolean } }) {
   const { cx, cy, payload } = props;
   if (cx == null || cy == null || !payload?.partial) return <g />;
-  return <circle cx={cx} cy={cy} r={4} fill="var(--card)" stroke="var(--primary)" strokeWidth={2} />;
+  return <circle cx={cx} cy={cy} r={4} fill="var(--card)" stroke="var(--series-5)" strokeWidth={2} />;
 }
 
 /** Emphasized point on the 3-month floor line, only where the floor steps up (a new higher low). */

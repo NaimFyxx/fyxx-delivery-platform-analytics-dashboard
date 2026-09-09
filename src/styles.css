@@ -110,7 +110,9 @@
      multi-line charts must still carry a non-colour signal (dash + width). Raw hex in chart series
      props is banned by ESLint; reference these tokens instead. Do NOT use --accent/--warning gold
      as a series colour (status only) or a platform colour as a generic series. See docs audit. */
-  --series-1: #2a2a2a; /* dark charcoal, its own value (not the --primary/--foreground ink) */
+  --series-1: #092727; /* TGR brand ink (same value as --primary/--foreground); the chart-colour
+     ESLint wall forbids var(--primary)/var(--foreground) in chart fill/stroke, so the alias cannot be
+     used as a second series by construction, which is what caused the earlier identical-line bugs. */
   --series-2: #1c3f8f; /* blue */
   --series-3: #993d00; /* rust (darkened Talabat orange) */
   --series-4: #17826d; /* teal (lighter Careem green) */
