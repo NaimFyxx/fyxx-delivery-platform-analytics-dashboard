@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useRouterState } from "@tanstack/react-router";
+import { ChevronUp } from "lucide-react";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { computePace, currentPaceMonth, type PaceData } from "@/lib/pace";
 import { paceBadgeState, PACE_BADGE_LABEL, paceBasePct } from "@/lib/pace-badge";
@@ -70,7 +71,9 @@ export function PaceDock() {
 
   return (
     <>
-      {showBar && <PaceBar pace={pace!} month={month} />}
+      {/* key by pathname so the mobile expand/collapse state is ephemeral: it resets to collapsed on
+          navigation (the dock itself stays mounted in __root). */}
+      {showBar && <PaceBar key={pathname} pace={pace!} month={month} />}
       <PaceGear mode={mode} open={open} setOpen={setOpen} lifted={showBar} />
     </>
   );
@@ -94,8 +97,12 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
   const isMissed = badge === "missed";
   const badgeText = PACE_BADGE_LABEL[badge] ?? (targetSet ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set");
 
-  // Reserve exactly the bar's height as bottom room, remeasured on resize/wrap (the bar is taller on
-  // phones where the percentage and badge drop to their own line). Released to 0 when the bar unmounts.
+  // Mobile only: the bar collapses to a single line (month, %, badge, chevron) and expands on tap.
+  // Ephemeral, resets on navigation (PaceDock keys this component by pathname). Desktop ignores it.
+  const [expanded, setExpanded] = useState(false);
+
+  // Reserve exactly the bar's height as bottom room, remeasured on resize/wrap and on expand/collapse
+  // (offsetHeight of whichever of the mobile/desktop blocks is displayed). Released to 0 on unmount.
   const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = barRef.current;
@@ -107,17 +114,100 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
     ro.observe(el);
     return () => { ro.disconnect(); root.style.setProperty("--pace-bar-pad", "0px"); };
   }, []);
+  // Re-measure when the mobile bar expands or collapses (height changes but the element does not resize
+  // its own box synchronously before paint, so nudge the var immediately too).
+  useEffect(() => {
+    const el = barRef.current;
+    if (el) document.documentElement.style.setProperty("--pace-bar-pad", `${Math.ceil(el.offsetHeight) + 10}px`);
+  }, [expanded]);
+
+  const badgeStyle =
+    isStretch ? { background: "#EEC36A", color: "#092727" }
+    : isReached ? { background: "rgba(31,122,77,.28)", color: "#8ff0b8" }
+    : isMissed ? { background: "rgba(244,239,231,.13)", color: "rgba(244,239,231,.7)" }
+    : { background: "rgba(244,239,231,.15)", color: "#f4efe7" };
+  const pctColor = pct != null && pct >= 100 ? "#1BD15D" : "#EEC36A";
+
+  const detail = (
+    <>
+      {/* 0 to stretch track (0 to base when no stretch), yellow base tick + muted stretch tick */}
+      <div className="relative h-2.5 rounded-md mt-3" style={{ background: "rgba(244,239,231,.16)" }}>
+        <div className="absolute left-0 top-0 bottom-0 rounded-md" style={{ width: `${fillPct}%`, background: "#f4efe7" }} />
+        {baseTickPct != null && (
+          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: `${baseTickPct}%`, background: "#EEC36A" }} />
+        )}
+        {pace.stretch != null && (
+          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: "100%", background: "rgba(244,239,231,.4)" }} />
+        )}
+      </div>
+      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2.5 text-[11.5px]">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#FF5A00" }} />Talabat <span className="font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#1BD15D" }} />Careem <span className="font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
+        </span>
+        <span style={{ color: "rgba(244,239,231,.62)" }}>Combined <span className="font-semibold" style={{ color: "#f4efe7" }}>{fmtInt(pace.totalSales)}</span> JOD</span>
+        {targetSet && (
+          <span className="sm:ml-auto inline-flex items-center gap-1" style={{ color: "rgba(244,239,231,.72)" }}>
+            Base <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
+            {pace.stretch != null && <>{" · "}Stretch <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
+            {" JOD"}
+            <InfoTip id="pace_base_stretch" side="top" />
+          </span>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <div
       ref={barRef}
-      className="fixed right-0 bottom-0 z-[70] px-4 py-2.5 md:px-6 md:py-3"
+      className="fixed right-0 bottom-0 z-[70]"
       // The bar sits on dark green, so its text must be cream. --cream was never defined, so the old
       // text-[var(--cream)] resolved to nothing and any span without its own colour (Talabat, Careem,
       // the Day badge) fell back to the inherited #092727 foreground and rendered dark on dark.
       // --primary-foreground is the defined cream-on-dark-green token; set it here so it cascades.
       style={{ left: "var(--pace-bar-left)", background: "#092727", color: "var(--primary-foreground)", boxShadow: "0 -3px 22px rgba(9,39,39,.2)" }}
     >
+      {/* MOBILE: one-line summary, chevron expands the rest. Collapsed by default; resets on nav. */}
+      <div className="md:hidden px-4 py-2.5">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse pace details" : "Expand pace details"}
+          className="w-full flex items-center gap-2 text-left"
+        >
+          <span className="font-display text-[14px] whitespace-nowrap" style={{ color: "#f4efe7" }}>{monthLong}</span>
+          <span className="ml-auto font-display text-[18px] leading-none" style={{ color: pctColor }}>
+            {targetSet && pct != null ? Math.round(pct) + "%" : "-"}
+          </span>
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap" style={badgeStyle}>
+            {badgeText}
+          </span>
+          <ChevronUp className="size-4 shrink-0" style={{ transform: expanded ? "none" : "rotate(180deg)", opacity: 0.85 }} />
+        </button>
+        {expanded && (
+          <div className="mt-2">
+            <div className="flex items-center gap-2 flex-wrap text-[10px]">
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 font-semibold" style={{ background: "rgba(244,239,231,.13)" }}>
+                Day {pace.dayOfMonth}/{pace.daysInMonth}
+              </span>
+              {pace.dataThroughLabel && (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 font-semibold"
+                      style={{ background: "rgba(244,239,231,.13)", color: pace.dataThroughStale ? "#EEC36A" : "rgba(244,239,231,.75)" }}>
+                  data through {pace.dataThroughLabel}
+                </span>
+              )}
+            </div>
+            {detail}
+          </div>
+        )}
+      </div>
+
+      {/* DESKTOP: full bar, unchanged. */}
+      <div className="hidden md:block px-6 py-3">
       <div className="flex items-center gap-2.5 flex-wrap">
         <span className="font-display text-[15px] whitespace-nowrap" style={{ color: "#f4efe7" }}>{monthLong}</span>
         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(244,239,231,.13)" }}>
@@ -177,6 +267,7 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
           </span>
         )}
       </div>
+      </div>
     </div>
   );
 }
@@ -193,7 +284,10 @@ function PaceGear({ mode, open, setOpen, lifted }: {
   return (
     <div
       className="fixed right-[15px] md:right-[22px] z-[95] transition-[bottom] duration-200"
-      style={{ bottom: lifted ? "calc(env(safe-area-inset-bottom, 0px) + 128px)" : "22px" }}
+      // Sit clear of the bar by tracking its measured height (--pace-bar-pad already includes a 10px
+      // gap). Because it follows the real height, the collapsed mobile bar lifts the gear far less
+      // than the old fixed 128px did, which also shrinks the Overview/Insights jump.
+      style={{ bottom: lifted ? "calc(env(safe-area-inset-bottom, 0px) + var(--pace-bar-pad, 0px) + 12px)" : "22px" }}
       onClick={(e) => e.stopPropagation()}
     >
       {open && (

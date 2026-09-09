@@ -81,8 +81,11 @@ describe("Pace bar renders the base/stretch badge", () => {
       perPlatformThrough: [], base: 1000, stretch: 1150,
     };
     mountPage(React.createElement(PaceBar, { pace, month: "2026-09" }));
-    expect(screen.getByText("Stretch reached")).toBeInTheDocument();
-    expect(screen.getByText("120%")).toBeInTheDocument(); // percent of base, not stretch
+    // jsdom applies no CSS, so both the mobile (collapsed) summary and the desktop block render, which
+    // duplicates the month, percentage and badge. The base/stretch detail lives only in the desktop
+    // block here (mobile shows it on expand), so it is single.
+    expect(screen.getAllByText("Stretch reached").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("120%").length).toBeGreaterThan(0); // percent of base, not stretch
     expect(screen.getByText("1,000")).toBeInTheDocument(); // base value
     expect(screen.getByText("1,150")).toBeInTheDocument(); // stretch value
     // The Talabat/Careem figures render, and the bar sets an explicit cream text colour on a defined
@@ -92,6 +95,8 @@ describe("Pace bar renders the base/stretch badge", () => {
     const bar = document.querySelector(".fixed.bottom-0") as HTMLElement;
     expect(bar.style.color).toBe("var(--primary-foreground)");
     expect(bar.className).not.toContain("--cream");
+    // The mobile summary carries a chevron toggle to expand the rest.
+    expect(screen.getByRole("button", { name: /expand pace details/i })).toBeInTheDocument();
   });
 });
 
