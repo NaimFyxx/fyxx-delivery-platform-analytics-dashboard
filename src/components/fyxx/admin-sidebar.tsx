@@ -131,7 +131,7 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
               {expanded && <span className="ml-2">Sign out</span>}
             </Button>
             {expanded && (
-              <div className="mt-3 px-3 flex items-center gap-1.5 text-[10px] text-sidebar-foreground/40 whitespace-nowrap">
+              <div className="mt-3 px-3 flex items-center gap-1.5 text-[10px] text-sidebar-foreground/60 whitespace-nowrap">
                 <span>TGR</span><span>×</span>
                 <img src={fyxxLogo} alt="Fyxx" className="h-2.5 w-auto opacity-70" />
               </div>

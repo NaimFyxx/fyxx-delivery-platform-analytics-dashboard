@@ -1248,7 +1248,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
       aria-label={expanded ? "Hide pace details" : "Show pace details"}
-      className="mt-3 w-full flex items-center justify-center gap-1.5 border-t border-border pt-3 text-[13px] font-semibold text-muted-foreground"
+      className="mt-3 w-full min-h-11 flex items-center justify-center gap-1.5 border-t border-border pt-3 text-[13px] font-semibold text-muted-foreground"
     >
       {expanded ? "Hide details" : "Show details"}
       <ChevronDown className={`size-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -1333,7 +1333,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
       {/* "Show August" (the three-day month-hold toggle) survives as a text link at the foot of the
           expanded body, since Layout C drops the chip row it used to live in. */}
       {toggle && (
-        <button type="button" onClick={toggle.onToggle} className="mt-3 text-[12px] font-semibold text-primary underline underline-offset-2">
+        <button type="button" onClick={toggle.onToggle} className="mt-1 inline-flex items-center min-h-11 text-[12px] font-semibold text-primary underline underline-offset-2">
           {toggle.label}
         </button>
       )}

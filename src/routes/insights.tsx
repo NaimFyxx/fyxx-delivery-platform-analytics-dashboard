@@ -297,7 +297,7 @@ export function InsightsPage() {
             bg="linear-gradient(135deg, #0a3d2b, #0f5c3e)"
           >
             {!careemMix || !careemMix.has ? (
-              <Empty text="Import the Careem Plus · Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
+              <Empty onDark text="Import the Careem Plus · Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
             ) : (
               <CustomerMixBody mix={careemMix} colorVar="var(--careem-dark-bg)" barColor="var(--careem-dark-bg)" />
             )}
@@ -308,9 +308,9 @@ export function InsightsPage() {
             bg="linear-gradient(135deg, #5c1f00, #8a2f00)"
           >
             {!talabatTiers ? (
-              <Empty text="No Talabat data in this range." />
+              <Empty onDark text="No Talabat data in this range." />
             ) : !talabatTiers.hasSub ? (
-              <Empty text="No Pro orders in this range. This panel is built from the Talabat Order Report, which flags each order as Pro or not. There is Talabat order data for this range but none of it is flagged Pro, which almost always means none of the orders were Pro. (It can also mean these months were imported before the Pro flag was captured.)" />
+              <Empty onDark text="No Pro orders in this range. This panel is built from the Talabat Order Report, which flags each order as Pro or not. There is Talabat order data for this range but none of it is flagged Pro, which almost always means none of the orders were Pro. (It can also mean these months were imported before the Pro flag was captured.)" />
             ) : (
               <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat-dark-bg)" barColor="var(--talabat)" />
             )}
@@ -739,9 +739,16 @@ function TierCard({
   );
 }
 
-function Empty({ text }: { text: string }) {
+function Empty({ text, onDark }: { text: string; onDark?: boolean }) {
+  // onDark: this Empty sits inside a dark gradient panel (the Careem+ / Talabat Pro cards), where the
+  // default muted-foreground body copy dropped to ~1.5-2.3:1. Use the same white the panel's own
+  // subtitle uses (white/70 composites to a warm muted cream on the gradient, ~4.8:1 and up).
   return (
-    <div className="text-[11.5px] text-muted-foreground py-8 px-4 text-center border border-dashed border-border rounded-xl">
+    <div
+      className={`text-[11.5px] py-8 px-4 text-center border border-dashed rounded-xl ${
+        onDark ? "text-white/70 border-white/20" : "text-muted-foreground border-border"
+      }`}
+    >
       {text}
     </div>
   );

@@ -432,7 +432,7 @@ function Stepper({
                     ? "bg-success/30 text-success"
                     : active
                       ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground",
+                      : "bg-muted text-foreground", // inactive: muted-foreground on bg-muted was 4.45:1; the digit uses full ink (the button's opacity-70 keeps the whole step de-emphasised)
                 )}
               >
                 {done ? <Check className="size-3" /> : s.n}
@@ -687,7 +687,7 @@ function CoverageMatrix({
                       <Badge
                         variant="outline"
                         title="The current month isn't finished. These figures are partial."
-                        className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]"
+                        className="bg-amber-500/10 text-amber-800 border-amber-500/30 text-[10px]"
                       >
                         In progress
                       </Badge>
@@ -749,7 +749,7 @@ function CompletenessPanel({
           <div className="flex items-center gap-2">
             <div className="text-sm font-semibold">Monthly completeness</div>
             {isCurrent && (
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]">
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-800 border-amber-500/30 text-[10px]">
                 In progress
               </Badge>
             )}

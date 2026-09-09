@@ -93,7 +93,9 @@
   --muted-foreground: #5c6b6b;
   --accent: #EEC36A;
   --accent-foreground: #092727;
-  --destructive: #c43d3d;
+  --destructive: #b83232; /* darkened from #c43d3d: as text on cream (#f4efe7) #c43d3d was 4.49:1, a
+     hair under the 4.5 floor on every page (the stale freshness banner); #b83232 is ~5.2:1 on cream,
+     ~5.9:1 on white, and keeps a stronger destructive button too. */
   --destructive-foreground: #ffffff;
   --border: #ddd4c2;
   --input: #ddd4c2;
@@ -111,7 +113,9 @@
   --careem: #00493E; /* Careem Forest Green, Pantone 560C: for LIGHT backgrounds (white cards, charts) */
   --careem-foreground: #ffffff;
   --careem-dark-bg: #00E784; /* Careem Green, Pantone 7479C: for DARK surfaces (the pace bar, dark cards) */
-  --success: #1f8a4c;
+  --success: #0f6b39; /* darkened from #1f8a4c: as text #1f8a4c was ~4.4:1 on white (under 4.5) and
+     3.64:1 on the success/15 "Complete" pill tint; #0f6b39 is ~6.6:1 on white and ~5.3:1 on the tint,
+     and reads fine as fill (dots, bars) and for positive figures. */
   --warning: #b8862a;
   /* Categorical chart series ramp. Colour-blind-safe within the limits of the 3:1-on-white
      requirement: every pair >= dE 25 in normal vision, worst pair dE 21 under deuteranopia (the

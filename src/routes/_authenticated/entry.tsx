@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Loader2, Trash2, Upload } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PLATFORMS, currentMonth, platformBg, fmtJOD, fmtInt, logImport, type Platform, type PlatformKey } from "@/lib/fyxx";
+import { PLATFORMS, currentMonth, platformBg, platformColor, fmtJOD, fmtInt, logImport, type Platform, type PlatformKey } from "@/lib/fyxx";
 import { DatePicker, MonthPicker } from "@/components/fyxx/date-picker";
 import { AddProductDialog } from "@/components/fyxx/add-product-dialog";
 import { parseCsv, parseDate, num, round3, isDelivered } from "@/lib/csv-import";
@@ -206,8 +206,11 @@ function DailySalesForm() {
             const last = lastByPlatform[p];
             const behind = last ? dayGap(last, today) : 0;
             const lagging = behind > 1;
+            // When lagging, colour the line by its own platform (Careem green / Talabat darkened
+            // orange), not amber: amber was 3.2:1 and, worse, painted "Careem" in Talabat's orange.
+            // The warning is carried by the "days behind" text and the warning glyph.
             return (
-              <div key={p} className={`inline-flex items-center text-xs ${lagging ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
+              <div key={p} className={`inline-flex items-center text-xs ${lagging ? `${platformColor(p)} font-medium` : "text-muted-foreground"}`}>
                 <span className="font-semibold">{p}</span>
                 <span className="ml-1">· {last ? `last entered ${fmtDayMonYear(last)}` : "no entries yet."}</span>
                 {lagging && <span className="ml-1">· {behind} days behind ⚠</span>}
