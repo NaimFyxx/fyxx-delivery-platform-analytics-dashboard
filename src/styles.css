@@ -56,6 +56,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-talabat: var(--talabat);
   --color-talabat-foreground: var(--talabat-foreground);
+  --color-talabat-text: var(--talabat-text);
   --color-careem: var(--careem);
   --color-careem-foreground: var(--careem-foreground);
   --color-careem-dark-bg: var(--careem-dark-bg);
@@ -96,8 +97,12 @@
   --border: #ddd4c2;
   --input: #ddd4c2;
   --ring: #092727;
-  --talabat: #FF5A00;
+  --talabat: #FF5A00; /* Talabat Orange: the brand colour, for FILLS (bars, dots, segments, chips, logo) */
   --talabat-foreground: #ffffff;
+  --talabat-text: #993d00; /* Talabat orange darkened for TEXT on LIGHT backgrounds. #FF5A00 as text on
+     white/cream is ~2.6:1 (unreadable); this darkened orange is ~6:1. Same split as --careem (light)
+     vs --careem-dark-bg (dark): fills stay #FF5A00, only text on light uses this. Value equals
+     --series-3 (the darkened Talabat orange) but kept as its own semantic token so neither can drift. */
   --careem: #00493E; /* Careem Forest Green, Pantone 560C: for LIGHT backgrounds (white cards, charts) */
   --careem-foreground: #ffffff;
   --careem-dark-bg: #00E784; /* Careem Green, Pantone 7479C: for DARK surfaces (the pace bar, dark cards) */

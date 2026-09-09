@@ -544,7 +544,7 @@ export function PublicDashboard() {
               ? ` since ${new Date(allTime.firstMonth + "-01T00:00:00").toLocaleString("en-US", { month: "short", year: "numeric" })}`
               : ""}
             {" · "}
-            <span className="font-semibold" style={{ color: "var(--talabat)" }}>Talabat</span>{" "}
+            <span className="font-semibold" style={{ color: "var(--talabat-text)" }}>Talabat</span>{" "}
             <span className="text-foreground">{fmtInt(allTime.talabat)} JOD</span>
             {" · "}
             <span className="font-semibold" style={{ color: "var(--careem)" }}>Careem</span>{" "}

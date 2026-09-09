@@ -28,10 +28,13 @@ export const toMonth = (d: string | Date) => {
 
 export const currentMonth = () => toMonth(new Date());
 
+// Platform-name TEXT: Talabat uses the darkened text token (its #FF5A00 fill is ~2.6:1 as text on
+// light); Careem's #00493E is ~9:1 on light so its fill token doubles as its text colour. The badge
+// keeps the brand fill/border tints (bg-*/border-*), only the label text takes the readable token.
 export const platformColor = (p: Platform) =>
-  p === "Talabat" ? "text-talabat" : "text-careem";
+  p === "Talabat" ? "text-talabat-text" : "text-careem";
 export const platformBg = (p: Platform) =>
-  p === "Talabat" ? "bg-talabat/15 text-talabat border-talabat/30"
+  p === "Talabat" ? "bg-talabat/15 text-talabat-text border-talabat/30"
                   : "bg-careem/15 text-careem border-careem/30";
 
 export async function requireUser() {

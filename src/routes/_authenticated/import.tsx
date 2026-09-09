@@ -639,7 +639,7 @@ function CoverageMatrix({
           <thead>
             <tr className="text-muted-foreground">
               <th rowSpan={2} className="text-left font-medium px-2 py-1.5 align-bottom">Month</th>
-              <th colSpan={4} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--talabat)" }}>Talabat</th>
+              <th colSpan={4} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--talabat-text)" }}>Talabat</th>
               <th colSpan={6} className="text-center font-semibold px-2 py-1 border-l border-border" style={{ color: "var(--careem)" }}>Careem</th>
               <th rowSpan={2} className="text-right font-medium px-2 py-1.5 align-bottom border-l border-border">Status</th>
             </tr>

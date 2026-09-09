@@ -239,11 +239,11 @@ export function AddProductDialog({
                 {onTalabat && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs" style={{ color: "var(--talabat)" }}>Talabat price (incl VAT)</Label>
+                      <Label className="text-xs" style={{ color: "var(--talabat-text)" }}>Talabat price (incl VAT)</Label>
                       <Input type="number" step={priceStep} min="0" value={talPrice} onChange={(e) => setTalPrice(e.target.value)} placeholder="0.000" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs" style={{ color: "var(--talabat)" }}>Talabat date added</Label>
+                      <Label className="text-xs" style={{ color: "var(--talabat-text)" }}>Talabat date added</Label>
                       <DatePicker value={talDate} onChange={setTalDate} />
                     </div>
                   </div>
