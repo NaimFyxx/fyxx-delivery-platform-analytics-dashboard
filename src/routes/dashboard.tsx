@@ -795,6 +795,10 @@ export function Header({
     <div className="border-b border-border bg-card sticky top-0 z-50">
       {/* Mobile: two compact rows */}
       <div className="flex md:hidden flex-col px-4 py-2.5 gap-1.5">
+        {/* Row 1 (logo + nav) is guests only: signed-in admins already get the logo and nav from the
+            sidebar strip, so rendering it here put a second TGR logo on screen. Mobile only; the
+            desktop header (hidden md:flex below) is unchanged. */}
+        {showNav && (
         <div className="flex items-center justify-between gap-2">
           <img src={tgrLogoDark} alt="The Green Room" className="h-8 w-auto" />
           <div className="flex items-center gap-2 min-w-0">
@@ -817,6 +821,7 @@ export function Header({
             {signIn}
           </div>
         </div>
+        )}
         <div className="flex items-center justify-between gap-2">
           <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
           <div className="flex items-center gap-2 shrink-0">

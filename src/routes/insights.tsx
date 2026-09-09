@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { DataHealthChip } from "@/components/fyxx/data-health-chip";
+import { MobileFilters } from "@/components/fyxx/mobile-filters";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -271,7 +272,7 @@ export function InsightsPage() {
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 pt-5 md:pt-7 pb-20">
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 items-center mb-5">
+        <MobileFilters summary={`${rangeLabel}${platform !== "All" ? ` · ${platform}` : ""}`} className="mb-5">
           <Segmented
             options={[
               { v: "this", l: "This Month" },
@@ -309,7 +310,7 @@ export function InsightsPage() {
             Range:{" "}
             {rangeMonths.length === 1 ? monthLabel(rangeMonths[0]) : `${rangeMonths.length} months`}
           </div>
-        </div>
+        </MobileFilters>
 
         {!rangeHasData ? (
           <EmptyState label={rangeLabel} />

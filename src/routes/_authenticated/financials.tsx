@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { moneyTrail } from "@/lib/money-trail";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { MobileFilters } from "@/components/fyxx/mobile-filters";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { EmptyState } from "@/components/fyxx/empty-state";
 import { MonthPicker } from "@/components/fyxx/date-picker";
@@ -120,7 +121,7 @@ export function Financials() {
         title="Monthly financials"
         description="Gross sales, actual payouts and COGS per platform. COGS and net margin are ex-VAT (matching the Overview)."
       />
-      <div className="flex flex-wrap gap-3 items-center mb-4">
+      <MobileFilters summary={`${rangeLabel}${platformFilter !== "All" ? ` · ${platformFilter}` : ""}`}>
         <Segmented
           options={[
             { v: "this", l: "This Month" },
@@ -159,7 +160,7 @@ export function Financials() {
         >
           <Download className="size-3.5 mr-1.5" /> Export CSV
         </Button>
-      </div>
+      </MobileFilters>
 
       {rows.length === 0 ? (
         <EmptyState label={rangeLabel} />

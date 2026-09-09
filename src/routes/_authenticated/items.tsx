@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/fyxx/page-header";
+import { MobileFilters } from "@/components/fyxx/mobile-filters";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Merge, LineChart as LineChartIcon, Trash2, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Loader2, Merge, LineChart as LineChartIcon, Trash2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
 import { EmptyState } from "@/components/fyxx/empty-state";
@@ -119,7 +120,6 @@ function Items() {
   const [q, setQ] = useState("");
   // Category filter: "All" shows every category; stacks with the range + platform filters.
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
-  const [filtersOpen, setFiltersOpen] = useState(false); // mobile: filter chips collapsed by default
   // Reveal catalogue items that have no sales in the current view (e.g. newly added products).
   const [showZero, setShowZero] = useState(false);
   const qc = useQueryClient();
@@ -306,23 +306,7 @@ function Items() {
     <div className="p-6 max-w-7xl mx-auto">
       <PageHeader title="Items" description="Sell-price columns show your set list price (bold); 'avg' is what customers actually paid, revenue divided by units, after discounts and combos." />
 
-      {/* Mobile: filters collapse behind one toggle so real data reaches above the fold. Desktop shows
-          them inline as before (the toggle is md:hidden, the row is md:flex). */}
-      <div className="mb-4">
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((o) => !o)}
-          aria-expanded={filtersOpen}
-          className="md:hidden inline-flex items-center gap-2 h-9 px-3 rounded-full border border-border bg-card text-xs font-medium text-foreground"
-        >
-          <SlidersHorizontal className="size-3.5" />
-          Filters
-          <span className="text-muted-foreground truncate max-w-[180px]">
-            {rangeLabel}{platform !== "All" ? ` · ${platform}` : ""}{categoryFilter !== "All" ? ` · ${categoryFilter}` : ""}
-          </span>
-          <ChevronDown className="size-3.5 shrink-0" style={{ transform: filtersOpen ? "rotate(180deg)" : "none" }} />
-        </button>
-        <div className={`${filtersOpen ? "flex" : "hidden"} md:flex flex-wrap gap-3 mt-2 md:mt-0 items-center`}>
+      <MobileFilters summary={`${rangeLabel}${platform !== "All" ? ` · ${platform}` : ""}${categoryFilter !== "All" ? ` · ${categoryFilter}` : ""}`}>
         <Segmented
           options={[
             { v: "this", l: "This Month" },
@@ -373,8 +357,7 @@ function Items() {
           <AddProductDialog />
           <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
         </div>
-        </div>
-      </div>
+      </MobileFilters>
 
       {range !== "this" && range !== "last" && (
         <p className="text-xs text-muted-foreground mb-3">{rangeLabel}</p>
