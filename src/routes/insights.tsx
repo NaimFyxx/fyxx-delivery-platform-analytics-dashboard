@@ -306,7 +306,7 @@ export function InsightsPage() {
             value={platform}
             onChange={(v) => setPlatform(v as PlatformKey)}
           />
-          <div className="ml-auto text-[10.5px] text-muted-foreground">
+          <div className="ml-auto text-[12px] md:text-[10.5px] text-muted-foreground">
             Range:{" "}
             {rangeMonths.length === 1 ? monthLabel(rangeMonths[0]) : `${rangeMonths.length} months`}
           </div>
@@ -394,11 +394,11 @@ export function InsightsPage() {
         {customerKpi && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="bg-card border border-border rounded-2xl p-4">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% Returning (repeat rate)<InfoTip id="repeat_rate" side="bottom" /></div>
+              <div className="text-[12px] md:text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% Returning (repeat rate)<InfoTip id="repeat_rate" side="bottom" /></div>
               <div className="font-display text-3xl font-semibold">
                 {customerKpi.pctReturning != null ? `${customerKpi.pctReturning.toFixed(1)}%` : "-"}
               </div>
-              <div className="text-[10.5px] text-muted-foreground mt-1">
+              <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-1">
                 {Math.round(customerKpi.totalReturning).toLocaleString()} returning /{" "}
                 {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
                 {customerKpi.hasMultipleBases && (
@@ -408,20 +408,20 @@ export function InsightsPage() {
                 )}
               </div>
               {customerKpi.avgReturningPerDay != null && (
-                <div className="text-[9.5px] text-muted-foreground mt-0.5">avg {customerKpi.avgReturningPerDay.toFixed(1)}/day</div>
+                <div className="text-[11px] md:text-[9.5px] text-muted-foreground mt-0.5">avg {customerKpi.avgReturningPerDay.toFixed(1)}/day</div>
               )}
             </div>
             <div className="bg-card border border-border rounded-2xl p-4">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% New<InfoTip id="new_customers" side="bottom" /></div>
+              <div className="text-[12px] md:text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1 flex items-center">% New<InfoTip id="new_customers" side="bottom" /></div>
               <div className="font-display text-3xl font-semibold">
                 {customerKpi.pctNew != null ? `${customerKpi.pctNew.toFixed(1)}%` : "-"}
               </div>
-              <div className="text-[10.5px] text-muted-foreground mt-1">
+              <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-1">
                 {Math.round(customerKpi.totalNew).toLocaleString()} new /{" "}
                 {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
               </div>
               {customerKpi.avgNewPerDay != null && (
-                <div className="text-[9.5px] text-muted-foreground mt-0.5">avg {customerKpi.avgNewPerDay.toFixed(1)}/day</div>
+                <div className="text-[11px] md:text-[9.5px] text-muted-foreground mt-0.5">avg {customerKpi.avgNewPerDay.toFixed(1)}/day</div>
               )}
             </div>
           </div>
@@ -599,7 +599,7 @@ export function InsightsPage() {
                           className="inline-flex items-center gap-1 hover:text-foreground"
                         >
                           Margin after commission %
-                          <span className="text-[9px]" style={{ color: sortBy === "commMargin" ? "var(--primary)" : "transparent" }}>
+                          <span className="text-[11px] md:text-[9px]" style={{ color: sortBy === "commMargin" ? "var(--primary)" : "transparent" }}>
                             {sortDir === "asc" ? "▲" : "▼"}
                           </span>
                         </button>
@@ -613,7 +613,7 @@ export function InsightsPage() {
                           className="inline-flex items-center gap-1 hover:text-foreground"
                         >
                           Net margin %
-                          <span className="text-[9px]" style={{ color: sortBy === "netMargin" ? "var(--primary)" : "transparent" }}>
+                          <span className="text-[11px] md:text-[9px]" style={{ color: sortBy === "netMargin" ? "var(--primary)" : "transparent" }}>
                             {sortDir === "asc" ? "▲" : "▼"}
                           </span>
                         </button>
@@ -658,7 +658,7 @@ export function InsightsPage() {
         </>
         )}
 
-        <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
+        <div className="mt-8 pt-4 border-t border-border text-[12px] md:text-[10px] text-muted-foreground text-center">
           The Green Room × Talabat &amp; Careem
         </div>
       </div>
@@ -711,7 +711,7 @@ function ThSort({
           className="inline-flex items-center gap-1 hover:text-foreground"
         >
           {label}
-          <span className="text-[9px]" style={{ color: active ? "var(--primary)" : "transparent" }}>
+          <span className="text-[11px] md:text-[9px]" style={{ color: active ? "var(--primary)" : "transparent" }}>
             {sortDir === "asc" ? "▲" : "▼"}
           </span>
         </button>
@@ -737,9 +737,9 @@ function Panel({
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="font-display text-[15px] font-semibold">{title}</h3>
-          {sub && <div className="text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
+          {sub && <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
         </div>
-        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+        <span className="text-[12px] md:text-[10px] text-muted-foreground whitespace-nowrap">
           Imported on {asOf ?? "-"}
         </span>
       </div>
@@ -769,9 +769,9 @@ function TierCard({
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="font-display text-[15px] font-semibold text-white">{title}</h3>
-          {sub && <div className="text-[10.5px] text-white/60 mt-0.5">{sub}</div>}
+          {sub && <div className="text-[12px] md:text-[10.5px] text-white/60 mt-0.5">{sub}</div>}
         </div>
-        <span className="text-[10px] text-white/50 whitespace-nowrap">
+        <span className="text-[12px] md:text-[10px] text-white/50 whitespace-nowrap">
           Imported on {asOf ?? "-"}
         </span>
       </div>
@@ -1082,9 +1082,9 @@ function buildPromoSpend(
 function SpendKpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-lg border border-border bg-background/40 p-2.5">
-      <div className="text-[9.5px] uppercase tracking-wide text-muted-foreground font-semibold">{label}</div>
+      <div className="text-[11px] md:text-[9.5px] uppercase tracking-wide text-muted-foreground font-semibold">{label}</div>
       <div className="font-display text-[18px] font-semibold mt-0.5 truncate">{value}</div>
-      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
+      {sub && <div className="text-[12px] md:text-[10px] text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -1102,14 +1102,14 @@ function MiniStat({
 }) {
   return (
     <div className="bg-background/40 border border-white/10 rounded-lg p-2.5">
-      <div className="text-[9.5px] uppercase tracking-wide text-white/60 font-semibold">
+      <div className="text-[11px] md:text-[9.5px] uppercase tracking-wide text-white/60 font-semibold">
         {label}
       </div>
       <div
         className="font-display text-[18px] font-semibold mt-0.5 text-white"
         style={{ color: accentColor }}
       >
-        {value} <span className="text-[10px] text-white/50">{unit}</span>
+        {value} <span className="text-[12px] md:text-[10px] text-white/50">{unit}</span>
       </div>
     </div>
   );
@@ -1154,11 +1154,11 @@ function CustomerPanel({
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="font-display text-[15px] font-semibold">{platform}</h3>
-          <div className="text-[10.5px] text-muted-foreground mt-0.5">
+          <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-0.5">
             Basis: <span className="font-medium">{yLabel}</span> · New vs Returning per month
           </div>
         </div>
-        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+        <span className="text-[12px] md:text-[10px] text-muted-foreground whitespace-nowrap">
           Imported on {freshness ?? "-"}
         </span>
       </div>

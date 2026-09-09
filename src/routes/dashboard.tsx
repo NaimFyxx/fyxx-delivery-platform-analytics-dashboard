@@ -588,7 +588,7 @@ export function PublicDashboard() {
               salesFloorNow ? (
                 <div className="text-[11px] text-muted-foreground text-right leading-tight">
                   Current floor <span className="font-semibold text-foreground">{fmtJOD0(salesFloorNow.value)}</span>
-                  <div className="text-[10px]">since {salesFloorNow.sinceMonth}</div>
+                  <div className="text-[12px] md:text-[10px]">since {salesFloorNow.sinceMonth}</div>
                 </div>
               ) : undefined
             }
@@ -628,7 +628,7 @@ export function PublicDashboard() {
               infoId="chart_margin_trend"
               action={
                 marginTrend.some((d) => d.netTrail !== null) ? (
-                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                  <label className="flex items-center gap-1.5 text-[12px] md:text-[10px] text-muted-foreground cursor-pointer select-none">
                     <input
                       type="checkbox"
                       className="accent-primary"
@@ -685,7 +685,7 @@ export function PublicDashboard() {
               infoId="chart_order_volume"
               action={
                 orderVolumeTrend.some((d) => d.ordersTrail !== null) ? (
-                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                  <label className="flex items-center gap-1.5 text-[12px] md:text-[10px] text-muted-foreground cursor-pointer select-none">
                     <input type="checkbox" className="accent-primary" checked={showAvgTrailing} onChange={(e) => setShowAvgTrailing(e.target.checked)} />
                     3m avg
                   </label>
@@ -760,7 +760,7 @@ export function PublicDashboard() {
         </>
         )}
 
-        <div className="mt-8 pt-4 border-t border-border text-[10px] text-muted-foreground text-center">
+        <div className="mt-8 pt-4 border-t border-border text-[12px] md:text-[10px] text-muted-foreground text-center">
           The Green Room × Talabat &amp; Careem
         </div>
       </div>
@@ -826,7 +826,7 @@ export function Header({
           <h1 className="font-display text-[14px] font-semibold leading-none">The Green Room</h1>
           <div className="flex items-center gap-2 shrink-0">
             {statusChip}
-            <div className="flex items-center gap-1 text-[10px]">
+            <div className="flex items-center gap-1 text-[12px] md:text-[10px]">
               <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: fresh.color }} />
               <span style={{ color: fresh.color }}>{fresh.text}</span>
             </div>
@@ -852,7 +852,7 @@ export function Header({
           </div>
           <div className="min-w-0">
             <h1 className="font-display text-[17px] font-semibold leading-none truncate">The Green Room · Delivery Dashboard</h1>
-            <div className="text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
+            <div className="text-[12px] md:text-[10px] text-muted-foreground mt-1">Talabat &amp; Careem · shareable read-only link</div>
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
@@ -924,7 +924,7 @@ export function Segmented<T extends string>({
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] uppercase tracking-[1px] font-bold mt-6 mb-3" style={{ color: "var(--primary)" }}>
+    <div className="text-[12px] md:text-[10px] uppercase tracking-[1px] font-bold mt-6 mb-3" style={{ color: "var(--primary)" }}>
       {children}
     </div>
   );
@@ -944,17 +944,17 @@ export function Kpi({
   const deltaColor = !delta ? "var(--muted-foreground)" : delta.good ? "var(--careem)" : "var(--destructive)";
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
-      <div className="text-[9.5px] uppercase tracking-[0.8px] font-semibold text-muted-foreground flex items-center">
+      <div className="text-[11px] md:text-[9.5px] uppercase tracking-[0.8px] font-semibold text-muted-foreground flex items-center">
         {label}{infoId && <InfoTip id={infoId} />}
       </div>
       <div className="font-display text-[25px] font-semibold mt-1.5">
         {value} <span className="text-[13px] text-muted-foreground">{unit}</span>
       </div>
-      <div className="text-[10.5px] font-semibold mt-1" style={{ color: deltaColor }}>
+      <div className="text-[12px] md:text-[10.5px] font-semibold mt-1" style={{ color: deltaColor }}>
         {delta ? delta.text : "no prior period"}
       </div>
-      <div className="text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border">{prior}</div>
-      {sub && <div className="text-[9.5px] text-muted-foreground mt-0.5">{sub}</div>}
+      <div className="text-[12px] md:text-[10px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border">{prior}</div>
+      {sub && <div className="text-[11px] md:text-[9.5px] text-muted-foreground mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -968,9 +968,9 @@ function ChartCard({ title, sub, children, action, infoId, footnote }: { title: 
         </h3>
         {action}
       </div>
-      <div className="text-[10.5px] text-muted-foreground mb-3">{sub}</div>
+      <div className="text-[12px] md:text-[10.5px] text-muted-foreground mb-3">{sub}</div>
       <div className="h-[230px]">{children}</div>
-      {footnote && <div className="text-[10px] text-muted-foreground/80 mt-2 leading-snug">{footnote}</div>}
+      {footnote && <div className="text-[12px] md:text-[10px] text-muted-foreground/80 mt-2 leading-snug">{footnote}</div>}
     </div>
   );
 }
@@ -1063,7 +1063,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           <button
             type="button"
             onClick={toggle.onToggle}
-            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition-colors"
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[12px] md:text-[10.5px] font-semibold transition-colors"
             style={{ border: "1px solid rgba(9,39,39,0.35)", background: "rgba(9,39,39,0.08)", color: "#092727" }}
           >
             {toggle.label}
@@ -1108,18 +1108,18 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
             {monthTitle} · Combined
           </h3>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] md:text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">WD</span>
             <span style={{ color: "var(--primary)" }}>{pace.workingDay}</span>
             <InfoTip id="working_days" side="bottom" />
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] md:text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">Day</span>
             <span style={{ color: "var(--primary)" }}>{pace.dayOfMonth}<span className="text-muted-foreground">/{pace.daysInMonth}</span></span>
           </span>
           {pace.dataThroughLabel && (
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold bg-background/40 border border-border"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] md:text-[10.5px] font-semibold bg-background/40 border border-border"
               title={pace.perPlatformThrough.map((x) => `${x.platform}: through ${x.label}`).join(" · ")}
               style={{ color: pace.dataThroughStale ? "var(--warning)" : "var(--muted-foreground)" }}
             >
@@ -1131,7 +1131,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
             <button
               type="button"
               onClick={toggle.onToggle}
-              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold border border-border text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[12px] md:text-[10.5px] font-semibold border border-border text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
             >
               {toggle.label}
             </button>
@@ -1145,7 +1145,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           <InfoTip id="pace_pct" side="bottom" />
           {isReached || isMissed ? (
             <span
-              className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold align-middle ${
+              className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] md:text-[10px] font-semibold align-middle ${
                 isStretch ? "" : isReached ? "bg-success/10 text-success border-success/30" : "bg-muted text-muted-foreground border-border"
               }`}
               style={isStretch ? { background: "var(--accent)", color: "var(--accent-foreground)", borderColor: "rgba(9,39,39,0.25)" } : undefined}
@@ -1154,7 +1154,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
             </span>
           ) : (
             <>
-              <span className="ml-2 text-[10.5px] text-muted-foreground align-middle">
+              <span className="ml-2 text-[12px] md:text-[10.5px] text-muted-foreground align-middle">
                 {targetSet ? `${Math.round(pace.proRatedAch)}% of pace` : "no target set"}
               </span>
               {targetSet && <InfoTip id="pace_prorated" side="bottom" />}
@@ -1167,12 +1167,12 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
       <div className="mt-3 h-2.5 rounded-md overflow-hidden flex relative bg-muted">
         <div className="h-full transition-all relative group" style={{ width: `${segCareem}%`, background: colorFor("Careem") }}>
           {segCareem > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-black/70 pointer-events-none">{Math.round(segCareem)}%</span>
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-black/70 pointer-events-none">{Math.round(segCareem)}%</span>
           )}
         </div>
         <div className="h-full transition-all relative group" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }}>
           {segCappedTalabat > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/80 pointer-events-none">{Math.round(segCappedTalabat)}%</span>
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-white/80 pointer-events-none">{Math.round(segCappedTalabat)}%</span>
           )}
         </div>
       </div>

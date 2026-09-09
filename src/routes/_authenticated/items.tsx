@@ -405,7 +405,7 @@ function Items() {
                       <LineChartIcon className="size-3.5" />
                     </button>
                     {r.zeroSales && (
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-auto font-normal border-primary/30 text-primary bg-primary/10">
+                      <Badge variant="outline" className="text-[11px] md:text-[9px] px-1 py-0 h-auto font-normal border-primary/30 text-primary bg-primary/10">
                         no sales yet
                       </Badge>
                     )}
@@ -458,7 +458,7 @@ function Items() {
                 </TableCell>
                 <TableCell className="text-right text-num">
                   {r.lastCost == null
-                    ? <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/10">no cost</Badge>
+                    ? <Badge variant="outline" className="text-[12px] md:text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/10">no cost</Badge>
                     : fmtJOD(r.lastCost)}
                 </TableCell>
                 <TableCell className="text-right text-num">
@@ -547,7 +547,7 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)} disabled={names.length === 0}>
+      <Button variant="outline" size="sm" className="max-md:h-11" onClick={() => setOpen(true)} disabled={names.length === 0}>
         <Merge className="size-3.5 mr-1.5" /> Merge item
       </Button>
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
@@ -881,7 +881,7 @@ function CategoryCell({
         if (e.target.value !== value) onAssign(e.target.value);
       }}
       aria-label="Item category"
-      className={`w-[140px] rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 ${
+      className={`w-[140px] max-md:h-11 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 ${
         isDefault ? "text-muted-foreground" : "text-foreground"
       }`}
     >
@@ -919,12 +919,12 @@ function PriceCell({ listPrice, ppUnits, ppRevenue }: {
     <div>
       <div className="font-semibold">{fmtJOD(listPrice)}</div>
       {realized != null && (
-        <div className="text-[10px] text-muted-foreground flex items-center justify-end gap-1 flex-wrap">
+        <div className="text-[12px] md:text-[10px] text-muted-foreground flex items-center justify-end gap-1 flex-wrap">
           <span>avg {fmtJOD(realized)}</span>
           {discounted && (
             <Badge
               variant="outline"
-              className="text-[9px] px-1 py-0 h-auto font-normal text-muted-foreground"
+              className="text-[11px] md:text-[9px] px-1 py-0 h-auto font-normal text-muted-foreground"
               title="Average paid is below the entered list price (promos, vouchers or combo pricing)"
             >
               ↓ {Math.round(dropPct)}% vs list

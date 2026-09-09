@@ -163,7 +163,7 @@ export function AddProductDialog({
 
   return (
     <>
-      <Button variant={variant} size={size} className={className} onClick={() => setOpen(true)}>
+      <Button variant={variant} size={size} className={`${className ?? ""} max-md:h-11`} onClick={() => setOpen(true)}>
         <Plus className="size-3.5 mr-1.5" /> {label}
       </Button>
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>

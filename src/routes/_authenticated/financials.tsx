@@ -154,7 +154,7 @@ export function Financials() {
         <Button
           variant="outline"
           size="sm"
-          className="ml-auto"
+          className="ml-auto max-md:h-11"
           onClick={exportCsv}
           disabled={rows.length === 0}
         >
@@ -230,7 +230,7 @@ export function Financials() {
                 <TableCell className="text-right text-num">{fmtJOD(totals.discount)}</TableCell>
                 <TableCell className="text-right text-num">
                   <div>{fmtJOD(totals.netSales)}</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">
+                  <div className="text-[12px] md:text-[10px] font-normal text-muted-foreground">
                     ex-VAT {fmtJOD(totalNetSalesExVat)}
                   </div>
                 </TableCell>
