@@ -102,7 +102,7 @@ export function PaceSummaryLine({ pace, month, expanded, onToggle }: {
     : isReached ? { background: "rgba(31,122,77,.28)", color: "#8ff0b8" }
     : isMissed ? { background: "rgba(244,239,231,.13)", color: "rgba(244,239,231,.7)" }
     : { background: "rgba(244,239,231,.15)", color: "#f4efe7" };
-  const pctColor = pct != null && pct >= 100 ? "#1BD15D" : "#EEC36A";
+  const pctColor = pct != null && pct >= 100 ? "var(--careem-dark-bg)" : "#EEC36A";
   return (
     <button
       type="button"
@@ -179,10 +179,10 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
       </div>
       <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2.5 text-[11.5px]">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#FF5A00" }} />Talabat <span className="font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--talabat)" }} />Talabat <span className="font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#1BD15D" }} />Careem <span className="font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--careem-dark-bg)" }} />Careem <span className="font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
         </span>
         <span style={{ color: "rgba(244,239,231,.62)" }}>Combined <span className="font-semibold" style={{ color: "#f4efe7" }}>{fmtInt(pace.totalSales)}</span> JOD</span>
         {targetSet && (
@@ -190,7 +190,7 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
             Base <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
             {pace.stretch != null && <>{" · "}Stretch <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
             {" JOD"}
-            <InfoTip id="pace_base_stretch" side="top" />
+            <InfoTip id="pace_base_stretch" side="top" className="text-white/70 hover:text-white" />
           </span>
         )}
       </div>
@@ -243,7 +243,7 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
         )}
         {/* percentage + badge: their own full-width line on phones so they never collide */}
         <span className="w-full sm:w-auto sm:ml-auto flex items-center gap-2 mt-0.5 sm:mt-0">
-          <span className="font-display text-[22px] leading-none" style={{ color: pct != null && pct >= 100 ? "#1BD15D" : "#EEC36A" }}>
+          <span className="font-display text-[22px] leading-none" style={{ color: pct != null && pct >= 100 ? "var(--careem-dark-bg)" : "#EEC36A" }}>
             {targetSet && pct != null ? Math.round(pct) + "%" : "-"}
           </span>
           <span
@@ -257,7 +257,7 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
           >
             {badgeText}
           </span>
-          <InfoTip id="pace_bar" side="top" />
+          <InfoTip id="pace_bar" side="top" className="text-white/70 hover:text-white" />
         </span>
       </div>
 
@@ -274,10 +274,10 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
 
       <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2.5 text-[11.5px]">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#FF5A00" }} />Talabat <span className="font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--talabat)" }} />Talabat <span className="font-semibold">{fmtInt(talabat?.sales ?? 0)}</span>
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#1BD15D" }} />Careem <span className="font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
+          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "var(--careem-dark-bg)" }} />Careem <span className="font-semibold">{fmtInt(careem?.sales ?? 0)}</span>
         </span>
         <span style={{ color: "rgba(244,239,231,.62)" }}>Combined <span className="font-semibold" style={{ color: "#f4efe7" }}>{fmtInt(pace.totalSales)}</span> JOD</span>
         {targetSet && (
@@ -285,7 +285,7 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
             Base <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
             {pace.stretch != null && <>{" · "}Stretch <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
             {" JOD"}
-            <InfoTip id="pace_base_stretch" side="top" />
+            <InfoTip id="pace_base_stretch" side="top" className="text-white/70 hover:text-white" />
           </span>
         )}
       </div>

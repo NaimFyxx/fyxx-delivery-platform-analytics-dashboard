@@ -46,11 +46,6 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -63,6 +58,7 @@
   --color-talabat-foreground: var(--talabat-foreground);
   --color-careem: var(--careem);
   --color-careem-foreground: var(--careem-foreground);
+  --color-careem-dark-bg: var(--careem-dark-bg);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --font-display: "Fraunces", ui-serif, Georgia, serif;
@@ -102,8 +98,9 @@
   --ring: #092727;
   --talabat: #FF5A00;
   --talabat-foreground: #ffffff;
-  --careem: #00493E;
+  --careem: #00493E; /* Careem Forest Green, Pantone 560C: for LIGHT backgrounds (white cards, charts) */
   --careem-foreground: #ffffff;
+  --careem-dark-bg: #00E784; /* Careem Green, Pantone 7479C: for DARK surfaces (the pace bar, dark cards) */
   --success: #1f8a4c;
   --warning: #b8862a;
   /* Categorical chart series ramp. Colour-blind-safe within the limits of the 3:1-on-white
@@ -113,17 +110,12 @@
      multi-line charts must still carry a non-colour signal (dash + width). Raw hex in chart series
      props is banned by ESLint; reference these tokens instead. Do NOT use --accent/--warning gold
      as a series colour (status only) or a platform colour as a generic series. See docs audit. */
-  --series-1: #092727; /* brand green ink */
+  --series-1: #2a2a2a; /* dark charcoal, its own value (not the --primary/--foreground ink) */
   --series-2: #1c3f8f; /* blue */
   --series-3: #993d00; /* rust (darkened Talabat orange) */
   --series-4: #17826d; /* teal (lighter Careem green) */
   --series-5: #3990d0; /* sky blue */
   --series-6: #ad911f; /* gold (darkened TGR yellow) */
-  --chart-1: #092727;
-  --chart-2: #00493E;
-  --chart-3: #FF5A00;
-  --chart-4: #EEC36A;
-  --chart-5: #5c6b6b;
   --sidebar: #092727;
   --sidebar-foreground: #f4efe7;
   --sidebar-primary: #EEC36A;

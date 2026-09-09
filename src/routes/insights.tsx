@@ -299,7 +299,7 @@ export function InsightsPage() {
             {!careemMix || !careemMix.has ? (
               <Empty text="Import the Careem Plus · Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
             ) : (
-              <CustomerMixBody mix={careemMix} colorVar="var(--careem)" barColor="#5fd0a3" />
+              <CustomerMixBody mix={careemMix} colorVar="var(--careem)" barColor="var(--careem-dark-bg)" />
             )}
           </TierCard>
           <TierCard
@@ -312,7 +312,7 @@ export function InsightsPage() {
             ) : !talabatTiers.hasSub ? (
               <Empty text="No Pro orders in this range. This panel is built from the Talabat Order Report, which flags each order as Pro or not. There is Talabat order data for this range but none of it is flagged Pro, which almost always means none of the orders were Pro. (It can also mean these months were imported before the Pro flag was captured.)" />
             ) : (
-              <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat)" barColor="#ff8c42" />
+              <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat)" barColor="var(--talabat)" />
             )}
           </TierCard>
         </div>

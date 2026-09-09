@@ -829,8 +829,8 @@ function PriceHistoryDialog({
                 <thead>
                   <tr className="text-muted-foreground border-b border-border">
                     <th className="text-left font-medium px-3 py-2">Month</th>
-                    <th className="text-right font-medium px-3 py-2" style={{ color: "#FF5A00" }}>Talabat</th>
-                    <th className="text-right font-medium px-3 py-2" style={{ color: "#1BD15D" }}>Careem</th>
+                    <th className="text-right font-medium px-3 py-2" style={{ color: "var(--talabat)" }}>Talabat</th>
+                    <th className="text-right font-medium px-3 py-2" style={{ color: "var(--careem)" }}>Careem</th>
                     <th className="text-right font-medium px-3 py-2">Combined</th>
                   </tr>
                 </thead>

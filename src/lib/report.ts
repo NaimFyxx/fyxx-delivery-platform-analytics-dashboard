@@ -245,7 +245,7 @@ const REPORT_CSS = `
   :root {
     --green:#092727; --ink:#1d2b2b; --grey:#5f6d6d; --line:#d8d0c4;
     --yellow:#EEC36A; --cream:#f4efe7; --white:#fff;
-    --talabat:#FF5A00; --careem:#1BD15D;
+    --talabat:#FF5A00; --careem:#00493E;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { background:#e9e9e9; }

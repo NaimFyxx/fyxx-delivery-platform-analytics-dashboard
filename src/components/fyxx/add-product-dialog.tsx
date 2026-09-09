@@ -251,11 +251,11 @@ export function AddProductDialog({
                 {onCareem && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs" style={{ color: "#1BD15D" }}>Careem price (incl VAT)</Label>
+                      <Label className="text-xs" style={{ color: "var(--careem)" }}>Careem price (incl VAT)</Label>
                       <Input type="number" step={priceStep} min="0" value={carPrice} onChange={(e) => setCarPrice(e.target.value)} placeholder="0.000" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs" style={{ color: "#1BD15D" }}>Careem date added</Label>
+                      <Label className="text-xs" style={{ color: "var(--careem)" }}>Careem date added</Label>
                       <DatePicker value={carDate} onChange={setCarDate} />
                     </div>
                   </div>

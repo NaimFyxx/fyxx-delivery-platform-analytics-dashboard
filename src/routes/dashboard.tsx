@@ -604,7 +604,7 @@ export function PublicDashboard() {
                 <Tooltip content={<SalesTrendTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--series-1)" strokeWidth={2.5} dot={{ r: 3.5, fill: "var(--series-1)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
-                <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress (current month)" stroke="var(--series-1)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress (current month)" stroke="var(--series-5)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} />
                 {salesTrend.some((r) => r.avg3 !== null) && (
                   <Line isAnimationActive={false} type="monotone" dataKey="avg3" name="3-month average" stroke="var(--series-4)" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
                 )}
@@ -1172,12 +1172,12 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
       <div className="mt-3 h-2.5 rounded-md overflow-hidden flex relative bg-muted">
         <div className="h-full transition-all relative group" style={{ width: `${segCareem}%`, background: colorFor("Careem") }}>
           {segCareem > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-black/70 pointer-events-none">{Math.round(segCareem)}%</span>
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-white pointer-events-none">{Math.round(segCareem)}%</span>
           )}
         </div>
         <div className="h-full transition-all relative group" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }}>
           {segCappedTalabat > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-white/80 pointer-events-none">{Math.round(segCappedTalabat)}%</span>
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-black/80 pointer-events-none">{Math.round(segCappedTalabat)}%</span>
           )}
         </div>
       </div>

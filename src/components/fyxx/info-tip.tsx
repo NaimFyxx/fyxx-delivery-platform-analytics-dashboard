@@ -5,9 +5,13 @@ import { EXPLAINERS } from "@/lib/explainers";
 export function InfoTip({
   id,
   side = "top",
+  className = "text-muted-foreground/50 hover:text-muted-foreground focus-visible:text-foreground",
 }: {
   id: string;
   side?: "top" | "bottom" | "left" | "right";
+  /** Colour classes for the glyph. Override on dark surfaces (the pace bar) where the default
+   *  muted-foreground is near-invisible. */
+  className?: string;
 }) {
   const exp = EXPLAINERS[id];
   if (!exp) return null;
@@ -31,7 +35,7 @@ export function InfoTip({
           // Visible glyph stays 12px; on mobile an invisible 44x44 pseudo-element centred on it gives
           // an Apple-sized tap target without changing the layout. Mobile only (max-md:) so desktop
           // hover zones are unchanged and 30-plus icons do not overlap invisible targets on a mouse.
-          className="relative inline-flex items-center justify-center text-muted-foreground/50 hover:text-muted-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-full ml-0.5 align-middle max-md:before:content-[''] max-md:before:absolute max-md:before:left-1/2 max-md:before:top-1/2 max-md:before:h-11 max-md:before:w-11 max-md:before:-translate-x-1/2 max-md:before:-translate-y-1/2"
+          className={`relative inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-full ml-0.5 align-middle max-md:before:content-[''] max-md:before:absolute max-md:before:left-1/2 max-md:before:top-1/2 max-md:before:h-11 max-md:before:w-11 max-md:before:-translate-x-1/2 max-md:before:-translate-y-1/2 ${className}`}
           onMouseEnter={() => { cancelClose(); setOpen(true); }}
           onMouseLeave={scheduleClose}
           aria-label={`Explain: ${exp.label}`}
