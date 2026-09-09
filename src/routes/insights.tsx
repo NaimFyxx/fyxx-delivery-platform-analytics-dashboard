@@ -299,7 +299,7 @@ export function InsightsPage() {
             {!careemMix || !careemMix.has ? (
               <Empty text="Import the Careem Plus · Customers file (Customer Insights → Careem Plus, non Careem Plus)." />
             ) : (
-              <CustomerMixBody mix={careemMix} colorVar="var(--careem)" barColor="var(--careem-dark-bg)" />
+              <CustomerMixBody mix={careemMix} colorVar="var(--careem-dark-bg)" barColor="var(--careem-dark-bg)" />
             )}
           </TierCard>
           <TierCard
@@ -312,7 +312,7 @@ export function InsightsPage() {
             ) : !talabatTiers.hasSub ? (
               <Empty text="No Pro orders in this range. This panel is built from the Talabat Order Report, which flags each order as Pro or not. There is Talabat order data for this range but none of it is flagged Pro, which almost always means none of the orders were Pro. (It can also mean these months were imported before the Pro flag was captured.)" />
             ) : (
-              <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat)" barColor="var(--talabat)" />
+              <TierBody t={talabatTiers} subLabel="Pro" colorVar="var(--talabat-dark-bg)" barColor="var(--talabat)" />
             )}
           </TierCard>
         </div>
@@ -1059,8 +1059,12 @@ function MiniStat({
   unit: string;
   accentColor?: string;
 }) {
+  // Dark inset on a dark panel. It used bg-background/40 (a 40% CREAM veil), which composited the
+  // gradient up to a sage/tan mid-tone (~#688778 / ~#9c735c) where neither the accent nor the white
+  // label cleared 3:1. A dark veil keeps the box genuinely dark, so the dark-surface accent tokens
+  // (--careem-dark-bg, --talabat-dark-bg) and the white label read at 6:1 and up.
   return (
-    <div className="bg-background/40 border border-white/10 rounded-lg p-2.5">
+    <div className="bg-black/20 border border-white/10 rounded-lg p-2.5">
       <div className="text-[11px] md:text-[9.5px] uppercase tracking-wide text-white/60 font-semibold">
         {label}
       </div>

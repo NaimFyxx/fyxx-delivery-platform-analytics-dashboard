@@ -57,6 +57,7 @@
   --color-talabat: var(--talabat);
   --color-talabat-foreground: var(--talabat-foreground);
   --color-talabat-text: var(--talabat-text);
+  --color-talabat-dark-bg: var(--talabat-dark-bg);
   --color-careem: var(--careem);
   --color-careem-foreground: var(--careem-foreground);
   --color-careem-dark-bg: var(--careem-dark-bg);
@@ -103,6 +104,10 @@
      white/cream is ~2.6:1 (unreadable); this darkened orange is ~6:1. Same split as --careem (light)
      vs --careem-dark-bg (dark): fills stay #FF5A00, only text on light uses this. Value equals
      --series-3 (the darkened Talabat orange) but kept as its own semantic token so neither can drift. */
+  --talabat-dark-bg: #FF8A3D; /* Talabat orange lightened for TEXT/accents on DARK surfaces, mirroring
+     --careem-dark-bg. #FF5A00 on the dark insight panels is ~2.8-4.6:1; this lifted amber-orange is
+     ~6:1. A lifted variant (Talabat has no official second orange the way Careem's #00E784 is an
+     official Pantone), but it stays in the Talabat orange family. Fills on dark still use --talabat. */
   --careem: #00493E; /* Careem Forest Green, Pantone 560C: for LIGHT backgrounds (white cards, charts) */
   --careem-foreground: #ffffff;
   --careem-dark-bg: #00E784; /* Careem Green, Pantone 7479C: for DARK surfaces (the pace bar, dark cards) */
