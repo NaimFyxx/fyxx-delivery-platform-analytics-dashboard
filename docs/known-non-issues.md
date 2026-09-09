@@ -38,3 +38,18 @@ order by 1, 2;
 
 If a future audit reads run-together words out of any Recharts tick label, suspect the `<tspan>` wrap
 first and check the rendered chart and the data before treating it as a defect.
+
+## Pace card progress bar has no per-segment "%" labels
+
+**Status: not a bug. Intended. Do not chase.** Flagged as a FAIL in the 2026-09-09 eight-item check
+("both progress labels should be white") because an earlier instruction asked for the two in-bar
+percentage labels (Careem %, Talabat %) to be recoloured white to match.
+
+They were **deliberately removed, not recoloured.** The progress track is 10px tall (`h-2.5`); the
+labels were 9px text inside it, which never read acceptably at any colour. The per-platform
+percentages now live in the table rows directly below the bar (`Careem 178 / 410 43%`,
+`Talabat 183 / 590 31%`) at a readable size, so no information is lost. The bar is now two bare
+coloured segments (`--careem` / `--talabat` fills) plus a pace marker, with zero text nodes.
+
+Confirmed the right call by the reporter. If a future check looks for coloured "%" text inside the
+pace progress bar, there is intentionally none: read the table rows beneath it instead.
