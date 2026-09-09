@@ -5,12 +5,14 @@ import { EXPLAINERS } from "@/lib/explainers";
 export function InfoTip({
   id,
   side = "top",
-  className = "text-muted-foreground/50 hover:text-muted-foreground focus-visible:text-foreground",
+  className = "text-muted-foreground hover:text-foreground focus-visible:text-foreground",
 }: {
   id: string;
   side?: "top" | "bottom" | "left" | "right";
-  /** Colour classes for the glyph. Override on dark surfaces (the pace bar) where the default
-   *  muted-foreground is near-invisible. */
+  /** Colour classes for the glyph. The default (full muted-foreground) rasterises to ~#5c6b6b, which
+   *  clears the 3:1 non-text floor on the white/cream cards and pills it sits on (5.6:1 on white). The
+   *  earlier default carried a /50 alpha and dropped to ~2:1, effectively invisible. Override on dark
+   *  surfaces (the pace bar) where a dark glyph would vanish; those pass a light token instead. */
   className?: string;
 }) {
   const exp = EXPLAINERS[id];

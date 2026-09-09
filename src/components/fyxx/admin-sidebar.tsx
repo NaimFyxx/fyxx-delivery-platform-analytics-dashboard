@@ -139,21 +139,17 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
           </div>
       </aside>
 
-      {/* Mobile: one sticky strip, stacked as a thin utility row (sign out) above a full-width tab row.
-          The logo is dropped on mobile: with a logo (~47px) and a sign-out (~40px) both sitting in the
-          tab row, the scrollable track fell to 283px and only two of five tabs stayed fully visible.
-          Pulling both out of the track and giving the tabs the whole 390px restores four fully-visible
-          tabs (Overview, Insights, Financials, Items); "Data entry" scrolls in behind the right-edge
-          fade. Sticky top-0 so the nav stays reachable while scrolling a long page (its containing block
-          is the page root, which scrolls with the window, so this pins correctly). */}
+      {/* Mobile: one sticky nav row, full viewport width. The logo is dropped on mobile: with a logo
+          (~47px) and a sign-out (~40px) flanking the tabs, the scrollable track fell to 283px and only
+          two of five tabs stayed fully visible. Giving the tabs the whole 390px restores four fully-
+          visible tabs (Overview, Insights, Financials, Items). Sign out and "Data entry" live at the far
+          right of the same horizontal scroll, behind the right-edge fade, so neither steals width from
+          the four visible tabs and Sign out costs no extra header height (a dedicated row cost 32px, a
+          net regression). Sticky top-0 so the nav stays reachable while scrolling a long page (its
+          containing block is the page root, which scrolls with the window, so this pins correctly). */}
       <div className="md:hidden sticky top-0 z-50 border-b border-border bg-sidebar">
-        <div className="flex items-center justify-end px-2 py-0.5">
-          <Button size="sm" variant="ghost" onClick={onSignOut} className="h-7 gap-1.5 px-2 text-xs text-sidebar-foreground/80">
-            <LogOut className="size-4" /> Sign out
-          </Button>
-        </div>
         <div className="relative">
-          <div className="flex overflow-x-auto gap-1 px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center overflow-x-auto gap-1 px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {NAV_GROUPS
               .map((group) => group.items.filter((i) => i.mobile))
               .filter((items) => items.length > 0)
@@ -172,6 +168,12 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
                   ))}
                 </div>
               ))}
+            {/* Sign out rides at the end of the same scroll track, after a divider, so it is inline on
+                the nav row without consuming any of the four visible tabs' width. */}
+            <div className="w-px h-5 bg-sidebar-border/60 mx-1 shrink-0" />
+            <Button size="sm" variant="ghost" onClick={onSignOut} className="shrink-0 h-7 gap-1.5 px-2 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent">
+              <LogOut className="size-4" /> Sign out
+            </Button>
           </div>
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-sidebar to-transparent" />
         </div>
