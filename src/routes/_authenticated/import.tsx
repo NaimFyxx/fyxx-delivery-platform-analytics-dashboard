@@ -843,6 +843,23 @@ function CsvFlow({
   const [resolutions, setResolutions] = useState<Record<string, Resolution>>({});
   // Required fields whose expected header wasn't found — the ONLY thing the user maps by hand.
   const [manualFields, setManualFields] = useState<FieldDef[]>([]);
+  // Desktop drag-and-drop onto the already-selected slot. A dropped file does exactly what choosing
+  // one does (onFile); nothing about slots, mapping or parsing changes.
+  const [dragOver, setDragOver] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    if (files.length > 1) { setDropError("One file at a time."); return; }
+    const f = files[0];
+    const isCsv = f.type === "text/csv" || f.name.toLowerCase().endsWith(".csv");
+    if (!isCsv) { setDropError(`That is not a CSV: "${f.name}". Drop a .csv file.`); return; }
+    setDropError(null);
+    onFile(f);
+  }
 
   /** Build the preview from explicit values (so we can run it before React state settles). */
   async function buildPreviewWith(
@@ -1098,23 +1115,51 @@ function CsvFlow({
             </div>
             <div>
               <Label className="text-xs">CSV file</Label>
-              <div className="mt-1.5 flex items-center gap-3">
-                <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card hover:bg-accent text-sm">
-                  <Upload className="size-4" />
-                  {file ? "Replace file" : "Choose CSV"}
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-                {file && (
+              {(() => {
+                const chooseBtn = (
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card hover:bg-accent text-sm">
+                    <Upload className="size-4" />
+                    {file ? "Replace file" : "Choose CSV"}
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                );
+                const chosen = file && (
                   <span className="text-sm text-muted-foreground">
                     {file.name} · {rawRows.length} rows
                   </span>
-                )}
-              </div>
+                );
+                return (
+                  <>
+                    {/* Desktop: a drop zone onto this slot, with the button kept inside it. Dropping a
+                        file does exactly what choosing one does. Drag does not exist on phones, so the
+                        mobile control below is just the button. */}
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+                      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+                      onDrop={handleDrop}
+                      className={`hidden md:flex mt-1.5 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-5 text-center transition-colors ${dragOver ? "border-primary bg-accent" : "border-border bg-muted/20"}`}
+                    >
+                      <Upload className="size-5 text-muted-foreground" />
+                      <div className="text-sm text-muted-foreground">
+                        {dragOver ? `Drop to upload into ${report.label}` : "Drag a CSV here, or"}
+                      </div>
+                      {chooseBtn}
+                      {chosen}
+                    </div>
+                    {/* Mobile: just the button. */}
+                    <div className="md:hidden mt-1.5 flex items-center gap-3">
+                      {chooseBtn}
+                      {chosen}
+                    </div>
+                    {dropError && <p className="mt-2 text-xs font-medium text-destructive">{dropError}</p>}
+                  </>
+                );
+              })()}
             </div>
           </Card>
 
