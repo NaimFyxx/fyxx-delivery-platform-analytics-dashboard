@@ -151,8 +151,10 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
-    /* Keep window-scrolled (guest) content clear of the fixed pace bar. */
-    padding-bottom: var(--pace-bar-pad, 0px);
+    /* The pace-bar reservation lives on each scrolling CONTENT column (the admin <main>), not here.
+       Reserving it on body shrank the body content box, which clamped the sticky full-height sidebar
+       and left a bar-height cream gap beneath it. The bar sits beside the sidebar, so the sidebar
+       needs no reservation; only content the bar can overlap does. */
   }
 
   h1, h2, h3, h4 {

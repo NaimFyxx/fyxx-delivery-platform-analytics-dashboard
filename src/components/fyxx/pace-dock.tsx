@@ -111,8 +111,12 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
   return (
     <div
       ref={barRef}
-      className="fixed right-0 bottom-0 z-[70] px-4 py-2.5 md:px-6 md:py-3 text-[var(--cream)]"
-      style={{ left: "var(--pace-bar-left)", background: "#092727", boxShadow: "0 -3px 22px rgba(9,39,39,.2)" }}
+      className="fixed right-0 bottom-0 z-[70] px-4 py-2.5 md:px-6 md:py-3"
+      // The bar sits on dark green, so its text must be cream. --cream was never defined, so the old
+      // text-[var(--cream)] resolved to nothing and any span without its own colour (Talabat, Careem,
+      // the Day badge) fell back to the inherited #092727 foreground and rendered dark on dark.
+      // --primary-foreground is the defined cream-on-dark-green token; set it here so it cascades.
+      style={{ left: "var(--pace-bar-left)", background: "#092727", color: "var(--primary-foreground)", boxShadow: "0 -3px 22px rgba(9,39,39,.2)" }}
     >
       <div className="flex items-center gap-2.5 flex-wrap">
         <span className="font-display text-[15px] whitespace-nowrap" style={{ color: "#f4efe7" }}>{monthLong}</span>

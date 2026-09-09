@@ -85,6 +85,13 @@ describe("Pace bar renders the base/stretch badge", () => {
     expect(screen.getByText("120%")).toBeInTheDocument(); // percent of base, not stretch
     expect(screen.getByText("1,000")).toBeInTheDocument(); // base value
     expect(screen.getByText("1,150")).toBeInTheDocument(); // stretch value
+    // The Talabat/Careem figures render, and the bar sets an explicit cream text colour on a defined
+    // token (not the undefined --cream that made those spans dark-on-dark). Guards that regression.
+    expect(screen.getByText("Talabat")).toBeInTheDocument();
+    expect(screen.getByText("Careem")).toBeInTheDocument();
+    const bar = document.querySelector(".fixed.bottom-0") as HTMLElement;
+    expect(bar.style.color).toBe("var(--primary-foreground)");
+    expect(bar.className).not.toContain("--cream");
   });
 });
 
