@@ -10,16 +10,24 @@ The rule is simple:
 
 ## The tokens
 
-| Token | Value | Use |
-|---|---|---|
-| `--talabat` | `#FF5A00` | fills, any background |
-| `--talabat-text` | `#993d00` | text on light backgrounds (white / cream cards) |
-| `--talabat-dark-bg` | `#FF8A3D` | text and accents on dark surfaces (the dark insight panels) |
-| `--careem` | `#00493E` | fills, and text on light backgrounds |
-| `--careem-dark-bg` | `#00E784` | text and accents on dark surfaces |
+| Token | Value | Use | Provenance |
+|---|---|---|---|
+| `--talabat` | `#FF5A00` | fills, any background | Talabat brand orange (official) |
+| `--talabat-text` | `#993d00` | text on light backgrounds (white / cream cards) | **INVENTED** (darkened `#FF5A00`, == `--series-3`) |
+| `--talabat-dark-bg` | `#FF8A3D` | text and accents on dark surfaces (the dark insight panels) | **INVENTED** (lifted `#FF5A00`) |
+| `--careem` | `#00493E` | fills, and text on light backgrounds | Careem Forest Green, Pantone 560C (official) |
+| `--careem-dark-bg` | `#00E784` | text and accents on dark surfaces | Careem Green, Pantone 7479C (official, partner guidelines) |
 
 Each is registered in `@theme inline` (so a `text-*` / `bg-*` utility exists) and defined in `:root` in
 `src/styles.css`.
+
+**On provenance.** The two Careem values are both official Careem colours from Careem's partner
+guidelines (Pantone 560C and 7479C), so on a dark surface Careem is still rendered in a real Careem
+colour. The two Talabat variants are **invented**: Talabat publishes only the one orange (`#FF5A00`),
+so `--talabat-text` and `--talabat-dark-bg` are derived by darkening / lifting it for legibility, not
+sanctioned brand values. **If Talabat ever publishes an official secondary orange, replace
+`--talabat-dark-bg` (and reconsider `--talabat-text`) with it.** Both are used only where the brand
+`#FF5A00` would be unreadable, so the official orange still appears everywhere it can.
 
 ## Why each variant exists (measured)
 
@@ -29,13 +37,18 @@ Each is registered in `@theme inline` (so a `text-*` / `bg-*` utility exists) an
 - **On the dark insight panels**, the accent sits in a stat inset. `--careem` `#00493E` there is ~2.6:1
   (dark on dark) and `--talabat` `#FF5A00` is ~2.8-4.6:1. The dark-surface variants fix this:
   `--careem-dark-bg` `#00E784` reads ~8:1 and `--talabat-dark-bg` `#FF8A3D` reads ~6:1 on a dark inset.
-- `--careem-dark-bg` `#00E784` is an official Careem colour (Pantone 7479C). `--talabat-dark-bg`
-  `#FF8A3D` is a lifted amber-orange with no official equivalent, but it stays in the Talabat orange
-  family and is used only where the brand `#FF5A00` would be unreadable.
 
 Note the dark-panel stat inset must itself be **dark** (`bg-black/20`, not a cream `bg-background/40`
 veil) for the dark-surface variants to land on a dark background. A light veil over a dark panel
 composites to a sage/tan mid-tone where no brand colour clears the floor.
+
+**Always measure the composited pixel, not the declared background.** A semi-transparent overlay
+(`bg-background/40`, `bg-white/5`, `bg-black/20`, any `/NN`) composites with whatever is behind it, so
+the colour a foreground actually sits on is not the value written in the CSS. Here the inset declared a
+dark panel but rendered as a sage/tan mid-tone, which inverted the fix: pointing the Careem accent at
+`--careem-dark-bg` on the *declared* dark background would have taken it from ~2.6:1 to ~2.4:1 (worse),
+not to ~8:1. Rasterise the element and sample the pixel (or composite the layers by hand) before
+trusting a contrast number over any translucent surface.
 
 ## Why this file exists
 
