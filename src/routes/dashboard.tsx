@@ -1186,7 +1186,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
         </div>
         <div className="h-full transition-all relative group" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }}>
           {segCappedTalabat > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-black/80 pointer-events-none">{Math.round(segCappedTalabat)}%</span>
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-white pointer-events-none">{Math.round(segCappedTalabat)}%</span>
           )}
         </div>
       </div>
