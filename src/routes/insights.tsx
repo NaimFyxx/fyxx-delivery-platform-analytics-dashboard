@@ -228,34 +228,6 @@ export function InsightsPage() {
     };
   }, [customerRows, platform, rangeMonths]);
 
-  // --- Freshness lookups from import_log ---
-  const freshness = useMemo(() => {
-    const find = (predicate: (i: { platform: string; reportType: string }) => boolean) => {
-      const row = data?.imports.find(predicate);
-      return row
-        ? new Date(row.importedAt).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })
-        : null;
-    };
-    const dailyTypes = [
-      "talabat:performance",
-      "careem:order_level",
-      "careem:plus_customers",
-    ];
-    const itemTypes = ["talabat:order_report", "careem:menu_item"];
-    const finTypes = ["talabat:order_report", "careem:order_level", "careem:adjustments"];
-    return {
-      daily: find(
-        (i) => dailyTypes.includes(i.reportType) && (platform === "All" || i.platform === platform),
-      ),
-      items: find((i) => itemTypes.includes(i.reportType)),
-      invoice: find((i) => finTypes.includes(i.reportType)),
-    };
-  }, [data, platform]);
-
   if (!sessionChecked || isLoading || !data) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
@@ -322,7 +294,6 @@ export function InsightsPage() {
           <TierCard
             title="Careem+ vs Regular"
             sub="Plus vs regular customer mix (daily counts)"
-            asOf={freshness.daily}
             bg="linear-gradient(135deg, #0a3d2b, #0f5c3e)"
           >
             {!careemMix || !careemMix.has ? (
@@ -334,7 +305,6 @@ export function InsightsPage() {
           <TierCard
             title="Talabat Pro"
             sub="Pro subscriber share for Talabat orders"
-            asOf={freshness.daily}
             bg="linear-gradient(135deg, #5c1f00, #8a2f00)"
           >
             {!talabatTiers ? (
@@ -351,8 +321,7 @@ export function InsightsPage() {
         <SectionLabel>Promotions &amp; Ad Spend</SectionLabel>
         <Panel
           title="Promotions & ad spend"
-          sub="Customer promos, paid ads, promo sharing & loyalty subsidy vs net margin"
-          asOf={freshness.invoice}
+          sub="Spend by type vs net margin"
         >
           {!promo || !promo.hasData ? (
             <Empty text="No promo or ad spend recorded for this range." />
@@ -428,12 +397,12 @@ export function InsightsPage() {
         )}
         {platform === "All" ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
-            <CustomerPanel platform="Careem" series={makeCustomerSeries("Careem")} freshness={freshness.daily} />
-            <CustomerPanel platform="Talabat" series={makeCustomerSeries("Talabat")} freshness={freshness.daily} />
+            <CustomerPanel platform="Careem" series={makeCustomerSeries("Careem")} />
+            <CustomerPanel platform="Talabat" series={makeCustomerSeries("Talabat")} />
           </div>
         ) : (
           <div className="mb-2">
-            <CustomerPanel platform={platform} series={makeCustomerSeries(platform)} freshness={freshness.daily} />
+            <CustomerPanel platform={platform} series={makeCustomerSeries(platform)} />
           </div>
         )}
         {!customerKpi && !data.customers.length && (
@@ -456,7 +425,6 @@ export function InsightsPage() {
               ? "Ranked by revenue (JOD) from popular-dishes / gross-breakdown imports."
               : "Ranked by units, no revenue values imported yet. Re-import with the Revenue column mapped to populate."
           }
-          asOf={freshness.items}
         >
           <div className="h-[320px]">
             {topProducts.length === 0 ? (
@@ -514,8 +482,6 @@ export function InsightsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 mb-2">
           <Panel
             title="Revenue by category"
-            sub="Total item revenue (JOD) per category for this range and platform. Unassigned items roll up under Uncategorised."
-            asOf={freshness.items}
           >
             <div className="h-[300px]">
               {revenueByCategory.length === 0 ? (
@@ -543,8 +509,6 @@ export function InsightsPage() {
 
           <Panel
             title="Units by category"
-            sub="Total units sold per category for this range and platform. Unassigned items roll up under Uncategorised."
-            asOf={freshness.items}
           >
             <div className="h-[300px]">
               {unitsByCategory.length === 0 ? (
@@ -576,7 +540,6 @@ export function InsightsPage() {
         <Panel
           title="Per-item breakdown"
           sub="Units, revenue, avg price, COGS, product margin (menu price), and net margin (allocated payout). Tap a column to sort."
-          asOf={freshness.items}
         >
           {items.length === 0 ? (
             <Empty text="No item-level data for this range." />
@@ -724,12 +687,10 @@ function ThSort({
 function Panel({
   title,
   sub,
-  asOf,
   children,
 }: {
   title: string;
   sub?: string;
-  asOf: string | null;
   children: React.ReactNode;
 }) {
   return (
@@ -739,9 +700,6 @@ function Panel({
           <h3 className="font-display text-[15px] font-semibold">{title}</h3>
           {sub && <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
         </div>
-        <span className="text-[12px] md:text-[10px] text-muted-foreground whitespace-nowrap">
-          Imported on {asOf ?? "-"}
-        </span>
       </div>
       {children}
     </div>
@@ -751,13 +709,11 @@ function Panel({
 function TierCard({
   title,
   sub,
-  asOf,
   children,
   bg,
 }: {
   title: string;
   sub?: string;
-  asOf: string | null;
   children: React.ReactNode;
   bg?: string;
 }) {
@@ -771,9 +727,6 @@ function TierCard({
           <h3 className="font-display text-[15px] font-semibold text-white">{title}</h3>
           {sub && <div className="text-[12px] md:text-[10.5px] text-white/60 mt-0.5">{sub}</div>}
         </div>
-        <span className="text-[12px] md:text-[10px] text-white/50 whitespace-nowrap">
-          Imported on {asOf ?? "-"}
-        </span>
       </div>
       {children}
     </div>
@@ -1128,11 +1081,9 @@ type CustomerSeriesRow = {
 function CustomerPanel({
   platform,
   series,
-  freshness,
 }: {
   platform: string;
   series: CustomerSeriesRow[];
-  freshness: string | null;
 }) {
   if (!series.length) {
     return (
@@ -1158,9 +1109,6 @@ function CustomerPanel({
             Basis: <span className="font-medium">{yLabel}</span> · New vs Returning per month
           </div>
         </div>
-        <span className="text-[12px] md:text-[10px] text-muted-foreground whitespace-nowrap">
-          Imported on {freshness ?? "-"}
-        </span>
       </div>
 
       <div className="h-[220px]">

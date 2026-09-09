@@ -553,7 +553,7 @@ export function PublicDashboard() {
         )}
 
         <SectionLabel>Analytics · Controlled by the Range &amp; Platform Filters Above</SectionLabel>
-        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform" footnote="Careem shown on food-basket basis (your revenue), ~11% below Careem's GMV headline. See tooltip.">
+        <ChartCard title="Sales by Platform" sub={rangeIsSingleMonth ? "Daily gross sales incl VAT" : "Gross sales incl VAT"} infoId="chart_sales_by_platform" footnote="Careem shown on food-basket basis (your revenue), ~11% below Careem's GMV headline.">
           {chartData.some((d) => (Number(d.Talabat) || 0) + (Number(d.Careem) || 0) > 0) ? (
           <ResponsiveContainer>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -584,6 +584,8 @@ export function PublicDashboard() {
           <SectionLabel>Total Sales · Monthly</SectionLabel>
           <ChartCard
             title="Total sales over time"
+            allTime
+            infoId="chart_total_sales"
             action={
               salesFloorNow ? (
                 <div className="text-[11px] text-muted-foreground text-right leading-tight">
@@ -592,11 +594,7 @@ export function PublicDashboard() {
                 </div>
               ) : undefined
             }
-            sub={
-              platform === "All"
-                ? "Combined monthly gross incl VAT (Talabat + Careem), full monthly history, not affected by the date filter above. The 3-month floor is the lowest total across each month and the two before it; a yellow point marks where that floor steps up."
-                : `${platform} monthly gross incl VAT, full monthly history, not affected by the date filter above. The 3-month floor is the lowest total across each month and the two before it; a yellow point marks where that floor steps up.`
-            }
+            sub={platform === "All" ? "Combined monthly gross incl VAT (Talabat + Careem)" : `${platform} monthly gross incl VAT`}
           >
             <ResponsiveContainer>
               <LineChart data={salesTrend} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -624,7 +622,8 @@ export function PublicDashboard() {
             <SectionLabel>Margin Trend · Monthly</SectionLabel>
             <ChartCard
               title="Margin over Time"
-              sub="Product → After commission → Net margin. Full monthly history; not affected by the date filter above"
+              allTime
+              sub="Product → After commission → Net margin"
               infoId="chart_margin_trend"
               action={
                 marginTrend.some((d) => d.netTrail !== null) ? (
@@ -681,7 +680,8 @@ export function PublicDashboard() {
             <SectionLabel>Order Volume Trend · Monthly</SectionLabel>
             <ChartCard
               title="Order Volume Trend"
-              sub="Avg orders/day (left) vs avg sales/day JOD (right), full history; not affected by the date filter above"
+              allTime
+              sub="Avg orders/day (left) vs avg sales/day JOD (right)"
               infoId="chart_order_volume"
               action={
                 orderVolumeTrend.some((d) => d.ordersTrail !== null) ? (
@@ -724,26 +724,28 @@ export function PublicDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
-          <ChartCard title="The Commission Drag" sub="Margin points lost to platform fees and discounts" infoId="chart_commission_drag">
-            {rangeIsSingleMonth ? (
-              <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                {singleMonthDrag != null ? (
-                  <>
-                    <div className="font-display text-[46px] font-bold leading-none" style={{ color: "var(--foreground)" }}>
-                      {singleMonthDrag.toFixed(1)}<span className="text-[20px] font-semibold text-muted-foreground ml-1">pts</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-3">
-                      Commission drag in {new Date(rangeMonths[0] + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" })}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-1.5 max-w-xs leading-relaxed">
-                      Product margin minus net margin. It is one figure for the month and does not vary by day. Pick a wider range to see it move month to month.
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground">No data for this month.</div>
-                )}
-              </div>
-            ) : (
+          {rangeIsSingleMonth ? (
+            // Single month: one figure, not a chart. Render it as a stat card, not an empty chart
+            // card. The "it does not vary by day, pick a wider range" note lives behind the info icon.
+            <div className="bg-card border border-border rounded-2xl p-4">
+              <h3 className="font-display text-[15px] font-semibold flex items-center gap-x-1">
+                The Commission Drag<InfoTip id="chart_commission_drag" side="bottom" />
+              </h3>
+              {singleMonthDrag != null ? (
+                <div className="mt-3">
+                  <div className="font-display text-[40px] font-bold leading-none" style={{ color: "var(--foreground)" }}>
+                    {singleMonthDrag.toFixed(1)}<span className="text-[18px] font-semibold text-muted-foreground ml-1">pts</span>
+                  </div>
+                  <div className="text-[12px] md:text-[11px] text-muted-foreground mt-2">
+                    Margin points lost to platform fees and discounts in {new Date(rangeMonths[0] + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" })}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground mt-3">No data for this month.</div>
+              )}
+            </div>
+          ) : (
+            <ChartCard title="The Commission Drag" sub="Margin points lost to platform fees and discounts" infoId="chart_commission_drag">
               <ResponsiveContainer>
                 <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                   <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -754,8 +756,8 @@ export function PublicDashboard() {
                   <Bar isAnimationActive={false} dataKey="drag" fill="var(--series-3)" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            )}
-          </ChartCard>
+            </ChartCard>
+          )}
         </div>
         </>
         )}
@@ -959,16 +961,19 @@ export function Kpi({
   );
 }
 
-function ChartCard({ title, sub, children, action, infoId, footnote }: { title: string; sub: string; children: React.ReactNode; action?: React.ReactNode; infoId?: string; footnote?: React.ReactNode }) {
+function ChartCard({ title, sub, children, action, infoId, footnote, allTime }: { title: string; sub?: string; children: React.ReactNode; action?: React.ReactNode; infoId?: string; footnote?: React.ReactNode; allTime?: boolean }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-4">
       <div className="flex items-start justify-between gap-2 mb-0.5">
-        <h3 className="font-display text-[15px] font-semibold flex items-center">
-          {title}{infoId && <InfoTip id={infoId} side="bottom" />}
+        <h3 className="font-display text-[15px] font-semibold flex items-center flex-wrap gap-x-1">
+          {title}
+          {/* "all time" chip replaces the repeated "not affected by the date filter above" prose. */}
+          {allTime && <span className="inline-flex items-center rounded-full bg-background border border-border px-1.5 py-0.5 text-[11px] md:text-[9px] font-medium text-muted-foreground">all time</span>}
+          {infoId && <InfoTip id={infoId} side="bottom" />}
         </h3>
         {action}
       </div>
-      <div className="text-[12px] md:text-[10.5px] text-muted-foreground mb-3">{sub}</div>
+      {sub && <div className="text-[12px] md:text-[10.5px] text-muted-foreground mb-3">{sub}</div>}
       <div className="h-[230px]">{children}</div>
       {footnote && <div className="text-[12px] md:text-[10px] text-muted-foreground/80 mt-2 leading-snug">{footnote}</div>}
     </div>

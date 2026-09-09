@@ -223,6 +223,12 @@ export const EXPLAINERS: Record<string, Explainer> = {
       "Gross sales (incl VAT) per platform: monthly bars over the selected range, daily view when a single month is chosen.",
     note: CAREEM_BASKET_NOTE,
   },
+  chart_total_sales: {
+    label: "Total sales over time",
+    meaning:
+      "Combined monthly gross incl VAT (or the selected platform), across the full monthly history. This chart ignores the date filter above. The 3-month floor is the lowest monthly total across each month and the two before it; a yellow point marks where that floor steps up.",
+    note: CAREEM_BASKET_NOTE,
+  },
   chart_margin_trend: {
     label: "Margin over Time",
     meaning:
