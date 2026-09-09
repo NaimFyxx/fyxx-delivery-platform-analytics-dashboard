@@ -168,7 +168,7 @@ export function Financials() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Month</TableHead>
+                <TableHead className="sticky left-0 z-20 bg-card border-r border-border">Month</TableHead>
                 <TableHead>Platform</TableHead>
                 <TableHead className="text-right"><span className="inline-flex items-center">Gross (incl. VAT)<InfoTip id="sales_incl_vat" side="bottom" /></span></TableHead>
                 <TableHead className="text-right"><span className="inline-flex items-center">Discount<InfoTip id="discount" side="bottom" /></span></TableHead>
@@ -185,7 +185,7 @@ export function Financials() {
                 const r = d.r;
                 return (
                   <TableRow key={`${r.month}-${r.platform}`}>
-                    <TableCell className="font-medium">{r.month}</TableCell>
+                    <TableCell className="font-medium sticky left-0 z-10 bg-card border-r border-border">{r.month}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={platformBg(r.platform as Platform)}>
                         {r.platform}
