@@ -181,7 +181,7 @@ export function AddProductDialog({
               <Label className="text-xs">Item name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Grilled Halloumi" autoFocus />
               {isDuplicate && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs text-warning-text">
                   This item already exists. Edit its cost, price or category from Data entry or the Items page instead.
                 </p>
               )}
@@ -214,7 +214,7 @@ export function AddProductDialog({
                 </label>
               </div>
               {selected.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">Pick at least one platform.</p>
+                <p className="text-xs text-warning-text">Pick at least one platform.</p>
               )}
             </div>
 

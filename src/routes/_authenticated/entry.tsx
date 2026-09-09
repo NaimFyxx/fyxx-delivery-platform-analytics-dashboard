@@ -218,7 +218,7 @@ function DailySalesForm() {
                   <button
                     type="button"
                     onClick={() => setFillPrompt({ platform: p, last: last!, missing: [...datesBetween(last!, today), today] })}
-                    className="ml-2 rounded border border-amber-500/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 transition-colors"
+                    className="ml-2 rounded border border-amber-500/50 px-1.5 py-0.5 text-[10px] font-semibold text-warning-text hover:bg-amber-500/10 transition-colors"
                   >
                     Fill 0s to today
                   </button>

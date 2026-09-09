@@ -687,7 +687,7 @@ function CoverageMatrix({
                       <Badge
                         variant="outline"
                         title="The current month isn't finished. These figures are partial."
-                        className="bg-amber-500/10 text-amber-800 border-amber-500/30 text-[10px]"
+                        className="bg-amber-500/10 text-warning-text border-amber-500/30 text-[10px]"
                       >
                         In progress
                       </Badge>
@@ -749,7 +749,7 @@ function CompletenessPanel({
           <div className="flex items-center gap-2">
             <div className="text-sm font-semibold">Monthly completeness</div>
             {isCurrent && (
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-800 border-amber-500/30 text-[10px]">
+              <Badge variant="outline" className="bg-amber-500/10 text-warning-text border-amber-500/30 text-[10px]">
                 In progress
               </Badge>
             )}
@@ -1262,7 +1262,7 @@ function CsvFlow({
             </div>
           )}
           {preview.warnings?.map((w, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+            <div key={i} className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-warning-text">
               <AlertCircle className="size-4 shrink-0 mt-0.5" />
               <span>{w}</span>
             </div>
@@ -1412,7 +1412,7 @@ function UnrecognizedPanel({
 
   return (
     <div className="rounded-md border border-amber-500/40 bg-amber-500/8 p-4 space-y-3">
-      <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+      <div className="flex items-center gap-2 text-xs font-semibold text-warning-text">
         <AlertCircle className="size-4 shrink-0" />
         {unresolvedCount > 0
           ? `${unresolvedCount} unrecognized product${unresolvedCount > 1 ? "s" : ""} , resolve before confirming`

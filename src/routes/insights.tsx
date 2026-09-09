@@ -377,7 +377,7 @@ export function InsightsPage() {
                 {Math.round(customerKpi.totalReturning).toLocaleString()} returning /{" "}
                 {Math.round(customerKpi.totalReturning + customerKpi.totalNew).toLocaleString()} total
                 {customerKpi.hasMultipleBases && (
-                  <span className="block mt-0.5 text-amber-600 dark:text-amber-400">
+                  <span className="block mt-0.5 text-warning-text">
                     Careem = customers · Talabat = orders. KPI shown for informational comparison only.
                   </span>
                 )}

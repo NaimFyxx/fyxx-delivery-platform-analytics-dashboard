@@ -133,6 +133,29 @@ export default tseslint.config(
           message:
             "Do not put alpha on an ink foreground used as text (text-<token>/NN in a template className): it fails the 4.5:1 contrast floor on light surfaces. Use the solid token, e.g. text-muted-foreground.",
         },
+        // The raw-Tailwind-text-colour wall. Text colours must be design tokens, never a raw Tailwind
+        // palette utility (text-amber-600, text-red-500, text-slate-400, ...): those are untuned for
+        // this theme and drift into contrast failures the way Tailwind amber-600 (#E17100) did in eight
+        // places (2.7-3.3:1 as warning text on light). Use a semantic token: text-warning-text for
+        // warnings, text-destructive / text-success for status, text-muted-foreground for secondary,
+        // the platform tokens, etc. A numeric shade is the tell: semantic tokens (text-muted-foreground,
+        // text-warning-text, text-careem) never end in "-<number>", so this matches only palette
+        // utilities and leaves them alone. Backgrounds and borders (bg-*/border-<palette>-<shade>) are
+        // NOT matched, only text-*; variant prefixes (dark:, hover:, md:) are caught by the substring
+        // match. Known outstanding violation: targets.tsx uses text-amber-600 and is on the do-not-touch
+        // list; it needs text-warning-text when that file is next opened.
+        {
+          selector:
+            "Literal[value=/text-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-[0-9]/]",
+          message:
+            "Use a semantic colour token for text, not a raw Tailwind palette utility (e.g. text-warning-text, text-destructive, text-success, text-muted-foreground), so text colour stays tuned for contrast and cannot drift. See src/styles.css and docs/platform-colours.",
+        },
+        {
+          selector:
+            "TemplateElement[value.raw=/text-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-[0-9]/]",
+          message:
+            "Use a semantic colour token for text, not a raw Tailwind palette utility (template className), e.g. text-warning-text / text-destructive / text-muted-foreground. See src/styles.css.",
+        },
       ],
     },
   },

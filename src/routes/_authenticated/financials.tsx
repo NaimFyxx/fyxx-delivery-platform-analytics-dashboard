@@ -280,7 +280,7 @@ function AnomalyNote({ gross, discount, payout, cogs }: { gross: number; discoun
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center justify-center text-amber-500 hover:text-amber-600 rounded-full focus:outline-none"
+          className="inline-flex items-center justify-center text-warning-text rounded-full focus:outline-none"
           aria-label="Payout anomaly explanation"
           onMouseEnter={() => { cancelClose(); setOpen(true); }}
           onMouseLeave={scheduleClose}
@@ -296,7 +296,7 @@ function AnomalyNote({ gross, discount, payout, cogs }: { gross: number; discoun
         onMouseLeave={scheduleClose}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <p className="font-semibold text-[13px] mb-1.5 text-amber-600">Payout wiped out this month.</p>
+        <p className="font-semibold text-[13px] mb-1.5 text-warning-text">Payout wiped out this month.</p>
         <p className="text-muted-foreground">
           Gross was <span className="text-foreground font-medium">{fmtJOD(gross)}</span>, but after
           partner-funded promos (<span className="text-foreground font-medium">{fmtJOD(discount)}</span>),

@@ -464,7 +464,7 @@ function Items() {
                 </TableCell>
                 <TableCell className="text-right text-num">
                   {r.lastCost == null
-                    ? <Badge variant="outline" className="text-[12px] md:text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/10">no cost</Badge>
+                    ? <Badge variant="outline" className="text-[12px] md:text-[10px] border-amber-500/40 text-warning-text bg-amber-500/10">no cost</Badge>
                     : fmtJOD(r.lastCost)}
                 </TableCell>
                 <TableCell className="text-right text-num">
@@ -601,7 +601,7 @@ function MergeItemsDialog({ names, dbAliases }: { names: string[]; dbAliases: Db
               </p>
             )}
             {targetIsAliased && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <p className="text-xs text-warning-text">
                 “{target}” is itself merged into another item. Pick the final canonical name instead.
               </p>
             )}
@@ -708,7 +708,7 @@ function DeleteItemDialog({
         </DialogHeader>
 
         {blocked ? (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-warning-text">
             <strong>{target?.label}</strong> has {salesCount} sales {salesCount === 1 ? "record" : "records"} in the
             history. Deleting it would corrupt historical reports, so it is kept. You can still change its cost,
             price or category from Data entry.
