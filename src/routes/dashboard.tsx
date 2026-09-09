@@ -9,6 +9,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { latestCoverageDate, freshnessLabel } from "@/lib/freshness";
 import { PaceSummaryLine } from "@/components/fyxx/pace-dock";
+import { ChevronUp } from "lucide-react";
 type DashboardData = NonNullable<Awaited<ReturnType<typeof getDashboardData>>>;
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
@@ -1113,6 +1114,11 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
             {monthTitle} · Combined
           </h3>
+          {/* Mobile-only collapse control: expanding replaces the summary strip with this card, so a
+              chevron here returns it to the strip. md:hidden keeps the desktop card byte-identical. */}
+          <button type="button" onClick={() => setExpanded(false)} aria-label="Collapse pace details" className="md:hidden inline-flex items-center justify-center text-muted-foreground">
+            <ChevronUp className="size-4" />
+          </button>
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] md:text-[10.5px] font-semibold bg-background/40 border border-border">
             <span className="text-muted-foreground">WD</span>
             <span style={{ color: "var(--primary)" }}>{pace.workingDay}</span>
@@ -1216,13 +1222,15 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
 
   return (
     <>
-      {/* MOBILE: collapse to the same summary line the bar uses; tap to expand the full card. The
-          summary sits on a dark green pill so the collapsed card and the collapsed bar look the same. */}
+      {/* MOBILE: collapsed is the same dark summary strip the bar uses; expanding REPLACES the strip
+          with the full card (it does not stack a second copy beneath it). The card's own md:hidden
+          chevron collapses it back. */}
       <div className="md:hidden">
-        <div className="rounded-2xl px-4 py-2.5 mb-4" style={{ background: "#092727", color: "var(--primary-foreground)" }}>
-          <PaceSummaryLine pace={pace} month={currentMonth} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
-        </div>
-        {expanded && cardBody}
+        {expanded ? cardBody : (
+          <div className="rounded-2xl px-4 py-2.5 mb-4" style={{ background: "#092727", color: "var(--primary-foreground)" }}>
+            <PaceSummaryLine pace={pace} month={currentMonth} expanded={false} onToggle={() => setExpanded(true)} />
+          </div>
+        )}
       </div>
       {/* DESKTOP: the full card, unchanged. */}
       <div className="hidden md:block">{cardBody}</div>

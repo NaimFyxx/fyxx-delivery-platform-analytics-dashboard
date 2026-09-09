@@ -346,11 +346,11 @@ export function InsightsPage() {
                       }
                     />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />
-                    <Bar yAxisId="left" dataKey="customerPromos" name="Customer promos" stackId="s" fill="var(--series-6)" />
-                    <Bar yAxisId="left" dataKey="paidAds" name="Paid ads" stackId="s" fill="var(--series-3)" />
-                    <Bar yAxisId="left" dataKey="promoSharing" name="Promo sharing" stackId="s" fill="var(--series-2)" />
-                    <Bar yAxisId="left" dataKey="loyaltySubsidy" name="Loyalty subsidy" stackId="s" fill="var(--series-4)" radius={[3, 3, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="var(--series-1)" strokeWidth={2} dot={{ fill: "var(--series-1)", r: 3 }} connectNulls={false} />
+                    <Bar isAnimationActive={false} yAxisId="left" dataKey="customerPromos" name="Customer promos" stackId="s" fill="var(--series-6)" />
+                    <Bar isAnimationActive={false} yAxisId="left" dataKey="paidAds" name="Paid ads" stackId="s" fill="var(--series-3)" />
+                    <Bar isAnimationActive={false} yAxisId="left" dataKey="promoSharing" name="Promo sharing" stackId="s" fill="var(--series-2)" />
+                    <Bar isAnimationActive={false} yAxisId="left" dataKey="loyaltySubsidy" name="Loyalty subsidy" stackId="s" fill="var(--series-4)" radius={[3, 3, 0, 0]} />
+                    <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="netMargin" name="Net margin %" stroke="var(--series-1)" strokeWidth={2} dot={{ fill: "var(--series-1)", r: 3 }} connectNulls={false} legendType={rangeMonths.length <= 1 ? "none" : "line"} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -466,7 +466,7 @@ export function InsightsPage() {
                         : [`${v.toLocaleString()} units`, "Units"]
                     }
                   />
-                  <Bar dataKey={anyRevenue ? "revenue" : "units"} radius={[0, 3, 3, 0]}>
+                  <Bar isAnimationActive={false} dataKey={anyRevenue ? "revenue" : "units"} radius={[0, 3, 3, 0]}>
                     {topProducts.map((_, i) => (
                       <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
                     ))}
@@ -496,7 +496,7 @@ export function InsightsPage() {
                       contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                       formatter={(v: number) => [`${Math.round(v).toLocaleString()} JOD`, "Revenue"]}
                     />
-                    <Bar dataKey="revenue" radius={[0, 3, 3, 0]}>
+                    <Bar isAnimationActive={false} dataKey="revenue" radius={[0, 3, 3, 0]}>
                       {revenueByCategory.map((_, i) => (
                         <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
                       ))}
@@ -523,7 +523,7 @@ export function InsightsPage() {
                       contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
                       formatter={(v: number) => [`${v.toLocaleString()} units`, "Units"]}
                     />
-                    <Bar dataKey="units" radius={[0, 3, 3, 0]}>
+                    <Bar isAnimationActive={false} dataKey="units" radius={[0, 3, 3, 0]}>
                       {unitsByCategory.map((_, i) => (
                         <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
                       ))}
@@ -1158,11 +1158,12 @@ function CustomerPanel({
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconSize={8}
             />
-            <Bar yAxisId="left" dataKey="new" name="New" stackId="a" fill="var(--series-6)" />
-            {showSplit && <Bar yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="var(--series-2)" />}
-            {showSplit && <Bar yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
-            {!showSplit && <Bar yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
+            <Bar isAnimationActive={false} yAxisId="left" dataKey="new" name="New" stackId="a" fill="var(--series-6)" />
+            {showSplit && <Bar isAnimationActive={false} yAxisId="left" dataKey="reactivated" name="Reactivated" stackId="a" fill="var(--series-2)" />}
+            {showSplit && <Bar isAnimationActive={false} yAxisId="left" dataKey="retained" name="Retained" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
+            {!showSplit && <Bar isAnimationActive={false} yAxisId="left" dataKey="returning" name="Returning" stackId="a" fill="var(--series-4)" radius={[3, 3, 0, 0]} />}
             <Line
+              isAnimationActive={false}
               yAxisId="right"
               type="monotone"
               dataKey="repeatRate"
@@ -1171,6 +1172,7 @@ function CustomerPanel({
               strokeWidth={2}
               dot={{ fill: "var(--series-1)", r: 3 }}
               connectNulls={false}
+              legendType={series.length <= 1 ? "none" : "line"}
             />
           </ComposedChart>
         </ResponsiveContainer>

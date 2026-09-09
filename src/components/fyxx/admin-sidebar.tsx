@@ -139,34 +139,39 @@ export function AdminSidebar({ email, onSignOut }: { email: string; onSignOut: (
           </div>
       </aside>
 
-      {/* Mobile: top strip nav (unchanged behavior; groups get a thin separator). */}
-      <div className="md:hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-sidebar">
-          <Link to="/dashboard">
-            <img src={tgrLogoLight} alt="The Green Room" className="h-7 w-auto" />
-          </Link>
-          <Button size="sm" variant="ghost" onClick={onSignOut}><LogOut className="size-4" /></Button>
+      {/* Mobile: one sticky strip. The old 57px dark bar (just a logo and a logout) is gone; the logo
+          moved in beside the nav and the logout to the right. Sticky top-0 so the nav stays reachable
+          while scrolling a long page (its containing block is the page root, which scrolls with the
+          window, so this pins correctly). A right-edge fade signals that the nav scrolls to reach
+          "Data entry". */}
+      <div className="md:hidden sticky top-0 z-50 flex items-center gap-1 px-2 py-2 border-b border-border bg-sidebar">
+        <Link to="/dashboard" className="shrink-0 mr-1">
+          <img src={tgrLogoLight} alt="The Green Room" className="h-7 w-auto" />
+        </Link>
+        <div className="relative flex-1 min-w-0">
+          <div className="flex overflow-x-auto gap-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {NAV_GROUPS
+              .map((group) => group.items.filter((i) => i.mobile))
+              .filter((items) => items.length > 0)
+              .map((items, gi) => (
+                <div key={gi} className="flex items-center gap-1 shrink-0">
+                  {gi > 0 && <div className="w-px h-5 bg-sidebar-border/60 mx-1 shrink-0" />}
+                  {items.map(({ to, label, icon: Icon }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className="flex items-center gap-2 whitespace-nowrap px-3 py-1.5 rounded-md text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:text-sidebar-foreground"
+                      activeProps={{ className: "active" }}
+                    >
+                      <Icon className="size-3.5" /> {label}
+                    </Link>
+                  ))}
+                </div>
+              ))}
+          </div>
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-sidebar to-transparent" />
         </div>
-        <div className="flex overflow-x-auto gap-1 px-2 py-2 border-b border-border bg-sidebar">
-          {NAV_GROUPS
-            .map((group) => group.items.filter((i) => i.mobile))
-            .filter((items) => items.length > 0)
-            .map((items, gi) => (
-              <div key={gi} className="flex items-center gap-1 shrink-0">
-                {gi > 0 && <div className="w-px h-5 bg-sidebar-border/60 mx-1 shrink-0" />}
-                {items.map(({ to, label, icon: Icon }) => (
-                  <Link
-                    key={to}
-                    to={to}
-                    className="flex items-center gap-2 whitespace-nowrap px-3 py-1.5 rounded-md text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent [&.active]:bg-sidebar-accent [&.active]:text-sidebar-foreground"
-                    activeProps={{ className: "active" }}
-                  >
-                    <Icon className="size-3.5" /> {label}
-                  </Link>
-                ))}
-              </div>
-            ))}
-        </div>
+        <Button size="sm" variant="ghost" onClick={onSignOut} className="shrink-0"><LogOut className="size-4" /></Button>
       </div>
     </>
   );

@@ -309,7 +309,7 @@ function PaceGear({ mode, open, setOpen, lifted }: {
       // Sit clear of the bar by tracking its measured height (--pace-bar-pad already includes a 10px
       // gap). Because it follows the real height, the collapsed mobile bar lifts the gear far less
       // than the old fixed 128px did, which also shrinks the Overview/Insights jump.
-      style={{ bottom: lifted ? "calc(env(safe-area-inset-bottom, 0px) + var(--pace-bar-pad, 0px) + 12px)" : "22px" }}
+      style={{ bottom: lifted ? "calc(env(safe-area-inset-bottom, 0px) + max(var(--pace-bar-pad, 0px), 44px) + 14px)" : "22px" }}
       onClick={(e) => e.stopPropagation()}
     >
       {open && (
