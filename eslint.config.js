@@ -108,6 +108,31 @@ export default tseslint.config(
           selector: "Property[key.name=/^(fill|stroke)$/] > Literal[value=/var\\(\\s*--(primary|foreground)\\b/]",
           message: "Do not use var(--primary)/var(--foreground) as a chart colour: they alias --series-1 (same ink), so two series render identically. Use var(--series-1). See docs/chart-colour-audit.",
         },
+        // The text-contrast wall (lives in the same no-restricted-syntax array on purpose: a second
+        // config block setting no-restricted-syntax for these same file globs would OVERRIDE, not
+        // extend, the chart rules above). An ink foreground token at reduced opacity used as text
+        // composites toward the light card/cream background and lands in the sub-4.5:1 "pale" zone:
+        // that is the class of bug the 2026-09-09 live re-check found eight times (text-muted-
+        // foreground/50 and kin). Ban alpha on the theme's DARK ink foreground tokens when used in a
+        // text-* utility; require the solid token instead (text-muted-foreground). Alpha on light
+        // tokens (text-white, text-sidebar-foreground, text-primary-foreground) stays allowed because
+        // those are text on DARK surfaces where the alpha keeps high contrast, e.g. the pace-bar info
+        // icon at text-white/70 = 8.3:1. Alpha on backgrounds (bg-*/NN), borders (border-*/NN) and
+        // non-text graphics is unaffected: only the text-* utility on an ink token matches. Both a
+        // plain className string literal and a template-literal className (the ${...} concatenation
+        // form) are covered.
+        {
+          selector:
+            "Literal[value=/text-(muted-foreground|foreground|primary|card-foreground|popover-foreground|secondary-foreground|accent-foreground|destructive|success|warning|ring)\\/[0-9]/]",
+          message:
+            "Do not put alpha on an ink foreground used as text (text-<token>/NN): it composites toward the light background and fails the 4.5:1 contrast floor. Use the solid token, e.g. text-muted-foreground. Alpha on bg-*/border-*/graphics, and on light tokens (white, sidebar-foreground, primary-foreground), is fine.",
+        },
+        {
+          selector:
+            "TemplateElement[value.raw=/text-(muted-foreground|foreground|primary|card-foreground|popover-foreground|secondary-foreground|accent-foreground|destructive|success|warning|ring)\\/[0-9]/]",
+          message:
+            "Do not put alpha on an ink foreground used as text (text-<token>/NN in a template className): it fails the 4.5:1 contrast floor on light surfaces. Use the solid token, e.g. text-muted-foreground.",
+        },
       ],
     },
   },

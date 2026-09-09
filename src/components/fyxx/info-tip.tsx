@@ -15,11 +15,15 @@ export function InfoTip({
    *  surfaces (the pace bar) where a dark glyph would vanish; those pass a light token instead. */
   className?: string;
 }) {
-  const exp = EXPLAINERS[id];
-  if (!exp) return null;
-
+  // Hooks must run on every render in the same order, so they come before any early return. If `exp`
+  // is missing for one render and present the next (id can change while this element stays mounted),
+  // an early return placed above these would change the hook count between renders and misalign
+  // React's state.
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const exp = EXPLAINERS[id];
+  if (!exp) return null;
 
   const cancelClose = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -62,7 +66,7 @@ export function InfoTip({
           <p className="font-mono bg-muted rounded px-2 py-1 text-[11px] mb-1.5 text-foreground">{exp.formula}</p>
         )}
         {exp.example && (
-          <p className="text-[11px] text-muted-foreground/80 italic">{exp.example}</p>
+          <p className="text-[11px] text-muted-foreground italic">{exp.example}</p>
         )}
       </PopoverContent>
     </Popover>

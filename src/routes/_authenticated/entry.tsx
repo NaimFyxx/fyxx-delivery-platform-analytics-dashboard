@@ -313,14 +313,14 @@ function DailySalesForm() {
           r.date,
           <Badge key="p" variant="outline" className={platformBg(r.platform as Platform)}>{r.platform}</Badge>,
           r.auto_filled ? (
-            <span key="s" className="inline-flex items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70" title="Auto-filled gap day (0 sales / 0 orders)">
+            <span key="s" className="inline-flex items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground" title="Auto-filled gap day (0 sales / 0 orders)">
               auto · 0
             </span>
           ) : (
             fmtJOD(Number(r.sales_jod))
           ),
           r.auto_filled ? (
-            <span key="o" className="text-muted-foreground/60">0</span>
+            <span key="o" className="text-muted-foreground">0</span>
           ) : r.orders != null ? (
             fmtInt(r.orders)
           ) : (

@@ -406,7 +406,7 @@ function Items() {
                       onClick={() => setHistoryItem({ label: r.item, key: canonicalItemName(r.item, dbAliases) })}
                       title="Avg selling price history"
                       aria-label={`Price history for ${r.item}`}
-                      className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <LineChartIcon className="size-3.5" />
                     </button>
@@ -421,7 +421,7 @@ function Items() {
                         onClick={() => setDeleteTarget({ label: r.item, canon: canonicalItemName(r.item, dbAliases) })}
                         title="Delete item"
                         aria-label={`Delete ${r.item}`}
-                        className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                        className="text-muted-foreground hover:text-destructive transition-colors"
                       >
                         <Trash2 className="size-3.5" />
                       </button>

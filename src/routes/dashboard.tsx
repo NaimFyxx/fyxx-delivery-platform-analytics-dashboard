@@ -976,7 +976,7 @@ function ChartCard({ title, sub, children, action, infoId, footnote, allTime }: 
       </div>
       {sub && <div className="text-[12px] md:text-[10.5px] text-muted-foreground mb-3">{sub}</div>}
       <div className="h-[230px]">{children}</div>
-      {footnote && <div className="text-[12px] md:text-[10px] text-muted-foreground/80 mt-2 leading-snug">{footnote}</div>}
+      {footnote && <div className="text-[12px] md:text-[10px] text-muted-foreground mt-2 leading-snug">{footnote}</div>}
     </div>
   );
 }

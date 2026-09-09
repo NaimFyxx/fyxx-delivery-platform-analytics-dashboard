@@ -22,7 +22,7 @@ export function StatCard({
           <div className="mt-2 text-3xl font-display font-bold text-num">{value}</div>
           {sub != null && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
         </div>
-        {icon && <div className="text-primary/80">{icon}</div>}
+        {icon && <div className="text-primary">{icon}</div>}
       </div>
     </Card>
   );

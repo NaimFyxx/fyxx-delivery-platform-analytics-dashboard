@@ -68,7 +68,7 @@ function AuthPage() {
               margin and targets, without the spreadsheet gymnastics.
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>TGR</span>
             <span>×</span>
             <img src={fyxxLogo} alt="Fyxx" className="h-3 w-auto opacity-70" />

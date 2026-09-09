@@ -599,12 +599,12 @@ const isLive = (p: Platform, month: string) => month >= PLATFORM_LIVE_FROM[p];
 function CoverageCell({ ok, na }: { ok: boolean; na?: boolean }) {
   if (na) {
     // Platform wasn't live this month — neutral, not a red "missing" mark.
-    return <span className="block text-center text-muted-foreground/40" title="Not live this month">-</span>;
+    return <span className="block text-center text-muted-foreground" title="Not live this month">-</span>;
   }
   return ok ? (
     <Check className="size-4 text-success mx-auto" />
   ) : (
-    <Minus className="size-4 text-destructive/50 mx-auto" />
+    <Minus className="size-4 text-destructive mx-auto" />
   );
 }
 
@@ -782,7 +782,7 @@ function CompletenessPanel({
                   return (
                     <li key={row.key} className="flex items-center gap-2 text-[12.5px]">
                       {!live ? (
-                        <span className="size-4 flex items-center justify-center text-muted-foreground/40">-</span>
+                        <span className="size-4 flex items-center justify-center text-muted-foreground">-</span>
                       ) : ok ? (
                         <Check className="size-4 text-success" />
                       ) : (
