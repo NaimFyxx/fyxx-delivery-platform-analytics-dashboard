@@ -13,7 +13,7 @@ The rule is simple:
 | Token | Value | Use | Provenance |
 |---|---|---|---|
 | `--talabat` | `#FF5A00` | fills, any background | Talabat brand orange (official) |
-| `--talabat-text` | `#993d00` | text on light backgrounds (white / cream cards) | **INVENTED** (darkened `#FF5A00`, == `--series-3`) |
+| `--talabat-text` | `#993d00` | text on light backgrounds (white / cream cards) | **INVENTED** (darkened `#FF5A00`) |
 | `--talabat-dark-bg` | `#FF8A3D` | text and accents on dark surfaces (the dark insight panels) | **INVENTED** (lifted `#FF5A00`) |
 | `--careem` | `#00493E` | fills, and text on light backgrounds | Careem Forest Green, Pantone 560C (official) |
 | `--careem-dark-bg` | `#00E784` | text and accents on dark surfaces | Careem Green, Pantone 7479C (official, partner guidelines) |
@@ -29,11 +29,35 @@ sanctioned brand values. **If Talabat ever publishes an official secondary orang
 `--talabat-dark-bg` (and reconsider `--talabat-text`) with it.** Both are used only where the brand
 `#FF5A00` would be unreadable, so the official orange still appears everywhere it can.
 
+## Reserved: off-limits for chart series colours
+
+A chart series colour must not be, or read as, a brand or status token, or a "different" series ends up
+meaning the same thing as a platform. These six values are reserved:
+
+| Reserved token | Value |
+|---|---|
+| `--careem` | `#00493E` |
+| `--talabat` | `#FF5A00` |
+| `--talabat-text` | `#993D00` |
+| `--careem-dark-bg` | `#00E784` |
+| `--talabat-dark-bg` | `#FF8A3D` |
+| `--warning-text` | `#8A5900` |
+
+**Any new or changed `--series-*` token must be checked against this list:** at least ΔE2000 20 from
+every one of them in normal vision, at least 3:1 on white, and it must keep the palette worst-pair at or
+above normal 26.4 / deuteranopia 23.8. Use the colour math in `scratchpad/color.mjs` (CIEDE2000 plus a
+Viénot deuteranopia simulation) before adding a series token.
+
+This list is exactly why `--series-3` moved from `#993d00` (identical to `--talabat-text`, ΔE 0) to
+`#7c0020`, and `--series-4` from `#17826d` (ΔE 19 from `--careem`, so it read as Careem on a chart) to
+`#008770` (ΔE 20.8 from Careem). Both moves also lifted the palette's deuteranopia worst-pair from 21.0
+to 23.8.
+
 ## Why each variant exists (measured)
 
-- **`--talabat` `#FF5A00` as text on white is ~2.6:1**, unreadable. `--talabat-text` `#993d00` (the same
-  value as `--series-3`) is ~6-7:1 on white/cream. Careem needs no light-text variant: `#00493E` on
-  white is ~9:1, so `--careem` doubles as its own light-text colour.
+- **`--talabat` `#FF5A00` as text on white is ~2.6:1**, unreadable. `--talabat-text` `#993d00` is
+  ~6-7:1 on white/cream. Careem needs no light-text variant: `#00493E` on white is ~9:1, so `--careem`
+  doubles as its own light-text colour.
 - **On the dark insight panels**, the accent sits in a stat inset. `--careem` `#00493E` there is ~2.6:1
   (dark on dark) and `--talabat` `#FF5A00` is ~2.8-4.6:1. The dark-surface variants fix this:
   `--careem-dark-bg` `#00E784` reads ~8:1 and `--talabat-dark-bg` `#FF8A3D` reads ~6:1 on a dark inset.

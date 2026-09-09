@@ -123,19 +123,23 @@
      tints; this dark amber is 5.0:1 and up on all of them (one value covers text on white, on cream and
      on an amber tint). Hue ~39deg keeps it distinct from --talabat-text #993d00 so warning text never
      reads as a platform colour. Use text-warning-text for any warning/attention text. */
-  /* Categorical chart series ramp. Colour-blind-safe within the limits of the 3:1-on-white
-     requirement: every pair >= dE 25 in normal vision, worst pair dE 21 under deuteranopia (the
-     rust/gold pair, both brand tones), and all six clear 3:1 contrast on the white card. It is a
-     lightness ramp (L* 14/29/38/49/57/61) because lightness is what survives colour blindness, so
-     multi-line charts must still carry a non-colour signal (dash + width). Raw hex in chart series
-     props is banned by ESLint; reference these tokens instead. Do NOT use --accent/--warning gold
-     as a series colour (status only) or a platform colour as a generic series. See docs audit. */
+  /* Categorical chart series. Colour-blind-safe within the limits of the 3:1-on-white requirement:
+     worst pair dE 26.4 in normal vision (ink/blue) and dE 23.8 under deuteranopia (ink/blue), with a
+     wide spread of hue and lightness so a series never reads as a brand/platform colour. All six clear
+     3:1 on the white card. Lightness still does most of the colour-blind work, so multi-line charts
+     must carry a non-colour signal too (dash + width). Raw hex in chart series props is banned by
+     ESLint; reference these tokens instead. Do NOT use --accent/--warning gold as a series colour
+     (status only) or a platform colour as a generic series. Any NEW or changed series token must sit
+     at least dE 20 from every reserved token (see the reserved list in docs/platform-colours). */
   --series-1: #092727; /* TGR brand ink (same value as --primary/--foreground); the chart-colour
      ESLint wall forbids var(--primary)/var(--foreground) in chart fill/stroke, so the alias cannot be
      used as a second series by construction, which is what caused the earlier identical-line bugs. */
   --series-2: #1c3f8f; /* blue */
-  --series-3: #993d00; /* rust (darkened Talabat orange) */
-  --series-4: #17826d; /* teal (lighter Careem green) */
+  --series-3: #7c0020; /* dark crimson. Was #993d00, which collided EXACTLY (dE 0) with --talabat-text;
+     the orange/amber band is now fully reserved (talabat, talabat-text, talabat-dark-bg, warning-text),
+     so this moved to a warm red, min dE 21.4 from every reserved token, 11.2:1 on white. */
+  --series-4: #008770; /* teal. Was #17826d, only dE 19 from Careem #00493E (reads as Careem on a chart);
+     shifted to dE 20.8 from Careem while holding 4.47:1 on white for 2px lines. */
   --series-5: #3990d0; /* sky blue */
   --series-6: #ad911f; /* gold (darkened TGR yellow) */
   --sidebar: #092727;
