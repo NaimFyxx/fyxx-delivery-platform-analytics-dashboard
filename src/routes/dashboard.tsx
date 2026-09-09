@@ -7,7 +7,7 @@ import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
-import { latestCoverageDate } from "@/lib/freshness";
+import { latestCoverageDate, freshnessLabel } from "@/lib/freshness";
 type DashboardData = NonNullable<Awaited<ReturnType<typeof getDashboardData>>>;
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
@@ -780,8 +780,7 @@ export function Header({
   // both were the data date, days was always 0 and the label could only ever say "current" (the
   // stale branches were dead). Now today and the coverage date genuinely differ, so a lagging import
   // shows as "updated N days ago" or stale, which is the whole point of the label.
-  const today = new Date().toISOString().slice(0, 10);
-  const fresh = useFreshness(today, coverageDate);
+  const fresh = freshnessLabel(coverageDate, new Date().toISOString().slice(0, 10));
   // Understated admin entry point, shown only to guests (signed-in admins use the sidebar).
   const signIn = showNav ? (
     <Link
@@ -838,8 +837,14 @@ export function Header({
       <div className="hidden md:flex items-center justify-between px-7 py-3.5 gap-4">
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex items-center gap-3 shrink-0">
-            <img src={tgrLogoDark} alt="The Green Room" className="h-10 w-auto" />
-            <span className="text-muted-foreground text-xs">×</span>
+            {/* The TGR logo shows for guests only. A signed-in admin already has it in the sidebar
+                rail, so rendering it here put a second TGR logo on the desktop screen too. */}
+            {showNav && (
+              <>
+                <img src={tgrLogoDark} alt="The Green Room" className="h-10 w-auto" />
+                <span className="text-muted-foreground text-xs">×</span>
+              </>
+            )}
             <img src={talabatLogo.url} alt="talabat" className="h-5 w-auto" />
             <span className="text-muted-foreground text-xs">×</span>
             <img src={careemLogo} alt="Careem" className="h-5 w-auto" />
@@ -876,15 +881,6 @@ export function Header({
       </div>
     </div>
   );
-}
-
-function useFreshness(today: string, last: string | null): { text: string; color: string } {
-  if (!last) return { text: "No data yet", color: "var(--muted-foreground)" };
-  const days = Math.round((Date.parse(today) - Date.parse(last)) / 86400_000);
-  const nice = new Date(last).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  if (days <= 1) return { text: `Data current as of ${nice}`, color: "var(--careem)" };
-  if (days <= 3) return { text: `Updated ${days} days ago (${nice})`, color: "var(--primary)" };
-  return { text: `⚠ Stale, last update ${days} days ago (${nice})`, color: "var(--destructive)" };
 }
 
 export function Segmented<T extends string>({

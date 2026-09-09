@@ -22,3 +22,20 @@ export function latestCoverageDate(
   // Earlier of the platforms: coverage is honestly limited by the platform that is behind.
   return dates.reduce((earliest, d) => (d < earliest ? d : earliest));
 }
+
+/**
+ * The freshness statement and its colour token, from the coverage date and the real calendar date.
+ * The single source of the wording so the guest Header and the admin PageHeader read identically:
+ * current (green) within a day, updated (primary) within three, stale (red) beyond. Pure.
+ */
+export function freshnessLabel(
+  coverageDate: string | null,
+  todayISO: string,
+): { text: string; color: string } {
+  if (!coverageDate) return { text: "No data yet", color: "var(--muted-foreground)" };
+  const days = Math.round((Date.parse(todayISO) - Date.parse(coverageDate)) / 86400_000);
+  const nice = new Date(coverageDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (days <= 1) return { text: `Data current as of ${nice}`, color: "var(--careem)" };
+  if (days <= 3) return { text: `Updated ${days} days ago (${nice})`, color: "var(--primary)" };
+  return { text: `⚠ Stale, last update ${days} days ago (${nice})`, color: "var(--destructive)" };
+}
