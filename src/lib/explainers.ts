@@ -150,6 +150,16 @@ export const EXPLAINERS: Record<string, Explainer> = {
     formula: "base = Talabat target + Careem target; stretch = combined stretch",
     example: "Base 1,000, stretch 1,150. At 1,000 the badge reads Base reached.",
   },
+  // One consolidated explainer for the mobile pace card, which carries a single title info icon in
+  // place of the five scattered ones. Combines base/stretch, against-pace, and data-through so none of
+  // those explanations is lost when the individual icons are removed on mobile.
+  pace_card: {
+    label: "Reading this card",
+    meaning:
+      "Base is the number you expect to hit (the two platform targets summed); stretch is an optional combined upside. The badge reads Base reached, then Stretch reached, once cumulative sales cross each, and stays set for the rest of the month. Against pace is where you are versus where you would need to be by today to finish the month on base: 100% is exactly on track, below is behind, above is ahead. Data through is the latest date both platforms have data for, limited by the slower one; amber means a recent day may still be missing.",
+    formula: "against pace = sales ÷ (base × dayOfMonth ÷ daysInMonth) × 100",
+    example: "Base 1,000, stretch 1,150. Day 27/30 you would expect 900; at 771 that is 86% of pace.",
+  },
   pace_bar: {
     label: "Pace bar",
     meaning:

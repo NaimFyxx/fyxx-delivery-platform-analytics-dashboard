@@ -8,8 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboardData } from "@/lib/dashboard.functions";
 import { latestCoverageDate, freshnessLabel } from "@/lib/freshness";
-import { PaceSummaryLine } from "@/components/fyxx/pace-dock";
-import { ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 type DashboardData = NonNullable<Awaited<ReturnType<typeof getDashboardData>>>;
 import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
@@ -728,7 +727,11 @@ export function PublicDashboard() {
           {rangeIsSingleMonth ? (
             // Single month: one figure, not a chart. Render it as a stat card, not an empty chart
             // card. The "it does not vary by day, pick a wider range" note lives behind the info icon.
-            <div className="bg-card border border-border rounded-2xl p-4">
+            // Grid items stretch to the row height set by the chart card beside it, so this short stat
+            // card would leave a large empty box below its text. Centre the content as a flex column so
+            // the slack distributes evenly above and below (and across), keeping grid alignment. Both
+            // widths: the empty slot shows on the desktop two-column grid too.
+            <div className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center justify-center text-center">
               <h3 className="font-display text-[15px] font-semibold flex items-center gap-x-1">
                 The Commission Drag<InfoTip id="chart_commission_drag" side="bottom" />
               </h3>
@@ -1220,17 +1223,133 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
     </div>
   );
 
+  // ---------- MOBILE card (Layout C: a scannable label/value table, no chips) ----------
+  // The badge (Base reached / Target missed / Stretch reached) carries into the collapsed summary
+  // chip; when no badge applies, the chip shows the against-pace figure.
+  const badgeText = PACE_BADGE_LABEL[badge] ?? `${Math.round(pace.proRatedAch)}% of pace`;
+  const chipClass =
+    isStretch ? "border-transparent"
+    : isReached ? "bg-success/10 text-success border-success/30"
+    : isMissed ? "bg-muted text-muted-foreground border-border"
+    : "bg-accent/20 text-accent-foreground border-accent/40";
+  const chipStyle = isStretch ? { background: "var(--accent)", color: "var(--accent-foreground)" } : undefined;
+
+  // Progress bar on a 0-to-stretch scale (0 to base when no stretch), so the base tick has a place to
+  // sit. The single fill is split Careem/Talabat by each platform's share of combined sales.
+  const mScaleMax = pace.stretch ?? pace.base;
+  const mFillPct = mScaleMax > 0 ? Math.min(pace.totalSales / mScaleMax, 1) * 100 : 0;
+  const mBaseTickPct = pace.stretch != null && mScaleMax > 0 ? (pace.base / mScaleMax) * 100 : null;
+
+  // The fixed footer button: same position and size in both states, only the label and chevron change.
+  // This is the whole point of the layout, so the control never moves between collapsed and expanded.
+  const footerBtn = (
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      aria-expanded={expanded}
+      aria-label={expanded ? "Hide pace details" : "Show pace details"}
+      className="mt-3 w-full flex items-center justify-center gap-1.5 border-t border-border pt-3 text-[13px] font-semibold text-muted-foreground"
+    >
+      {expanded ? "Hide details" : "Show details"}
+      <ChevronDown className={`size-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+    </button>
+  );
+
+  const collapsedSummary = (
+    <div className="flex items-center gap-2">
+      <span className="font-display text-[15px] whitespace-nowrap">{monthTitle}</span>
+      <span className="ml-auto font-display text-[19px] leading-none" style={{ color: pctColor(pace.totalAchievement) }}>
+        {Math.round(pace.totalAchievement)}%
+      </span>
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${chipClass}`} style={chipStyle}>
+        {badgeText}
+      </span>
+    </div>
+  );
+
+  const mobileBody = (
+    <>
+      <div className="flex items-center gap-x-1">
+        <h3 className="font-display text-[17px] leading-tight">{monthTitle}</h3>
+        {/* One info icon in place of the five scattered ones: covers base, stretch, pace and data-through. */}
+        <InfoTip id="pace_card" side="bottom" />
+      </div>
+      <div className="text-[11px] text-muted-foreground mt-1">
+        Day {pace.dayOfMonth} of {pace.daysInMonth} · {pace.workingDay} working days
+        {pace.dataThroughLabel && (
+          <>
+            {" · "}
+            <span style={pace.dataThroughStale ? { color: "var(--warning)" } : undefined}>data through {pace.dataThroughLabel}</span>
+          </>
+        )}
+      </div>
+      <div className="relative h-2.5 rounded-md mt-3 bg-muted">
+        <div className="absolute inset-y-0 left-0 flex overflow-hidden rounded-md" style={{ width: `${mFillPct}%` }}>
+          <div className="h-full" style={{ width: `${segCareemShare * 100}%`, background: colorFor("Careem") }} />
+          <div className="h-full flex-1" style={{ background: colorFor("Talabat") }} />
+        </div>
+        {mBaseTickPct != null && (
+          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: `${mBaseTickPct}%`, background: "var(--muted-foreground)" }} />
+        )}
+      </div>
+      <table className="w-full mt-3 text-[12.5px]">
+        <tbody>
+          <tr>
+            <td className="py-1 text-muted-foreground">Sold so far</td>
+            <td className="py-1 text-right font-semibold text-num">{fmtInt(pace.totalSales)} JOD</td>
+          </tr>
+          <tr>
+            <td className="py-1 text-muted-foreground">Base target</td>
+            <td className="py-1 text-right text-num">{fmtInt(pace.base)} JOD</td>
+          </tr>
+          {pace.stretch != null && (
+            <tr>
+              <td className="py-1 text-muted-foreground">Stretch</td>
+              <td className="py-1 text-right text-num">{fmtInt(pace.stretch)} JOD</td>
+            </tr>
+          )}
+          <tr>
+            <td className="pt-2 border-t border-border text-muted-foreground">Against pace</td>
+            <td className="pt-2 border-t border-border text-right font-bold text-num" style={{ color: pctColor(pace.proRatedAch) }}>
+              {Math.round(pace.proRatedAch)}%
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <table className="w-full mt-3 border-t border-border pt-1 text-[12.5px]">
+        <tbody>
+          <tr>
+            <td className="py-1"><span className="inline-block w-2 h-2 rounded-full mr-2 align-middle" style={{ background: colorFor("Careem") }} />Careem</td>
+            <td className="py-1 text-right text-num"><span className="font-semibold">{fmtInt(careem?.sales ?? 0)}</span> <span className="text-muted-foreground">/ {fmtInt(careem?.target ?? 0)}</span></td>
+            <td className="py-1 text-right font-semibold text-num" style={{ color: pctColor(careem?.achievement ?? 0) }}>{careem && careem.target > 0 ? Math.round(careem.achievement) + "%" : "-"}</td>
+          </tr>
+          <tr>
+            <td className="py-1"><span className="inline-block w-2 h-2 rounded-full mr-2 align-middle" style={{ background: colorFor("Talabat") }} />Talabat</td>
+            <td className="py-1 text-right text-num"><span className="font-semibold">{fmtInt(talabat?.sales ?? 0)}</span> <span className="text-muted-foreground">/ {fmtInt(talabat?.target ?? 0)}</span></td>
+            <td className="py-1 text-right font-semibold text-num" style={{ color: pctColor(talabat?.achievement ?? 0) }}>{talabat && talabat.target > 0 ? Math.round(talabat.achievement) + "%" : "-"}</td>
+          </tr>
+        </tbody>
+      </table>
+      {/* "Show August" (the three-day month-hold toggle) survives as a text link at the foot of the
+          expanded body, since Layout C drops the chip row it used to live in. */}
+      {toggle && (
+        <button type="button" onClick={toggle.onToggle} className="mt-3 text-[12px] font-semibold text-primary underline underline-offset-2">
+          {toggle.label}
+        </button>
+      )}
+    </>
+  );
+
   return (
     <>
-      {/* MOBILE: collapsed is the same dark summary strip the bar uses; expanding REPLACES the strip
-          with the full card (it does not stack a second copy beneath it). The card's own md:hidden
-          chevron collapses it back. */}
+      {/* MOBILE: Layout C. Collapsed shows a one-line summary; the fixed footer button below (which
+          never moves) toggles the full label/value body. Expanding REPLACES the summary with the body,
+          not a second stacked copy. */}
       <div className="md:hidden">
-        {expanded ? cardBody : (
-          <div className="rounded-2xl px-4 py-2.5 mb-4" style={{ background: "#092727", color: "var(--primary-foreground)" }}>
-            <PaceSummaryLine pace={pace} month={currentMonth} expanded={false} onToggle={() => setExpanded(true)} />
-          </div>
-        )}
+        <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
+          {expanded ? mobileBody : collapsedSummary}
+          {footerBtn}
+        </div>
       </div>
       {/* DESKTOP: the full card, unchanged. */}
       <div className="hidden md:block">{cardBody}</div>
