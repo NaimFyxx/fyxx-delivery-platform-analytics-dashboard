@@ -306,6 +306,12 @@ function Items() {
     <div className="p-6 max-w-7xl mx-auto">
       <PageHeader title="Items" description="Sell-price columns show your set list price (bold); 'avg' is what customers actually paid, revenue divided by units, after discounts and combos." />
 
+      {/* Actions live in their own always-visible row on mobile (not buried in the Filters shelf). */}
+      <div className="md:hidden flex items-center gap-2 mb-3">
+        <AddProductDialog />
+        <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
+      </div>
+
       <MobileFilters summary={`${rangeLabel}${platform !== "All" ? ` · ${platform}` : ""}${categoryFilter !== "All" ? ` · ${categoryFilter}` : ""}`}>
         <Segmented
           options={[
@@ -353,7 +359,7 @@ function Items() {
           <Switch checked={showZero} onCheckedChange={setShowZero} />
           Show items with 0 sales
         </label>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto hidden md:flex items-center gap-2">
           <AddProductDialog />
           <MergeItemsDialog names={allItemNames} dbAliases={dbAliases} />
         </div>

@@ -121,6 +121,12 @@ export function Financials() {
         title="Monthly financials"
         description="Gross sales, actual payouts and COGS per platform. COGS and net margin are ex-VAT (matching the Overview)."
       />
+      {/* Export lives in its own always-visible row on mobile, not inside the Filters shelf. */}
+      <div className="md:hidden mb-3">
+        <Button variant="outline" size="sm" className="max-md:h-11" onClick={exportCsv} disabled={rows.length === 0}>
+          <Download className="size-3.5 mr-1.5" /> Export CSV
+        </Button>
+      </div>
       <MobileFilters summary={`${rangeLabel}${platformFilter !== "All" ? ` · ${platformFilter}` : ""}`}>
         <Segmented
           options={[
@@ -154,7 +160,7 @@ export function Financials() {
         <Button
           variant="outline"
           size="sm"
-          className="ml-auto max-md:h-11"
+          className="ml-auto hidden md:inline-flex"
           onClick={exportCsv}
           disabled={rows.length === 0}
         >
