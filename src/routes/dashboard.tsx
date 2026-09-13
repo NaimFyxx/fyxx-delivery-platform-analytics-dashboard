@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useCallback, type ReactNode } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
-import { DataHealthChip } from "@/components/fyxx/data-health-chip";
+import { DataHealthChip, useHealthReport } from "@/components/fyxx/data-health-chip";
+import { METRICS, bestEver, recordStateFor, type MetricDef, type MonthPoint, type RecordState } from "@/lib/records";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -14,7 +15,7 @@ import tgrLogoDark from "@/assets/tgr-logo-dark.svg";
 import talabatLogo from "@/assets/talabat-logo.png.asset.json";
 import careemLogo from "@/assets/careem-logo-full.svg";
 import {
-  Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { MonthPicker } from "@/components/fyxx/date-picker";
@@ -51,6 +52,8 @@ function kpiView(t: MoneyTrail) {
 }
 type MonthAgg = ReturnType<typeof aggOf>;
 const shortMonth = (m: string) => new Date(m + "-01T00:00:00").toLocaleString("en-US", { month: "short" });
+/** "YYYY-MM" to "December 2025", for naming the month a best-ever record holds or beats. */
+const monthYearLong = (m: string) => new Date(m + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" });
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -140,6 +143,41 @@ export function PublicDashboard() {
   const kpis = kpiView(totals);
   const priorKpis = priorTotals ? kpiView(priorTotals) : null;
 
+  // --- Best-ever records. The pure records module (src/lib/records.ts) owns the direction per metric
+  //     and every exclusion; here we feed it full-history trails and the health "is clean" predicate
+  //     (rule 4: a flagged month never holds a record, so a data error is never celebrated). ---
+  const healthReport = useHealthReport();
+  const isCleanMonth = useCallback(
+    (m: string) => healthReport?.months.find((x) => x.month === m)?.status === "pass",
+    [healthReport],
+  );
+  const recordPoints: MonthPoint[] = useMemo(
+    () => moneyTrailPerMonth(data ?? EMPTY_MONEY_INPUT, allMonths, plats).map((t) => ({ month: t.months[0], trail: t })),
+    [data, allMonths, platforms], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const recordOpts = useMemo(() => ({ currentMonth, isClean: isCleanMonth }), [currentMonth, isCleanMonth]);
+  const grossRecord = useMemo(() => bestEver(METRICS.gross, recordPoints, recordOpts), [recordPoints, recordOpts]);
+  const netMarginRecord = useMemo(() => bestEver(METRICS.netMargin, recordPoints, recordOpts), [recordPoints, recordOpts]);
+  const netProfitRecord = useMemo(() => bestEver(METRICS.netProfit, recordPoints, recordOpts), [recordPoints, recordOpts]);
+
+  // A KPI shows a record badge only when one month is selected (the KPI then represents that month).
+  // Volume metrics get a day-rate month-end projection so a partial month can read "on track"; ratio
+  // metrics pass no projection (a projected share is a guess), so they show the line only while partial.
+  const selMonth = rangeMonths.length === 1 ? rangeMonths[0] : null;
+  const selPartial = selMonth === currentMonth;
+  const projectMonthEnd = (v: number) => {
+    const dom = Number(today.slice(8, 10)) || 1;
+    const dim = new Date(Number(currentMonth.slice(0, 4)), Number(currentMonth.slice(5, 7)), 0).getDate();
+    return dom > 0 ? (v / dom) * dim : v;
+  };
+  const kpiRecord = (metric: MetricDef, currentValue: number, fmt: (v: number) => string): KpiRecord | null => {
+    if (!selMonth) return null;
+    const projectedValue = selPartial && !metric.ratioFloor ? projectMonthEnd(currentValue) : null;
+    const { state, best } = recordStateFor(metric, recordPoints, { ...recordOpts, selectedMonth: selMonth, selectedIsPartial: selPartial, projectedValue });
+    if (state === "none" || state === "suppressed") return null; // no badge, card renders as normal
+    return { state, recordValue: best.recordValue, recordMonth: best.recordMonth, beatsMonth: best.beatsMonth, beatsValue: best.beatsValue, fmt };
+  };
+
   // Monthly Average: the mean combined gross of the last three COMPLETED months, versus the three
   // before them. A "what is the business running at now" figure, so it ignores the date filter (like
   // Margin over Time). Gross comes from the money trail, never recomputed.
@@ -176,6 +214,7 @@ export function PublicDashboard() {
         const validComms = win.map((w) => cm(w.commMargin, w.payout + w.discount)).filter((v): v is number => v !== null);
         const validNets = win.map((w) => cm(w.netMargin, w.payout)).filter((v): v is number => v !== null);
         return {
+          month: a.month,
           label: monthLabel(a.month),
           prod: cm(a.productMargin, a.gross),
           comm: cm(a.commMargin, a.payout + a.discount),
@@ -359,6 +398,7 @@ export function PublicDashboard() {
       const net = agg.payout > 1.16 ? agg.netMargin * 100 : null;
       const profit = agg.netProfit;
       return {
+        month: m,
         label: monthLabel(m),
         Talabat: platforms.includes("Talabat") ? talabat : 0,
         Careem: platforms.includes("Careem") ? careem : 0,
@@ -511,6 +551,7 @@ export function PublicDashboard() {
                delta={priorKpis ? pctDelta(kpis.gross, priorKpis.gross) : null}
                prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.gross)}` : platformContext(platform)}
                sub={`avg ${fmtJOD0(kpis.gross / activeDays)}/day`}
+               record={kpiRecord(METRICS.gross, kpis.gross, (v) => `${fmtInt(v)} JOD`)}
                infoId="sales_incl_vat" />
           <Kpi label="Monthly Average" value={monthlyAvg ? fmtInt(monthlyAvg.cur) : "-"} unit="JOD"
                delta={monthlyAvg && monthlyAvg.prior != null ? pctDelta(monthlyAvg.cur, monthlyAvg.prior) : null}
@@ -529,10 +570,12 @@ export function PublicDashboard() {
           <Kpi label="Net Margin · after commission" value={kpis.netMargin.toFixed(1)} unit="%"
                delta={priorKpis ? ptDelta(kpis.netMargin, priorKpis.netMargin) : null}
                prior={priorKpis ? `Prior: ${priorKpis.netMargin.toFixed(1)}%` : "on payout exVAT"}
+               record={kpiRecord(METRICS.netMargin, kpis.netMargin, (v) => `${v.toFixed(1)}%`)}
                infoId="net_margin" />
           <Kpi label="Net Profit Kept" value={fmtInt(kpis.netProfit)} unit="JOD"
                delta={priorKpis ? pctDelta(kpis.netProfit, priorKpis.netProfit) : null}
                prior={priorKpis ? `Prior: ${fmtJOD0(priorKpis.netProfit)}` : "payout exVAT − cost"}
+               record={kpiRecord(METRICS.netProfit, kpis.netProfit, (v) => `${fmtInt(v)} JOD`)}
                infoId="net_profit_kept" />
         </div>
 
@@ -603,7 +646,15 @@ export function PublicDashboard() {
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => Math.round(Number(v)).toLocaleString()} />
                 <Tooltip content={<SalesTrendTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--series-1)" strokeWidth={2.5} dot={{ r: 3.5, fill: "var(--series-1)", strokeWidth: 0 }} activeDot={{ r: 5 }} connectNulls={false} />
+                {grossRecord.recordValue != null && (
+                  <ReferenceLine
+                    y={grossRecord.recordValue}
+                    stroke="var(--warning)"
+                    strokeDasharray="5 4"
+                    label={{ value: `Best ever ${fmtInt(grossRecord.recordValue)}`, fill: "var(--warning-text)", fontSize: 10, position: "insideTopRight" }}
+                  />
+                )}
+                <Line isAnimationActive={false} type="monotone" dataKey="totalSolid" name="Monthly total" stroke="var(--series-1)" strokeWidth={2.5} dot={<RecordDot recordMonth={grossRecord.recordMonth} restFill="var(--series-1)" />} activeDot={{ r: 5 }} connectNulls={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="totalPartial" name="In progress (current month)" stroke="var(--series-5)" strokeWidth={2} strokeDasharray="4 3" dot={<PartialDot />} activeDot={false} connectNulls={false} />
                 {salesTrend.some((r) => r.avg3 !== null) && (
                   <Line isAnimationActive={false} type="monotone" dataKey="avg3" name="3-month average" stroke="var(--series-4)" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
@@ -660,12 +711,20 @@ export function PublicDashboard() {
                     strokeDasharray="6 4"
                     label={{ value: "Target 45%", fill: "var(--muted-foreground)", fontSize: 10, position: "insideTopRight" }}
                   />
+                  {netMarginRecord.recordValue != null && (
+                    <ReferenceLine
+                      y={netMarginRecord.recordValue}
+                      stroke="var(--warning)"
+                      strokeDasharray="5 4"
+                      label={{ value: `Best ever ${netMarginRecord.recordValue.toFixed(1)}%`, fill: "var(--warning-text)", fontSize: 10, position: "insideTopLeft" }}
+                    />
+                  )}
                   {/* Three clearly distinct colors: charcoal / taupe / green */}
                   {/* Non-colour encoding (dash + width) so the three margins separate without relying
                       on colour: Product solid/thick, After commission long-dash, Net short-dash. */}
                   <Line isAnimationActive={false} type="monotone" dataKey="prod" name="Product margin" stroke="var(--series-1)" strokeWidth={2.5} dot={{ r: 4, fill: "var(--series-1)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
                   <Line isAnimationActive={false} type="monotone" dataKey="comm" name="After commission" stroke="var(--series-6)" strokeWidth={2} strokeDasharray="7 4" dot={{ r: 4, fill: "var(--series-6)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line isAnimationActive={false} type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--series-2)" strokeWidth={2} strokeDasharray="2 3" dot={{ r: 4, fill: "var(--series-2)", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="net" name="Net (after commission + promos)" stroke="var(--series-2)" strokeWidth={2} strokeDasharray="2 3" dot={<RecordDot recordMonth={netMarginRecord.recordMonth} restFill="var(--series-2)" />} activeDot={{ r: 5 }} />
                   {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="prodTrail" name="Product 3m avg" stroke="var(--series-1)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                   {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="commTrail" name="After commission 3m avg" stroke="var(--series-6)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
                   {showTrailing && <Line isAnimationActive={false} type="monotone" dataKey="netTrail" name="Net 3m avg" stroke="var(--series-2)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} />}
@@ -720,7 +779,22 @@ export function PublicDashboard() {
                 <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
                 <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => fmtJOD0(v)} />
-                <Bar isAnimationActive={false} dataKey="profit" fill="var(--series-4)" radius={[3, 3, 0, 0]} />
+                {/* Monthly view only: the record is a monthly figure, so it is not drawn over the
+                    per-day bars of a single-month view (the KPI carries the record there instead). */}
+                {!rangeIsSingleMonth && netProfitRecord.recordValue != null && (
+                  <ReferenceLine
+                    y={netProfitRecord.recordValue}
+                    stroke="var(--warning)"
+                    strokeDasharray="5 4"
+                    label={{ value: `Best ever ${fmtInt(netProfitRecord.recordValue)}`, fill: "var(--warning-text)", fontSize: 10, position: "insideTopRight" }}
+                  />
+                )}
+                <Bar isAnimationActive={false} dataKey="profit" fill="var(--series-4)" radius={[3, 3, 0, 0]}>
+                  {!rangeIsSingleMonth &&
+                    chartData.map((d, i) => (
+                      <Cell key={i} fill={(d as { month?: string }).month === netProfitRecord.recordMonth ? "var(--accent)" : "var(--series-4)"} />
+                    ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -936,8 +1010,18 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+export interface KpiRecord {
+  state: RecordState;
+  recordValue: number | null;
+  recordMonth: string | null;
+  beatsMonth: string | null;
+  beatsValue: number | null;
+  /** Formats a value with its unit, e.g. "1,636 JOD" or "53.2%". */
+  fmt: (v: number) => string;
+}
+
 export function Kpi({
-  label, value, unit, delta, prior, sub, infoId,
+  label, value, unit, delta, prior, sub, infoId, record,
 }: {
   label: string;
   value: string;
@@ -946,16 +1030,45 @@ export function Kpi({
   prior: string;
   sub?: string;
   infoId?: string;
+  record?: KpiRecord | null;
 }) {
   const deltaColor = !delta ? "var(--muted-foreground)" : delta.good ? "var(--careem)" : "var(--destructive)";
+  const isRec = record?.state === "record";
+  // Tier 3: a solid gold chip + gold inset border when this month holds the record; a dashed
+  // warning-text outline chip when a partial month is on track to beat it. Nothing when neither.
   return (
-    <div className="bg-card border border-border rounded-2xl p-4">
+    <div className="bg-card border border-border rounded-2xl p-4" style={isRec ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}>
       <div className="text-[11px] md:text-[9.5px] uppercase tracking-[0.8px] font-semibold text-muted-foreground flex items-center">
         {label}{infoId && <InfoTip id={infoId} />}
       </div>
       <div className="font-display text-[25px] font-semibold mt-1.5">
         {value} <span className="text-[13px] text-muted-foreground">{unit}</span>
       </div>
+      {record && (
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1">
+            {record.state === "record" ? (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style={{ background: "var(--accent)", color: "var(--accent-foreground)" }}>
+                &#9733; Best ever
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style={{ color: "var(--warning-text)", borderColor: "var(--warning-text)" }}>
+                On track to beat {record.recordMonth ? monthYearLong(record.recordMonth) : "the record"}
+              </span>
+            )}
+            <InfoTip id="best_ever" />
+          </span>
+          <div className="text-[11px] text-muted-foreground mt-1">
+            {record.state === "record"
+              ? record.beatsMonth != null && record.beatsValue != null
+                ? `beats ${monthYearLong(record.beatsMonth)} at ${record.fmt(record.beatsValue)}`
+                : "the first clean month on record"
+              : record.recordValue != null && record.recordMonth != null
+                ? `record ${record.fmt(record.recordValue)} · ${monthYearLong(record.recordMonth)}`
+                : ""}
+          </div>
+        </div>
+      )}
       <div className="text-[12px] md:text-[10.5px] font-semibold mt-1" style={{ color: deltaColor }}>
         {delta ? delta.text : "no prior period"}
       </div>
@@ -1371,6 +1484,18 @@ function PartialDot(props: { cx?: number; cy?: number; payload?: { partial?: boo
   const { cx, cy, payload } = props;
   if (cx == null || cy == null || !payload?.partial) return <g />;
   return <circle cx={cx} cy={cy} r={4} fill="var(--card)" stroke="var(--series-5)" strokeWidth={2} />;
+}
+
+/** Tier 2: rings the best-ever record month on a trend line (accent fill, gold ring), and draws the
+ *  normal small marker on every other point. recordMonth/restFill are passed on the element; Recharts
+ *  injects cx/cy/payload per point. */
+function RecordDot(props: { cx?: number; cy?: number; payload?: { month?: string }; recordMonth?: string | null; restFill?: string }) {
+  const { cx, cy, payload, recordMonth, restFill } = props;
+  if (cx == null || cy == null) return <g />;
+  if (recordMonth != null && payload?.month === recordMonth) {
+    return <circle cx={cx} cy={cy} r={5.5} fill="var(--accent)" stroke="var(--warning)" strokeWidth={2} />;
+  }
+  return <circle cx={cx} cy={cy} r={3.5} fill={restFill ?? "var(--series-1)"} />;
 }
 
 /** Emphasized point on the 3-month floor line, only where the floor steps up (a new higher low). */

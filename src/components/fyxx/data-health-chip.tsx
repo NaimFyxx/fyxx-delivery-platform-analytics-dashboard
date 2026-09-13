@@ -51,7 +51,7 @@ function CheckRow({
   );
 }
 
-function useHealthReport() {
+export function useHealthReport() {
   const fetchData = useServerFn(getDashboardData);
   const { data } = useQuery({
     queryKey: ["dashboard"],
