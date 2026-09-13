@@ -259,4 +259,11 @@ export const EXPLAINERS: Record<string, Explainer> = {
     label: "Target line",
     meaning: "The monthly base sales-target reference line: where you need to be by end of month.",
   },
+  best_ever: {
+    label: "Best ever",
+    meaning:
+      "The best month on record for this metric, across the full history. Higher is better for sales, profit, orders and margin; lower is better for discounting. Either way it reads Best ever and always names what it beat, so the claim is checkable.",
+    note: "Three months never count. A launch month with fewer than 5 orders (October 2025) is ignored; the current month is still in progress so it cannot hold a record, only show as on track; and margin or share records need at least 10 orders so a thin month cannot post a flukey extreme. And a month the health panel has flagged claims no record at all, so a data error is never celebrated.",
+    example: "Best ever 1,636 JOD, beats December 2025.",
+  },
 };
