@@ -76,6 +76,31 @@ describe("records: lower-is-better (discount share)", () => {
   });
 });
 
+describe("records: lower-is-better (commission drag)", () => {
+  // Commission drag = (productMargin - netMargin) * 100, in points. Lower is better, so the record is
+  // the LEAST drag month. It is a ratio, so the 10-order volume floor applies.
+  const points: MonthPoint[] = [
+    point("2026-05", { productMargin: 0.5, netMargin: 0.3, orders: 40 }), // 20.0 pts
+    point("2026-06", { productMargin: 0.5, netMargin: 0.35, orders: 40 }), // 15.0 pts
+    point("2026-08", { productMargin: 0.5, netMargin: 0.4, orders: 40 }), // 10.0 pts  <- best (lowest)
+    point("2026-07", { productMargin: 0.5, netMargin: 0.48, orders: 8 }), //  2.0 pts, thin volume, excluded
+  ];
+  const best = bestEver(METRICS.commissionDrag, points, { currentMonth: "2026-09", isClean: allClean });
+
+  it("picks the lowest drag, and the volume floor rejects the thinner month with even less drag", () => {
+    expect(best.recordMonth).toBe("2026-08");
+    expect(best.recordValue).toBeCloseTo(10.0, 1);
+  });
+  it("the runner-up is the next-lowest drag", () => {
+    expect(best.beatsMonth).toBe("2026-06");
+    expect(best.beatsValue).toBeCloseTo(15.0, 1);
+  });
+  it("is declared lower-is-better in the registry", () => {
+    expect(METRICS.commissionDrag.direction).toBe("lower");
+    expect(METRICS.commissionDrag.ratioFloor).toBe(true);
+  });
+});
+
 describe("records: ratio metrics need a volume floor (rule 3)", () => {
   // A month with a spectacular margin but only 8 orders must not hold a ratio record (floor is 10),
   // while the same 8-order month WOULD win a non-ratio metric (only the 5-order launch floor applies).

@@ -159,6 +159,7 @@ export function PublicDashboard() {
   const grossRecord = useMemo(() => bestEver(METRICS.gross, recordPoints, recordOpts), [recordPoints, recordOpts]);
   const netMarginRecord = useMemo(() => bestEver(METRICS.netMargin, recordPoints, recordOpts), [recordPoints, recordOpts]);
   const netProfitRecord = useMemo(() => bestEver(METRICS.netProfit, recordPoints, recordOpts), [recordPoints, recordOpts]);
+  const commissionDragRecord = useMemo(() => bestEver(METRICS.commissionDrag, recordPoints, recordOpts), [recordPoints, recordOpts]);
 
   // A KPI shows a record badge only when one month is selected (the KPI then represents that month).
   // Volume metrics get a day-rate month-end projection so a partial month can read "on track"; ratio
@@ -414,6 +415,9 @@ export function PublicDashboard() {
     () => (rangeIsSingleMonth ? chartData.find((r) => r.drag != null)?.drag ?? null : null),
     [rangeIsSingleMonth, chartData],
   );
+  // Commission drag is lower-is-better, so a record here is the least drag. Badge for the single-month
+  // stat card (the multi-month bar chart uses commissionDragRecord directly).
+  const commissionDragBadge = kpiRecord(METRICS.commissionDrag, singleMonthDrag ?? 0, (v) => `${v.toFixed(1)} pts`);
 
   // Total sales over time: one point per month = combined gross incl VAT, per-platform financials
   // gross (falling back to summed daily), the same value as the Sales by Platform bars. Like the
@@ -805,7 +809,10 @@ export function PublicDashboard() {
             // card would leave a large empty box below its text. Centre the content as a flex column so
             // the slack distributes evenly above and below (and across), keeping grid alignment. Both
             // widths: the empty slot shows on the desktop two-column grid too.
-            <div className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+            <div
+              className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center justify-center text-center"
+              style={commissionDragBadge?.state === "record" ? { boxShadow: "inset 0 0 0 2px var(--accent)" } : undefined}
+            >
               <h3 className="font-display text-[15px] font-semibold flex items-center gap-x-1">
                 The Commission Drag<InfoTip id="chart_commission_drag" side="bottom" />
               </h3>
@@ -814,6 +821,23 @@ export function PublicDashboard() {
                   <div className="font-display text-[40px] font-bold leading-none" style={{ color: "var(--foreground)" }}>
                     {singleMonthDrag.toFixed(1)}<span className="text-[18px] font-semibold text-muted-foreground ml-1">pts</span>
                   </div>
+                  {/* Tier 3 badge: this month holds the least-drag record. Ratios never project, so a
+                      partial month shows nothing here, only the reference line on the multi-month chart. */}
+                  {commissionDragBadge?.state === "record" && (
+                    <div className="mt-2 flex flex-col items-center gap-1">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style={{ background: "var(--accent)", color: "var(--accent-foreground)" }}>
+                          &#9733; Best ever
+                        </span>
+                        <InfoTip id="best_ever" />
+                      </span>
+                      {commissionDragBadge.beatsMonth != null && commissionDragBadge.beatsValue != null && (
+                        <span className="text-[11px] text-muted-foreground">
+                          beats {monthYearLong(commissionDragBadge.beatsMonth)} at {commissionDragBadge.fmt(commissionDragBadge.beatsValue)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="text-[12px] md:text-[11px] text-muted-foreground mt-2">
                     Margin points lost to platform fees and discounts in {new Date(rangeMonths[0] + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" })}
                   </div>
@@ -831,7 +855,21 @@ export function PublicDashboard() {
                   <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false}
                          tickFormatter={(v) => `${v}pt`} />
                   <Tooltip {...tooltipStyle} formatter={(v: number) => `${v.toFixed(1)} pts`} />
-                  <Bar isAnimationActive={false} dataKey="drag" fill="var(--series-3)" radius={[3, 3, 0, 0]} />
+                  {/* Lower is better, so the record is the least drag: the reference line sits low and
+                      the least-drag month's bar is ringed in gold. */}
+                  {commissionDragRecord.recordValue != null && (
+                    <ReferenceLine
+                      y={commissionDragRecord.recordValue}
+                      stroke="var(--warning)"
+                      strokeDasharray="5 4"
+                      label={{ value: `Best ever ${commissionDragRecord.recordValue.toFixed(1)}pt`, fill: "var(--warning-text)", fontSize: 10, position: "insideBottomRight" }}
+                    />
+                  )}
+                  <Bar isAnimationActive={false} dataKey="drag" fill="var(--series-3)" radius={[3, 3, 0, 0]}>
+                    {chartData.map((d, i) => (
+                      <Cell key={i} fill={(d as { month?: string }).month === commissionDragRecord.recordMonth ? "var(--accent)" : "var(--series-3)"} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </ChartCard>

@@ -83,6 +83,17 @@ export const METRICS = {
     // The trail's `discounts` over `gross`. Lower is better: a record here is the least discounting.
     value: (m) => (m.gross > 0 ? (m.discounts / m.gross) * 100 : 0),
   },
+  commissionDrag: {
+    key: "commissionDrag",
+    label: "Commission drag",
+    unit: "pts",
+    direction: "lower",
+    ratioFloor: true,
+    // Margin points lost between menu price and payout: product margin minus net margin. Lower is
+    // better, so a record is the least drag. A ratio, so the volume floor applies (a low drag on a
+    // thin month is not a record).
+    value: (m) => (m.productMargin - m.netMargin) * 100,
+  },
 } satisfies Record<string, MetricDef>;
 
 export type MetricKey = keyof typeof METRICS;
