@@ -10,6 +10,74 @@ import { usePaceView, type PaceViewMode } from "@/lib/pace-view";
 import { fmtInt } from "@/lib/fyxx";
 import { InfoTip } from "@/components/fyxx/info-tip";
 
+// The gold hatch that marks the Moonshot zone (target to moonshot). Inline styles, not chart
+// fill/stroke, so the chart-colour wall does not apply; the same treatment reads on light and dark.
+const MOONSHOT_HATCH: React.CSSProperties = {
+  backgroundImage: "repeating-linear-gradient(45deg, rgba(184,134,42,.30) 0 5px, transparent 5px 10px)",
+  backgroundColor: "rgba(238,195,106,.14)",
+};
+
+/**
+ * The one pace progress bar, shared by the Overview card, the mobile card and the bottom dock so all
+ * three read the same. The track spans 0 to the Moonshot (0 to the Target when no Moonshot is set),
+ * split Careem/Talabat by share of sales. A flag marks the Target; the region beyond it is a hatched
+ * Moonshot zone with a small "Moonshot zone" label. No tick sits at the far right: the end of the
+ * track is the Moonshot, not a milestone. `dark` picks the bright Careem and cream flag for the dock.
+ */
+export function PaceProgressBar({
+  totalSales,
+  target,
+  moonshot,
+  careemSales,
+  talabatSales,
+  dark = false,
+}: {
+  totalSales: number;
+  target: number;
+  moonshot: number | null;
+  careemSales: number;
+  talabatSales: number;
+  dark?: boolean;
+}) {
+  const scaleMax = (moonshot ?? target) || 1;
+  const fillPct = Math.min(totalSales / scaleMax, 1) * 100;
+  const segTotal = careemSales + talabatSales;
+  const careemShare = segTotal > 0 ? careemSales / segTotal : 0.5;
+  // Flag sits at the Target. With no Moonshot the Target is the end of the track, so the flag is at 100%.
+  const targetPct = moonshot != null && scaleMax > 0 ? Math.min((target / scaleMax) * 100, 100) : 100;
+
+  const trackBg = dark ? "rgba(244,239,231,.16)" : "var(--muted)";
+  const careemFill = dark ? "var(--careem-dark-bg)" : "var(--careem)";
+  const flagColor = dark ? "var(--primary-foreground)" : "var(--foreground)";
+  const zoneLabelColor = dark ? "var(--accent)" : "var(--warning-text)";
+
+  return (
+    <div className="relative" style={{ paddingTop: 16 }}>
+      {moonshot != null && (
+        <div
+          className="absolute top-0 right-0 text-[9px] font-bold uppercase tracking-wide whitespace-nowrap"
+          style={{ color: zoneLabelColor }}
+        >
+          Moonshot zone
+        </div>
+      )}
+      <div className="relative h-2.5 rounded-md" style={{ background: trackBg }}>
+        {moonshot != null && (
+          <div className="absolute top-0 bottom-0" style={{ left: `${targetPct}%`, right: 0, borderRadius: "0 6px 6px 0", ...MOONSHOT_HATCH }} />
+        )}
+        <div className="absolute inset-y-0 left-0 flex overflow-hidden rounded-md" style={{ width: `${fillPct}%` }}>
+          <div className="h-full" style={{ width: `${careemShare * 100}%`, background: careemFill }} />
+          <div className="h-full flex-1" style={{ background: "var(--talabat)" }} />
+        </div>
+        {/* Flag at the Target: a thin rule with a small pennant at the top. */}
+        <div className="absolute rounded-sm" style={{ left: `${targetPct}%`, top: -5, bottom: -3, width: 2.5, background: flagColor, zIndex: 3 }}>
+          <div className="absolute" style={{ top: -1, left: -3, width: 8, height: 8, background: flagColor, borderRadius: "2px 2px 2px 0", transform: "rotate(45deg)" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // The dock (gear + bar) belongs only on the app's own pace, dashboard and admin pages. It is mounted
 // in __root, which sits above every route including the public sign-in page, so without this gate it
 // leaked onto /auth and onto any unknown (404) path. That matters beyond layout: the bar reads the
@@ -132,10 +200,6 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
   const talabat = pace.rows.find((r) => r.platform === "Talabat");
   const careem = pace.rows.find((r) => r.platform === "Careem");
 
-  const scaleMax = pace.stretch ?? pace.base;
-  const fillPct = scaleMax > 0 ? Math.min(pace.totalSales / scaleMax, 1) * 100 : 0;
-  const baseTickPct = pace.stretch != null && scaleMax > 0 ? (pace.base / scaleMax) * 100 : null;
-
   const isReached = badge === "base_reached" || badge === "stretch_reached";
   const isStretch = badge === "stretch_reached";
   const isMissed = badge === "missed";
@@ -167,15 +231,9 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
 
   const detail = (
     <>
-      {/* 0 to stretch track (0 to base when no stretch), yellow base tick + muted stretch tick */}
-      <div className="relative h-2.5 rounded-md mt-3" style={{ background: "rgba(244,239,231,.16)" }}>
-        <div className="absolute left-0 top-0 bottom-0 rounded-md" style={{ width: `${fillPct}%`, background: "#f4efe7" }} />
-        {baseTickPct != null && (
-          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: `${baseTickPct}%`, background: "#EEC36A" }} />
-        )}
-        {pace.stretch != null && (
-          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: "100%", background: "rgba(244,239,231,.4)" }} />
-        )}
+      {/* Unified pace bar: flag at the Target, hatched Moonshot zone beyond it, no far-right tick. */}
+      <div className="mt-1">
+        <PaceProgressBar totalSales={pace.totalSales} target={pace.base} moonshot={pace.stretch} careemSales={careem?.sales ?? 0} talabatSales={talabat?.sales ?? 0} dark />
       </div>
       <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2.5 text-[11.5px]">
         <span className="inline-flex items-center gap-1.5">
@@ -261,15 +319,9 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
         </span>
       </div>
 
-      {/* 0 to stretch track (0 to base when no stretch), yellow base tick + muted stretch tick */}
-      <div className="relative h-2.5 rounded-md mt-3" style={{ background: "rgba(244,239,231,.16)" }}>
-        <div className="absolute left-0 top-0 bottom-0 rounded-md" style={{ width: `${fillPct}%`, background: "#f4efe7" }} />
-        {baseTickPct != null && (
-          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: `${baseTickPct}%`, background: "#EEC36A" }} />
-        )}
-        {pace.stretch != null && (
-          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: "100%", background: "rgba(244,239,231,.4)" }} />
-        )}
+      {/* Unified pace bar: flag at the Target, hatched Moonshot zone beyond it, no far-right tick. */}
+      <div className="mt-1">
+        <PaceProgressBar totalSales={pace.totalSales} target={pace.base} moonshot={pace.stretch} careemSales={careem?.sales ?? 0} talabatSales={talabat?.sales ?? 0} dark />
       </div>
 
       <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2.5 text-[11.5px]">

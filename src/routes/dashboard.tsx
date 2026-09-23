@@ -3,6 +3,7 @@ import { useMemo, useState, useCallback, type ReactNode } from "react";
 import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { DataHealthChip, useHealthReport } from "@/components/fyxx/data-health-chip";
+import { PaceProgressBar } from "@/components/fyxx/pace-dock";
 import { METRICS, bestEver, recordStateFor, type MetricDef, type MonthPoint, type RecordState } from "@/lib/records";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
@@ -1243,15 +1244,6 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   const careem = pace.rows.find((r) => r.platform === "Careem");
   const talabat = pace.rows.find((r) => r.platform === "Talabat");
 
-  // Segments of the combined bar. The bar fills to combined/target (capped at 100%),
-  // then splits proportionally to each platform's actual sales — so the bigger seller
-  // always shows the longer segment, even when combined sales exceed the target.
-  const segSales = (careem?.sales ?? 0) + (talabat?.sales ?? 0);
-  const segFill = pace.totalTarget > 0 ? Math.min(segSales / pace.totalTarget, 1) * 100 : 0;
-  const segCareemShare = segSales > 0 ? (careem?.sales ?? 0) / segSales : 0;
-  const segCareem = segFill * segCareemShare;
-  const segCappedTalabat = segFill * (1 - segCareemShare);
-
   // Combined status: the combined figure against combined base and (optional) stretch. Reached
   // states are permanent (cumulative cannot fall); a completed month under base reads "Target
   // missed"; otherwise the in-progress pace figure stands. Percentage below is percent of base.
@@ -1329,19 +1321,8 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
         </div>
       </div>
 
-      {/* Combined stacked progress bar with visible % labels */}
-      <div className="mt-3 h-2.5 rounded-md overflow-hidden flex relative bg-muted">
-        <div className="h-full transition-all relative group" style={{ width: `${segCareem}%`, background: colorFor("Careem") }}>
-          {segCareem > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-white pointer-events-none">{Math.round(segCareem)}%</span>
-          )}
-        </div>
-        <div className="h-full transition-all relative group" style={{ width: `${segCappedTalabat}%`, background: colorFor("Talabat") }}>
-          {segCappedTalabat > 8 && (
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] md:text-[9px] font-bold text-white pointer-events-none">{Math.round(segCappedTalabat)}%</span>
-          )}
-        </div>
-      </div>
+      {/* Unified pace bar: flag at the Target, hatched Moonshot zone beyond it. Same on card and dock. */}
+      <PaceProgressBar totalSales={pace.totalSales} target={pace.base} moonshot={pace.stretch} careemSales={careem?.sales ?? 0} talabatSales={talabat?.sales ?? 0} />
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
         <span className="inline-flex items-center gap-1.5">
@@ -1386,12 +1367,6 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
     : "bg-accent/20 text-accent-foreground border-accent/40";
   const chipStyle = isStretch ? { background: "var(--accent)", color: "var(--accent-foreground)" } : undefined;
 
-  // Progress bar on a 0-to-stretch scale (0 to base when no stretch), so the base tick has a place to
-  // sit. The single fill is split Careem/Talabat by each platform's share of combined sales.
-  const mScaleMax = pace.stretch ?? pace.base;
-  const mFillPct = mScaleMax > 0 ? Math.min(pace.totalSales / mScaleMax, 1) * 100 : 0;
-  const mBaseTickPct = pace.stretch != null && mScaleMax > 0 ? (pace.base / mScaleMax) * 100 : null;
-
   // The fixed footer button: same position and size in both states, only the label and chevron change.
   // This is the whole point of the layout, so the control never moves between collapsed and expanded.
   const footerBtn = (
@@ -1435,15 +1410,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           </>
         )}
       </div>
-      <div className="relative h-2.5 rounded-md mt-3 bg-muted">
-        <div className="absolute inset-y-0 left-0 flex overflow-hidden rounded-md" style={{ width: `${mFillPct}%` }}>
-          <div className="h-full" style={{ width: `${segCareemShare * 100}%`, background: colorFor("Careem") }} />
-          <div className="h-full flex-1" style={{ background: colorFor("Talabat") }} />
-        </div>
-        {mBaseTickPct != null && (
-          <div className="absolute -top-1 -bottom-1 w-0.5 rounded-sm" style={{ left: `${mBaseTickPct}%`, background: "var(--muted-foreground)" }} />
-        )}
-      </div>
+      <PaceProgressBar totalSales={pace.totalSales} target={pace.base} moonshot={pace.stretch} careemSales={careem?.sales ?? 0} talabatSales={talabat?.sales ?? 0} />
       <table className="w-full mt-3 text-[12.5px]">
         <tbody>
           <tr>
