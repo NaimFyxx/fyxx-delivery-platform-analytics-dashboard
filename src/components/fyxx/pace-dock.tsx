@@ -187,8 +187,8 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
         <span style={{ color: "rgba(244,239,231,.62)" }}>Combined <span className="font-semibold" style={{ color: "#f4efe7" }}>{fmtInt(pace.totalSales)}</span> JOD</span>
         {targetSet && (
           <span className="sm:ml-auto inline-flex items-center gap-1" style={{ color: "rgba(244,239,231,.72)" }}>
-            Base <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
-            {pace.stretch != null && <>{" · "}Stretch <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
+            Target <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
+            {pace.stretch != null && <>{" · "}Moonshot <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
             {" JOD"}
             <InfoTip id="pace_base_stretch" side="top" className="text-white/70 hover:text-white" />
           </span>
@@ -282,8 +282,8 @@ export function PaceBar({ pace, month }: { pace: PaceData; month: string }) {
         <span style={{ color: "rgba(244,239,231,.62)" }}>Combined <span className="font-semibold" style={{ color: "#f4efe7" }}>{fmtInt(pace.totalSales)}</span> JOD</span>
         {targetSet && (
           <span className="sm:ml-auto inline-flex items-center gap-1" style={{ color: "rgba(244,239,231,.72)" }}>
-            Base <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
-            {pace.stretch != null && <>{" · "}Stretch <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
+            Target <b style={{ color: "#EEC36A" }}>{fmtInt(pace.base)}</b>
+            {pace.stretch != null && <>{" · "}Moonshot <b style={{ color: "#EEC36A" }}>{fmtInt(pace.stretch)}</b></>}
             {" JOD"}
             <InfoTip id="pace_base_stretch" side="top" className="text-white/70 hover:text-white" />
           </span>

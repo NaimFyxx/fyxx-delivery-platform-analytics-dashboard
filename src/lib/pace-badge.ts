@@ -1,7 +1,7 @@
 /**
  * Pace badge state: the combined figure against the combined base and (optional) stretch targets.
  * Pure and stateless. Permanence of the reached states is inherent, not tracked here: cumulative
- * sales cannot fall, so once totalSales >= base the month reads "Base reached" on any later day, and
+ * sales cannot fall, so once totalSales >= base the month reads "Target reached" on any later day, and
  * likewise for stretch. Read-only helper; it does not touch targets, sales, VAT or margins.
  */
 export type PaceBadgeState = "no_target" | "in_progress" | "base_reached" | "stretch_reached" | "missed";
@@ -30,7 +30,9 @@ export function paceBasePct(totalSales: number, base: number): number | null {
 export const PACE_BADGE_LABEL: Record<PaceBadgeState, string | null> = {
   no_target: null,
   in_progress: null,
-  base_reached: "Base reached",
-  stretch_reached: "Stretch reached",
+  // User-facing labels only. The state keys (base_reached / stretch_reached) and the DB columns stay;
+  // "base" reads as "Target" and "stretch" as "Moonshot" everywhere they are shown.
+  base_reached: "Target reached",
+  stretch_reached: "Moonshot reached",
   missed: "Target missed",
 };

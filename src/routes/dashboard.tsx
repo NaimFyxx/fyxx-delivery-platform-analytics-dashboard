@@ -1365,8 +1365,8 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
         </span>
         <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground text-num">
           Combined <span className="text-foreground font-semibold">{fmtInt(pace.totalSales)}</span>
-          {" / base "}{fmtInt(pace.base)}
-          {pace.stretch != null && <>{" · stretch "}{fmtInt(pace.stretch)}</>}
+          {" / target "}{fmtInt(pace.base)}
+          {pace.stretch != null && <>{" · moonshot "}{fmtInt(pace.stretch)}</>}
           {" JOD"}
           <InfoTip id="pace_base_stretch" side="top" />
         </span>
@@ -1375,7 +1375,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   );
 
   // ---------- MOBILE card (Layout C: a scannable label/value table, no chips) ----------
-  // The badge (Base reached / Target missed / Stretch reached) carries into the collapsed summary
+  // The badge (Target reached / Target missed / Moonshot reached) carries into the collapsed summary
   // chip; when no badge applies, the chip shows the against-pace figure.
   const badgeText = PACE_BADGE_LABEL[badge] ?? `${Math.round(pace.proRatedAch)}% of pace`;
   const chipClass =
@@ -1450,12 +1450,12 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
             <td className="py-1 text-right font-semibold text-num">{fmtInt(pace.totalSales)} JOD</td>
           </tr>
           <tr>
-            <td className="py-1 text-muted-foreground">Base target</td>
+            <td className="py-1 text-muted-foreground">Target</td>
             <td className="py-1 text-right text-num">{fmtInt(pace.base)} JOD</td>
           </tr>
           {pace.stretch != null && (
             <tr>
-              <td className="py-1 text-muted-foreground">Stretch</td>
+              <td className="py-1 text-muted-foreground">Moonshot</td>
               <td className="py-1 text-right text-num">{fmtInt(pace.stretch)} JOD</td>
             </tr>
           )}

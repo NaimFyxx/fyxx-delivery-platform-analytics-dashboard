@@ -114,14 +114,14 @@ export const EXPLAINERS: Record<string, Explainer> = {
   // Pace tracker
   pace_pct: {
     label: "Pace %",
-    meaning: "How far you are toward the combined base target so far. Always measured against base, never stretch.",
-    formula: "sales ÷ base × 100",
+    meaning: "How far you are toward the combined Target so far. Always measured against Target, never Moonshot.",
+    formula: "sales ÷ Target × 100",
     example: "248 ÷ 1,000 ≈ 25%.",
   },
   pace_prorated: {
     label: "% of pace",
-    meaning: "Where you are vs where you'd need to be by today to finish the month on base. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the base you have hit. That is the big number on the left.)",
-    formula: "sales ÷ (base × dayOfMonth ÷ daysInMonth) × 100",
+    meaning: "Where you are vs where you'd need to be by today to finish the month on Target. 100% = exactly on track; below 100% = behind; above 100% = ahead. (It is NOT how much of the Target you have hit. That is the big number on the left.)",
+    formula: "sales ÷ (Target × dayOfMonth ÷ daysInMonth) × 100",
     example: "Day 27/30 → you'd expect 900; at 771 that's 86% of pace (a little behind).",
   },
   working_days: {
@@ -139,33 +139,33 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   target_pct: {
     label: "Target achievement %",
-    meaning: "How far actual sales are vs this platform's monthly base target.",
-    formula: "actual ÷ base × 100",
+    meaning: "How far actual sales are vs this platform's monthly Target.",
+    formula: "actual ÷ Target × 100",
     example: "680 ÷ 1,000 = 68%.",
   },
   pace_base_stretch: {
-    label: "Base and stretch",
+    label: "Target and Moonshot",
     meaning:
-      "Base is the number you expect to hit (the two platform targets summed); stretch is an optional combined upside for the month. The badge reads Base reached, then Stretch reached, once cumulative sales cross each, and those stay set for the rest of the month. The percentage and pace are always measured against base.",
-    formula: "base = Talabat target + Careem target; stretch = combined stretch",
-    example: "Base 1,000, stretch 1,150. At 1,000 the badge reads Base reached.",
+      "Target is the number you expect to hit (the two platform targets summed); Moonshot is an optional combined upside for the month. The badge reads Target reached, then Moonshot reached, once cumulative sales cross each, and those stay set for the rest of the month. The percentage and pace are always measured against Target.",
+    formula: "Target = Talabat target + Careem target; Moonshot = combined upside",
+    example: "Target 1,000, Moonshot 1,150. At 1,000 the badge reads Target reached.",
   },
   // One consolidated explainer for the mobile pace card, which carries a single title info icon in
-  // place of the five scattered ones. Combines base/stretch, against-pace, and data-through so none of
-  // those explanations is lost when the individual icons are removed on mobile.
+  // place of the five scattered ones. Combines Target/Moonshot, against-pace, and data-through so none
+  // of those explanations is lost when the individual icons are removed on mobile.
   pace_card: {
     label: "Reading this card",
     meaning:
-      "Base is the number you expect to hit (the two platform targets summed); stretch is an optional combined upside. The badge reads Base reached, then Stretch reached, once cumulative sales cross each, and stays set for the rest of the month. Against pace is where you are versus where you would need to be by today to finish the month on base: 100% is exactly on track, below is behind, above is ahead. Data through is the latest date both platforms have data for, limited by the slower one; amber means a recent day may still be missing.",
-    formula: "against pace = sales ÷ (base × dayOfMonth ÷ daysInMonth) × 100",
-    example: "Base 1,000, stretch 1,150. Day 27/30 you would expect 900; at 771 that is 86% of pace.",
+      "Target is the number you expect to hit (the two platform targets summed); Moonshot is an optional combined upside. The badge reads Target reached, then Moonshot reached, once cumulative sales cross each, and stays set for the rest of the month. Against pace is where you are versus where you would need to be by today to finish the month on Target: 100% is exactly on track, below is behind, above is ahead. Data through is the latest date both platforms have data for, limited by the slower one; amber means a recent day may still be missing.",
+    formula: "against pace = sales ÷ (Target × dayOfMonth ÷ daysInMonth) × 100",
+    example: "Target 1,000, Moonshot 1,150. Day 27/30 you would expect 900; at 771 that is 86% of pace.",
   },
   pace_bar: {
     label: "Pace bar",
     meaning:
-      "The same month-to-date pace as the Overview card, pinned to the bottom so it follows you between pages. The track runs from 0 to stretch (0 to base when no stretch is set), with a yellow tick at base and a muted tick at stretch. Choose whether it shows with the gear button, bottom right.",
-    formula: "cumulative combined sales vs base and stretch",
-    example: "248 of base 1,000 with the fill about a quarter along.",
+      "The same month-to-date pace as the Overview card, pinned to the bottom so it follows you between pages. The track runs from 0 to the Moonshot (0 to the Target when no Moonshot is set), with a flag at the Target and a hatched Moonshot zone beyond it. Choose whether it shows with the gear button, bottom right.",
+    formula: "cumulative combined sales vs Target and Moonshot",
+    example: "248 of Target 1,000 with the fill about a quarter along.",
   },
   monthly_average: {
     label: "Monthly Average",
@@ -257,7 +257,7 @@ export const EXPLAINERS: Record<string, Explainer> = {
   },
   target_line: {
     label: "Target line",
-    meaning: "The monthly base sales-target reference line: where you need to be by end of month.",
+    meaning: "The monthly sales Target reference line: where you need to be by end of month.",
   },
   best_ever: {
     label: "Best ever",

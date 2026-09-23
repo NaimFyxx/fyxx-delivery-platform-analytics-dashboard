@@ -69,8 +69,8 @@ describe("Overview (Dashboard) renders August figures from the money trail", () 
   });
 });
 
-describe("Pace bar renders the base/stretch badge", () => {
-  it("shows Stretch reached and the base+stretch row", () => {
+describe("Pace bar renders the Target/Moonshot badge", () => {
+  it("shows Moonshot reached and the Target+Moonshot row", () => {
     const pace = {
       rows: [
         { platform: "Talabat" as const, sales: 700, target: 590, achievement: 0 },
@@ -84,10 +84,10 @@ describe("Pace bar renders the base/stretch badge", () => {
     // jsdom applies no CSS, so both the mobile (collapsed) summary and the desktop block render, which
     // duplicates the month, percentage and badge. The base/stretch detail lives only in the desktop
     // block here (mobile shows it on expand), so it is single.
-    expect(screen.getAllByText("Stretch reached").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("120%").length).toBeGreaterThan(0); // percent of base, not stretch
-    expect(screen.getByText("1,000")).toBeInTheDocument(); // base value
-    expect(screen.getByText("1,150")).toBeInTheDocument(); // stretch value
+    expect(screen.getAllByText("Moonshot reached").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("120%").length).toBeGreaterThan(0); // percent of Target, not Moonshot
+    expect(screen.getByText("1,000")).toBeInTheDocument(); // Target value
+    expect(screen.getByText("1,150")).toBeInTheDocument(); // Moonshot value
     // The Talabat/Careem figures render, and the bar sets an explicit cream text colour on a defined
     // token (not the undefined --cream that made those spans dark-on-dark). Guards that regression.
     expect(screen.getByText("Talabat")).toBeInTheDocument();

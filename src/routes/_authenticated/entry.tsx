@@ -810,7 +810,7 @@ function TargetsForm() {
       if (talT.trim() !== "") payload.push({ month, platform: "Talabat", sales_target_jod: Number(talT) });
       if (carT.trim() !== "") payload.push({ month, platform: "Careem", sales_target_jod: Number(carT) });
       const hasStretch = stretch.trim() !== "";
-      if (payload.length === 0 && !hasStretch) throw new Error("Enter a base target or a combined stretch");
+      if (payload.length === 0 && !hasStretch) throw new Error("Enter a Target or a combined Moonshot");
       if (payload.length > 0) {
         const { error } = await supabase.from("targets").upsert(payload, { onConflict: "month,platform" });
         if (error) throw error;
@@ -839,15 +839,15 @@ function TargetsForm() {
     <div className="space-y-6 mt-4">
       <Card className="p-5">
         <p className="text-xs text-muted-foreground mb-3">
-          The two platform figures are the <b>base</b>, the number you expect to hit; their sum is the combined base the pace
-          badge tracks. The <b>combined stretch</b> is one optional upside figure for the month. Leave a field blank to keep its
-          current value unchanged. A month with a base but no stretch behaves exactly as before.
+          The two platform figures are the <b>Target</b>, the number you expect to hit; their sum is the combined Target the pace
+          badge tracks. The <b>combined Moonshot</b> is one optional upside figure for the month. Leave a field blank to keep its
+          current value unchanged. A month with a Target but no Moonshot behaves exactly as before.
         </p>
         <form className="grid gap-4 md:grid-cols-5" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
           <Field label="Month"><MonthPicker value={month} onChange={setMonth} /></Field>
-          <Field label="Talabat base (JOD)"><Input type="number" step="0.001" min="0" value={talT} onChange={(e) => setTalT(e.target.value)} placeholder={currentFor("Talabat")} /></Field>
-          <Field label="Careem base (JOD)"><Input type="number" step="0.001" min="0" value={carT} onChange={(e) => setCarT(e.target.value)} placeholder={currentFor("Careem")} /></Field>
-          <Field label="Combined stretch (optional)"><Input type="number" step="0.001" min="0" value={stretch} onChange={(e) => setStretch(e.target.value)} placeholder={currentStretch(month)} /></Field>
+          <Field label="Talabat Target (JOD)"><Input type="number" step="0.001" min="0" value={talT} onChange={(e) => setTalT(e.target.value)} placeholder={currentFor("Talabat")} /></Field>
+          <Field label="Careem Target (JOD)"><Input type="number" step="0.001" min="0" value={carT} onChange={(e) => setCarT(e.target.value)} placeholder={currentFor("Careem")} /></Field>
+          <Field label="Combined Moonshot (optional)"><Input type="number" step="0.001" min="0" value={stretch} onChange={(e) => setStretch(e.target.value)} placeholder={currentStretch(month)} /></Field>
           <SubmitBtn pending={save.isPending} />
         </form>
       </Card>
