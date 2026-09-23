@@ -74,6 +74,34 @@ dark panel but rendered as a sage/tan mid-tone, which inverted the fix: pointing
 not to ~8:1. Rasterise the element and sample the pixel (or composite the layers by hand) before
 trusting a contrast number over any translucent surface.
 
+## Platform logos: where they are used, and why three placements are missing
+
+The real platform wordmarks are used only on **light surfaces**, via `PlatformLogo`
+(`src/components/fyxx/platform-logo.tsx`):
+
+- **Chart legends** and **chart tooltips** (currently the Sales by Platform chart): the wordmark
+  replaces the coloured square. Done.
+
+Three intended placements are **deliberately not done**, all blocked by the same asset limitation:
+
+| Placement | Status | Why |
+|---|---|---|
+| Filter pills | skipped | The active pill fills with the platform colour; an orange wordmark on an orange fill is invisible, and the Talabat asset cannot be recoloured (see below). |
+| Pace tracker rows (dark bar) | skipped | Needs the bright Careem and a Talabat that reads on dark; the Talabat asset cannot be recoloured to a dark-surface value. Keeps its coloured dots. |
+| Inside the Sales by Platform bars | skipped | Same recolouring limit, plus bars get a few pixels tall and there can be 31 per day. |
+
+**The asset limitation.** Careem ships a real SVG (`careem-logo-full.svg`, a single-fill dark-green
+wordmark) that renders on any light surface. **Talabat ships only a raster PNG** (an orange wordmark on
+transparent, referenced through `talabat-logo.png.asset.json`). A raster cannot be recoloured, so
+Talabat's logo works only where its own orange is already legible, which is a light background it is not
+sitting on top of. That rules out the active (orange-filled) pill, the dark pace bar, and a mark inside
+an orange bar segment.
+
+**Revisit when a proper Talabat SVG exists.** A single-fill Talabat SVG (recolourable to
+`--talabat-dark-bg` for dark surfaces, or to white for the active pill) unblocks all three. Until then
+these placements keep their existing colour treatment rather than shipping an invisible or illegible
+logo.
+
 ## Why this file exists
 
 Three consecutive audits each found the **same class of bug in a new place**: a light-background colour
