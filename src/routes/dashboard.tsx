@@ -53,7 +53,8 @@ function kpiView(t: MoneyTrail) {
 type MonthAgg = ReturnType<typeof aggOf>;
 const shortMonth = (m: string) => new Date(m + "-01T00:00:00").toLocaleString("en-US", { month: "short" });
 /** "YYYY-MM" to "December 2025", for naming the month a best-ever record holds or beats. */
-const monthYearLong = (m: string) => new Date(m + "-01T00:00:00").toLocaleString("en-US", { month: "long", year: "numeric" });
+/** "YYYY-MM" to "Aug 26" (short, for chips that must fit a 250px card). */
+const monthYearShort = (m: string) => new Date(m + "-01T00:00:00").toLocaleString("en-US", { month: "short", year: "2-digit" });
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -833,7 +834,7 @@ export function PublicDashboard() {
                       </span>
                       {commissionDragBadge.beatsMonth != null && commissionDragBadge.beatsValue != null && (
                         <span className="text-[11px] text-muted-foreground">
-                          beats {monthYearLong(commissionDragBadge.beatsMonth)} at {commissionDragBadge.fmt(commissionDragBadge.beatsValue)}
+                          beats {monthYearShort(commissionDragBadge.beatsMonth)} at {commissionDragBadge.fmt(commissionDragBadge.beatsValue)}
                         </span>
                       )}
                     </div>
@@ -1091,7 +1092,7 @@ export function Kpi({
               </span>
             ) : (
               <span className="inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style={{ color: "var(--warning-text)", borderColor: "var(--warning-text)" }}>
-                On track to beat {record.recordMonth ? monthYearLong(record.recordMonth) : "the record"}
+                On track to beat {record.recordMonth ? monthYearShort(record.recordMonth) : "the record"}
               </span>
             )}
             <InfoTip id="best_ever" />
@@ -1099,10 +1100,10 @@ export function Kpi({
           <div className="text-[11px] text-muted-foreground mt-1">
             {record.state === "record"
               ? record.beatsMonth != null && record.beatsValue != null
-                ? `beats ${monthYearLong(record.beatsMonth)} at ${record.fmt(record.beatsValue)}`
+                ? `beats ${monthYearShort(record.beatsMonth)} at ${record.fmt(record.beatsValue)}`
                 : "the first clean month on record"
               : record.recordValue != null && record.recordMonth != null
-                ? `record ${record.fmt(record.recordValue)} · ${monthYearLong(record.recordMonth)}`
+                ? `record ${record.fmt(record.recordValue)} · ${monthYearShort(record.recordMonth)}`
                 : ""}
           </div>
         </div>
