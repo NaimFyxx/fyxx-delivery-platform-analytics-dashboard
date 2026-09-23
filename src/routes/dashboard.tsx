@@ -25,7 +25,7 @@ import { fmtJOD0, fmtInt, platformsFromFilter, type Platform, type PlatformKey }
 import { monthOfDate, monthLabel, prevMonth, lastDayOfMonth, type RangeKey } from "@/lib/months";
 import { moneyTrail, moneyTrailPerMonth, type MoneyTrail, type MoneyTrailInput } from "@/lib/money-trail";
 import { completeMonths } from "@/lib/report";
-import { paceBadgeState, PACE_BADGE_LABEL } from "@/lib/pace-badge";
+import { paceBadgeState, PACE_BADGE_LABEL, celebrationFor } from "@/lib/pace-badge";
 import { computePace, currentPaceMonth, type PaceData } from "@/lib/pace";
 import { usePaceView } from "@/lib/pace-view";
 // Re-exported so index.tsx and targets.tsx keep importing pace helpers from here.
@@ -1253,9 +1253,10 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   const isReached = badge === "base_reached" || badge === "stretch_reached";
   const isStretch = badge === "stretch_reached";
   const isMissed = badge === "missed";
+  const celeb = celebrationFor(badge); // gold card outline + solid gold chip when reached, else null
 
   const cardBody = (
-    <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm" style={celeb ? { boxShadow: celeb.cardOutline } : undefined}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <h3 className="font-display text-sm font-semibold whitespace-nowrap">
@@ -1304,9 +1305,9 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           {isReached || isMissed ? (
             <span
               className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] md:text-[10px] font-semibold align-middle ${
-                isStretch ? "" : isReached ? "bg-success/10 text-success border-success/30" : "bg-muted text-muted-foreground border-border"
+                celeb ? "border-transparent" : "bg-muted text-muted-foreground border-border"
               }`}
-              style={isStretch ? { background: "var(--accent)", color: "var(--accent-foreground)", borderColor: "rgba(9,39,39,0.25)" } : undefined}
+              style={celeb ? { background: celeb.chipBg, color: celeb.chipText } : undefined}
             >
               {PACE_BADGE_LABEL[badge]}
             </span>
@@ -1360,12 +1361,12 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
   // The badge (Target reached / Target missed / Moonshot reached) carries into the collapsed summary
   // chip; when no badge applies, the chip shows the against-pace figure.
   const badgeText = PACE_BADGE_LABEL[badge] ?? `${Math.round(pace.proRatedAch)}% of pace`;
-  const chipClass =
-    isStretch ? "border-transparent"
-    : isReached ? "bg-success/10 text-success border-success/30"
-    : isMissed ? "bg-muted text-muted-foreground border-border"
-    : "bg-accent/20 text-accent-foreground border-accent/40";
-  const chipStyle = isStretch ? { background: "var(--accent)", color: "var(--accent-foreground)" } : undefined;
+  const chipClass = celeb
+    ? "border-transparent"
+    : isMissed
+      ? "bg-muted text-muted-foreground border-border"
+      : "bg-accent/20 text-accent-foreground border-accent/40";
+  const chipStyle = celeb ? { background: celeb.chipBg, color: celeb.chipText } : undefined;
 
   // The fixed footer button: same position and size in both states, only the label and chevron change.
   // This is the whole point of the layout, so the control never moves between collapsed and expanded.
@@ -1465,7 +1466,7 @@ export function PaceTracker({ pace, currentMonth, toggle }: {
           never moves) toggles the full label/value body. Expanding REPLACES the summary with the body,
           not a second stacked copy. */}
       <div className="md:hidden">
-        <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm">
+        <div className="rounded-2xl border border-border bg-card p-4 mb-4 shadow-sm" style={celeb ? { boxShadow: celeb.cardOutline } : undefined}>
           {expanded ? mobileBody : collapsedSummary}
           {footerBtn}
         </div>

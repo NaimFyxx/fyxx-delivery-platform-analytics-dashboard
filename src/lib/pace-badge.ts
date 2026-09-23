@@ -36,3 +36,20 @@ export const PACE_BADGE_LABEL: Record<PaceBadgeState, string | null> = {
   stretch_reached: "Moonshot reached",
   missed: "Target missed",
 };
+
+/**
+ * The celebration treatment when a Target or Moonshot is reached: a gold outline on the card and a
+ * solid gold chip. Deliberately restrained (no animation, banner or tint). Moonshot uses the deeper
+ * gold so it outranks an ordinary Target. Centralised here so the level is easy to raise later: add a
+ * card tint or a banner in one place and both the desktop and mobile pace cards pick it up.
+ */
+export interface Celebration {
+  chipBg: string; // solid gold fill for the chip
+  chipText: string; // dark ink on the gold
+  cardOutline: string; // box-shadow value for the card
+}
+export function celebrationFor(badge: PaceBadgeState): Celebration | null {
+  if (badge === "stretch_reached") return { chipBg: "var(--warning)", chipText: "var(--accent-foreground)", cardOutline: "inset 0 0 0 2px var(--accent)" };
+  if (badge === "base_reached") return { chipBg: "var(--accent)", chipText: "var(--accent-foreground)", cardOutline: "inset 0 0 0 2px var(--accent)" };
+  return null;
+}
