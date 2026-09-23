@@ -4,6 +4,7 @@ import { AdminShell } from "@/components/fyxx/admin-sidebar";
 import { InfoTip } from "@/components/fyxx/info-tip";
 import { DataHealthChip, useHealthReport } from "@/components/fyxx/data-health-chip";
 import { PaceProgressBar } from "@/components/fyxx/pace-dock";
+import { PlatformLogo } from "@/components/fyxx/platform-logo";
 import { METRICS, bestEver, recordStateFor, type MetricDef, type MonthPoint, type RecordState } from "@/lib/records";
 import { useSoftGate } from "@/hooks/use-soft-gate";
 import { useQuery } from "@tanstack/react-query";
@@ -609,8 +610,8 @@ export function PublicDashboard() {
               <CartesianGrid stroke="var(--border)" vertical={false} />
               <XAxis dataKey="label" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} />
               <YAxis stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip {...tooltipStyle} formatter={(v: number) => fmtJOD0(v)} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Tooltip content={<PlatformChartTooltip />} />
+              <Legend content={<PlatformChartLegend />} />
               {/* isAnimationActive={false}: the enter animation could start before the responsive
                   container was sized and never advance, leaving bars at height 0 and the line at 0
                   length (the empty-chart render bug). Every other chart on the page disables it. */}
@@ -1484,6 +1485,57 @@ const tooltipStyle = {
   },
   labelStyle: { color: "var(--foreground)" },
 };
+
+const isPlatformName = (n: unknown): n is "Talabat" | "Careem" => n === "Talabat" || n === "Careem";
+
+/** Legend for the Sales by Platform chart: the platform wordmark replaces the coloured square; any
+ *  other series (e.g. the 7-day average line) keeps its swatch and name. */
+function PlatformChartLegend({ payload }: { payload?: { value: string; color?: string }[] }) {
+  if (!payload?.length) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] mt-1">
+      {payload.map((e) => (
+        <span key={e.value} className="inline-flex items-center gap-1.5">
+          {isPlatformName(e.value) ? (
+            <PlatformLogo platform={e.value} className="h-3.5 w-auto" />
+          ) : (
+            <>
+              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: e.color }} />
+              <span className="text-muted-foreground">{e.value}</span>
+            </>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Tooltip for the Sales by Platform chart: the platform wordmark sits beside each platform's value. */
+function PlatformChartTooltip({ active, payload, label }: {
+  active?: boolean;
+  payload?: { name: string; value: number; color?: string }[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ ...tooltipStyle.contentStyle, padding: "6px 10px" }}>
+      <div style={{ fontWeight: 600, color: "var(--foreground)", marginBottom: 2 }}>{label}</div>
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-1.5" style={{ color: "var(--foreground)" }}>
+          {isPlatformName(p.name) ? (
+            <PlatformLogo platform={p.name} className="h-3 w-auto" />
+          ) : (
+            <>
+              <span className="inline-block w-2 h-2 rounded-sm" style={{ background: p.color }} />
+              <span>{p.name}</span>
+            </>
+          )}
+          <span className="text-num font-semibold">{fmtJOD0(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** Hollow dot drawn only on the in-progress month of the Total sales trend, so a partial month
  *  reads as awaiting data rather than a completed point. */
