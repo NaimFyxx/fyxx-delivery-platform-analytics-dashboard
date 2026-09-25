@@ -34,7 +34,7 @@ import { moneyTrail } from "@/lib/money-trail";
 import { categoryFor } from "@/lib/categories";
 import { canonicalItemName } from "@/lib/costs";
 import { useItemView } from "@/lib/item-view";
-import { ProductBlocks, type BlockItem } from "@/components/fyxx/product-blocks";
+import { ProductBlocks, CategoryStrip, type BlockItem } from "@/components/fyxx/product-blocks";
 
 export const Route = createFileRoute("/insights")({
   ssr: false,
@@ -498,7 +498,15 @@ export function InsightsPage() {
           {topProducts.length === 0 ? (
             <Empty text="No item-level data for this range." />
           ) : (
-            <ProductBlocks items={blockItems} mode={itemViewMode} metric={anyRevenue ? "revenue" : "units"} />
+            <>
+              {/* Category totals one level up from the items. Same aggregation as the charts below
+                  (revenue-sorted), same range + platform filter; not recomputed. */}
+              <CategoryStrip
+                items={anyRevenue ? revenueByCategory : unitsByCategory}
+                metric={anyRevenue ? "revenue" : "units"}
+              />
+              <ProductBlocks items={blockItems} mode={itemViewMode} metric={anyRevenue ? "revenue" : "units"} />
+            </>
           )}
         </Panel>
 

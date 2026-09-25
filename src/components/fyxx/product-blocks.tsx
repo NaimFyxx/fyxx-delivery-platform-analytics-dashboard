@@ -215,26 +215,62 @@ export function ProductBlocks({
     );
   }
 
-  // grid: responsive tiles ~180px min; the top item takes a double-width tile.
+  // grid: uniform tiles, every one the same treatment (no lead tile). items-start so a tile sizes to
+  // its content instead of stretching to the tallest in the row; the two-line name min-height keeps a
+  // one-line and a two-line name at the same height, so the row bottoms line up without stretching.
+  // Two columns at phone width; ~200px auto-fill from sm up (five or six across on desktop).
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
-      {items.map((it, i) => (
-        <div
-          key={it.name}
-          className="rounded-2xl p-3 flex flex-col gap-2 bg-background border border-border"
-          style={i === 0 ? { gridColumn: "span 2" } : undefined}
-        >
-          <ProductPhoto item={it} cdn={400} boxClass="w-full aspect-square rounded-xl" />
-          <div className="font-semibold text-[13px] leading-tight min-h-[32px]">{it.name}</div>
+    <div className="grid gap-2 items-start grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
+      {items.map((it) => (
+        <div key={it.name} className="rounded-xl p-2.5 flex flex-col gap-1.5 bg-background border border-border">
+          <ProductPhoto item={it} cdn={400} boxClass="w-full aspect-square rounded-lg" />
+          <div className="font-semibold text-[12.5px] leading-snug min-h-[34px] line-clamp-2">{it.name}</div>
           <div>
-            <div className="font-display text-[23px] leading-none">
+            <div className="font-display text-[21px] leading-none">
               {headline(it)}
-              {metric === "revenue" && <span className="text-[12px] text-muted-foreground"> JOD</span>}
+              {metric === "revenue" && <span className="text-[11px] text-muted-foreground"> JOD</span>}
             </div>
-            <div className="text-[11px] text-muted-foreground mt-1">{secondary(it)}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{secondary(it)}</div>
           </div>
-          <div className="mt-auto">
-            <Bar pct={(valOf(it) / max) * 100} />
+          <Bar pct={(valOf(it) / max) * 100} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export interface CategoryStripItem {
+  category: string;
+  revenue: number;
+  units: number;
+}
+
+/**
+ * A compact strip of category totals above the item blocks: category icon, name and revenue, one
+ * small block per category, sorted by the caller. Answers "what sells" one level up from the items.
+ * No photos, much smaller than the item tiles. Reuses the same category aggregation as the charts
+ * below; it does not recompute. `metric` follows the item blocks (revenue, or units when no revenue
+ * is imported).
+ */
+export function CategoryStrip({ items, metric }: { items: CategoryStripItem[]; metric: "revenue" | "units" }) {
+  if (!items.length) return null;
+  const value = (c: CategoryStripItem) => (metric === "revenue" ? jod0(c.revenue) : c.units.toLocaleString());
+  return (
+    <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(124px, 1fr))" }}>
+      {items.map((c) => (
+        <div key={c.category} className="flex items-center gap-2 rounded-xl px-2.5 py-2 bg-background border border-border min-w-0">
+          <div
+            className="w-7 h-7 rounded-md grid place-items-center shrink-0"
+            style={{ backgroundColor: "var(--muted)", color: categoryColor(c.category) }}
+          >
+            <CategoryIcon category={c.category} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold truncate">{c.category}</div>
+            <div className="font-display text-[14px] leading-none mt-0.5">
+              {value(c)}
+              {metric === "revenue" && <span className="text-[9px] text-muted-foreground"> JOD</span>}
+            </div>
           </div>
         </div>
       ))}
