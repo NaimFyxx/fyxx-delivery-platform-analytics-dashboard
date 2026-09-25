@@ -15,7 +15,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { normalizeItemName } = await import("@/lib/costs");
 
-  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData, stretchData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData, stretchData, pricesData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -66,6 +66,10 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     // error tuple, not a throw, so `data ?? []` yields no stretch and every month shows base-only.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- not in generated types yet (like pace_daily)
     (supabaseAdmin as any).from("monthly_stretch_targets").select("month,stretch_jod"),
+    // Set menu prices per platform. Carried in the DTO (same as costs) so the catalogue is fully
+    // known to any view: a "never sold" item can exist as a price-only row with no cost, and vice
+    // versa. Read-only; not used by any margin/COGS calc.
+    supabaseAdmin.from("item_prices").select("item_name,platform,price_incl_vat,effective_from"),
   ]);
 
   // Normalized alias lookup: normalized raw_name -> normalized canonical_name.
@@ -167,6 +171,12 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       platform: r.platform as string,
       deductionType: r.deduction_type as string,
       amount: Number(r.amount),
+    })),
+    prices: ((pricesData.data ?? []) as { item_name: string; platform: string; price_incl_vat: number; effective_from: string }[]).map((r) => ({
+      item_name: r.item_name,
+      platform: r.platform as string,
+      price_incl_vat: Number(r.price_incl_vat),
+      effective_from: r.effective_from,
     })),
     itemCategories,
     lastOrderDates,

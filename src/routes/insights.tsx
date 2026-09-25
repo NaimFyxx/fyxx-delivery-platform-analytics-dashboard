@@ -29,9 +29,10 @@ import { monthOfDate, monthLabel, type RangeKey } from "@/lib/months";
 import { platformsFromFilter, fmtJOD0, type Platform } from "@/lib/fyxx";
 import { useRangeFilter } from "@/hooks/use-range-filter";
 import { validateFilterSearch, retainFilterParams } from "@/lib/filter-search";
-import { aggregateItems } from "@/lib/items";
+import { aggregateItems, buildZeroSalesRows } from "@/lib/items";
 import { moneyTrail } from "@/lib/money-trail";
 import { categoryFor } from "@/lib/categories";
+import { canonicalItemName } from "@/lib/costs";
 
 export const Route = createFileRoute("/insights")({
   ssr: false,
@@ -158,6 +159,30 @@ export function InsightsPage() {
     () => byCategory.filter((c) => c.units > 0).sort((a, b) => b.units - a.units),
     [byCategory],
   );
+
+  // --- Never sold: catalogue items (item_costs or item_prices) with no monthly_item_sales row of
+  //     units > 0, ACROSS ALL TIME. All-time by definition, so this is deliberately independent of
+  //     the range and platform filters (depends only on `data`). Uses the same synthesizer as the
+  //     Items page's zero-sales toggle (buildZeroSalesRows); the only difference is the scope of the
+  //     "already sold" set: here it is every canonical item ever sold on either platform. Names
+  //     resolve through the alias map so an item sold under another spelling is not wrongly listed. ---
+  const neverSold = useMemo(() => {
+    if (!data) return [];
+    const aliases = data.itemAliases ?? {};
+    const soldEver = new Set<string>();
+    for (const s of data.itemSales) {
+      if (s.units > 0) soldEver.add(canonicalItemName(s.item, aliases));
+    }
+    return buildZeroSalesRows({
+      costRows: data.costs,
+      prices: data.prices,
+      catMap: data.itemCategories ?? {},
+      dbAliases: aliases,
+      activePlatforms: ["Talabat", "Careem"], // both: never-sold is all-platform by definition
+      present: soldEver,
+      asOf: today,
+    }).sort((a, b) => a.item.localeCompare(b.item));
+  }, [data, today]);
 
   // --- Tiers: Careem uses Plus customer counts (only Plus data Careem exports);
   //     Talabat uses Pro sales/orders (which Talabat does export). ---
@@ -624,6 +649,64 @@ export function InsightsPage() {
             </div>
           )}
         </Panel>
+
+        {/* NEVER SOLD (all-time; independent of the range + platform filters) */}
+        <SectionLabel>Never Sold</SectionLabel>
+        <Panel
+          title="Catalogue items with no sales, ever"
+          info="never_sold"
+          sub="Products with a cost or a set price that have never sold a single unit on either platform, across all time. All-time by definition, so the date filter does not change this list."
+        >
+          {neverSold.length === 0 ? (
+            <Empty text="Every catalogue item has sold at least once. Nothing has never sold." />
+          ) : (
+            <>
+              <div className="text-[11px] text-muted-foreground mb-2">
+                {neverSold.length} {neverSold.length === 1 ? "item" : "items"}
+              </div>
+              <div className="overflow-auto overscroll-contain max-h-[520px]">
+                <table className="min-w-[560px] w-full text-[12px]">
+                  <thead className="bg-background text-muted-foreground sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-left sticky left-0 z-20 bg-background border-r border-border">
+                        Item
+                      </th>
+                      <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-left">
+                        Category
+                      </th>
+                      <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
+                        Cost/unit (exVAT)
+                      </th>
+                      <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
+                        Talabat price
+                      </th>
+                      <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wide whitespace-nowrap text-right">
+                        Careem price
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {neverSold.map((r) => (
+                      <tr key={r.item} className="border-t border-border">
+                        <td className="px-3 py-2 sticky left-0 z-10 bg-card border-r border-border">{r.item}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.category}</td>
+                        <td className="px-3 py-2 text-right text-num text-muted-foreground">
+                          {r.lastCost != null ? r.lastCost.toFixed(2) : "-"}
+                        </td>
+                        <td className="px-3 py-2 text-right text-num text-muted-foreground">
+                          {r.listPrice.Talabat != null ? r.listPrice.Talabat.toFixed(2) : "-"}
+                        </td>
+                        <td className="px-3 py-2 text-right text-num text-muted-foreground">
+                          {r.listPrice.Careem != null ? r.listPrice.Careem.toFixed(2) : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Panel>
         </>
         )}
 
@@ -693,17 +776,23 @@ function ThSort({
 function Panel({
   title,
   sub,
+  info,
   children,
 }: {
   title: string;
   sub?: string;
+  /** Optional explainer id: renders an InfoTip next to the panel title. */
+  info?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-4 mb-2">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h3 className="font-display text-[15px] font-semibold">{title}</h3>
+          <h3 className="font-display text-[15px] font-semibold inline-flex items-center gap-1.5">
+            {title}
+            {info && <InfoTip id={info} side="bottom" />}
+          </h3>
           {sub && <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
         </div>
       </div>

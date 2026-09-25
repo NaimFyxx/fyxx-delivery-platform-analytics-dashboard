@@ -82,6 +82,7 @@ export function buildFixture(): DashboardData {
     daily,
     financials,
     costs: [{ item: "unit", cost: 1, effective_from: "2025-01-01" }],
+    prices: [],
     itemSales,
     targets: [],
     lastImportAt: "2026-08-31T00:00:00Z",

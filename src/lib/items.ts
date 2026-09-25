@@ -1,4 +1,5 @@
 import { costAsOf, canonicalItemName, normalizeItemName, priceAsOf, type CostRow, type DbAliasMap } from "./costs";
+import { categoryFor, type CategoryMap } from "./categories";
 import { exVat } from "./fyxx";
 
 export interface AggItem {
@@ -121,4 +122,82 @@ export function aggregateItems(args: {
       commMargin: r.commPayout > 0 ? ((r.commPayout - r.cogs) / r.commPayout) * 100 : null,
       netMargin: r.netPayout > 0 ? (r.netProfit / r.netPayout) * 100 : null,
     }));
+}
+
+/** An aggregated item plus its category and a zero-sales flag (the shape the Items table renders). */
+export type ItemRow = AggItem & { category: string; zeroSales: boolean };
+
+/**
+ * Synthesize rows for catalogue items that have NO sales, given a `present` set of canonical names
+ * to treat as already-sold. Pulls name, platforms, set prices and unit cost from item_costs /
+ * item_prices / item_categories (the same tables the Add product form writes). All sales-derived
+ * figures are left empty (0 units, null margins) so nothing is faked and nothing divides by zero.
+ *
+ * The single definition of "a catalogue item with no sales". The scope is the caller's: the Items
+ * page passes a range-scoped `present` set ("no sales in the current view"); the Insights "Never
+ * sold" block passes an all-time `present` set with both platforms active ("no sales, ever").
+ */
+export function buildZeroSalesRows(args: {
+  costRows: CostRow[];
+  prices: { item_name: string; platform: string; price_incl_vat: number; effective_from?: string }[];
+  catMap: CategoryMap;
+  dbAliases: DbAliasMap;
+  activePlatforms: string[];
+  present: Set<string>;
+  asOf: string;
+}): ItemRow[] {
+  const { costRows, prices, catMap, dbAliases, activePlatforms, present, asOf } = args;
+
+  // Pick one display name per canonical catalogue item, skipping any that already have sales.
+  const names = new Map<string, string>();
+  const consider = (name: string) => {
+    const canon = canonicalItemName(name, dbAliases);
+    if (present.has(canon)) return;
+    const cur = names.get(canon);
+    if (cur == null) { names.set(canon, name); return; }
+    const curDirect = normalizeItemName(cur) === canon;
+    const newDirect = normalizeItemName(name) === canon;
+    if (newDirect && !curDirect) names.set(canon, name);
+    else if (newDirect === curDirect && name.length < cur.length) names.set(canon, name);
+  };
+  for (const c of costRows) consider(c.item);
+  for (const p of prices) consider(p.item_name);
+
+  // Which platforms each catalogue item is listed on (from its price rows).
+  const platformsByCanon = new Map<string, Set<string>>();
+  for (const p of prices) {
+    const canon = canonicalItemName(p.item_name, dbAliases);
+    if (!platformsByCanon.has(canon)) platformsByCanon.set(canon, new Set());
+    platformsByCanon.get(canon)!.add(p.platform);
+  }
+
+  const rows: ItemRow[] = [];
+  for (const [canon, name] of names) {
+    const listed = Array.from(platformsByCanon.get(canon) ?? []);
+    // Respect the platform filter: show if listed on an active platform; a cost-only item
+    // (no price rows) only appears under the "All platforms" filter.
+    const onActive = listed.length ? listed.some((p) => activePlatforms.includes(p)) : activePlatforms.length >= 2;
+    if (!onActive) continue;
+
+    rows.push({
+      item: name,
+      platforms: new Set(listed.filter((p) => activePlatforms.includes(p))),
+      units: 0,
+      revenue: 0,
+      cogs: 0,
+      lastCost: costAsOf(costRows, name, asOf, dbAliases),
+      avgPrice: null,
+      perPlatform: {},
+      listPrice: {
+        Talabat: priceAsOf(prices, name, "Talabat", asOf, dbAliases),
+        Careem: priceAsOf(prices, name, "Careem", asOf, dbAliases),
+      },
+      productMargin: null,
+      commMargin: null,
+      netMargin: null,
+      category: categoryFor(name, catMap, dbAliases),
+      zeroSales: true,
+    });
+  }
+  return rows;
 }

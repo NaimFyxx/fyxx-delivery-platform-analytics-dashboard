@@ -73,6 +73,13 @@ export const EXPLAINERS: Record<string, Explainer> = {
     meaning: "Units sold in the selected period, for the current platform filter.",
     formula: "Σ units",
   },
+  never_sold: {
+    label: "Never sold",
+    meaning:
+      "Products that exist in the catalogue (they have a cost or a set menu price) but have never sold a single unit on either platform. This is a catalogue gap, not a slow month.",
+    note: "All-time by definition, so the date filter never changes it. Names resolve through the alias map, so an item that sold under a different spelling is not wrongly listed. Same definition as the Items page 'Show items with 0 sales' toggle, but that toggle is scoped to the selected range while this is all time.",
+    example: "e.g. a newly added product not yet ordered, or a test item.",
+  },
   sell_price: {
     label: "Sell price",
     meaning:

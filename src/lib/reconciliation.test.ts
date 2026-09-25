@@ -79,7 +79,7 @@ describe("data health check 2: order-count floor gates the COGS band", () => {
     add(TARGET, 217, targetOrders); // 21.7%, 9.3 pts off the 31.0% median
     return {
       paceDaily: [], daily, financials, costs: [{ item: "unit", cost: 1, effective_from: "2025-01-01" }],
-      itemSales, targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
+      prices: [], itemSales, targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
       adjustments: [], itemCategories: {}, lastOrderDates, itemAliases: {}, stretchTargets: [],
     };
   };
@@ -142,7 +142,7 @@ describe("data health check 10: pace sheet vs imported sales", () => {
     const financials = [{ month, platform, gross: opts.importedGross, payout: opts.importedGross * 0.8, discount: 0, cogsManual: 0, adsFee: 0, boostedFee: 0, marketingFees: 0 }];
     return {
       paceDaily, daily, financials, costs: [{ item: "unit", cost: 1, effective_from: "2025-01-01" }],
-      itemSales: [], targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
+      prices: [], itemSales: [], targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
       adjustments: [], itemCategories: {}, lastOrderDates: [], itemAliases: {}, stretchTargets: [],
     };
   };
