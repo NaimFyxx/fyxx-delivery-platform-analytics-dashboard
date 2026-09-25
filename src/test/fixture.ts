@@ -90,6 +90,7 @@ export function buildFixture(): DashboardData {
     customers: [],
     adjustments: [],
     itemCategories: {},
+    itemPhotos: {},
     lastOrderDates: [],
     itemAliases: {},
     stretchTargets: [],

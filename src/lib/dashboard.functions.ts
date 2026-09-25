@@ -15,7 +15,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { normalizeItemName } = await import("@/lib/costs");
 
-  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData, stretchData, pricesData] = await Promise.all([
+  const [daily, paceData, fin, costs, itemSales, targets, lastImport, allImports, custData, adjData, catData, ordersData, aliasData, stretchData, pricesData, photoData] = await Promise.all([
     supabaseAdmin
       .from("daily_sales")
       .select(
@@ -70,6 +70,11 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     // known to any view: a "never sold" item can exist as a price-only row with no cost, and vice
     // versa. Read-only; not used by any margin/COGS calc.
     supabaseAdmin.from("item_prices").select("item_name,platform,price_incl_vat,effective_from"),
+    // Product photos (Shopify), keyed by canonical item name. Defensive like monthly_stretch_targets:
+    // if the table is absent (seed not yet run) supabase-js returns an error tuple, not a throw, so
+    // `?? []` yields no photos and every item simply falls back to its category icon. Read-only.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- not in generated types yet
+    (supabaseAdmin as any).from("item_photos").select("item_key,photo_url"),
   ]);
 
   // Normalized alias lookup: normalized raw_name -> normalized canonical_name.
@@ -82,6 +87,12 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const itemCategories: Record<string, string> = {};
   for (const r of (catData.data ?? []) as { item_key: string; category: string }[]) {
     itemCategories[r.item_key] = r.category;
+  }
+
+  // Canonical item name → Shopify product photo URL. Missing item = category-icon fallback (in the UI).
+  const itemPhotos: Record<string, string> = {};
+  for (const r of (photoData.data ?? []) as { item_key: string; photo_url: string }[]) {
+    itemPhotos[r.item_key] = r.photo_url;
   }
 
   // Max order date and order count per platform per month (from platform_orders), for the
@@ -179,6 +190,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
       effective_from: r.effective_from,
     })),
     itemCategories,
+    itemPhotos,
     lastOrderDates,
     itemAliases,
     stretchTargets: ((stretchData.data ?? []) as { month: string; stretch_jod: number }[]).map((r) => ({

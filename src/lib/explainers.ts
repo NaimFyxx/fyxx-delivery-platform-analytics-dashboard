@@ -73,6 +73,12 @@ export const EXPLAINERS: Record<string, Explainer> = {
     meaning: "Units sold in the selected period, for the current platform filter.",
     formula: "Σ units",
   },
+  product_photos: {
+    label: "Product photos",
+    meaning:
+      "The top items shown as photo blocks. Switch between a photo grid and ranked rows with the toggle. Ranking, revenue and units come from the same per-item figures as the table below.",
+    note: "Photos come from the Shopify catalogue. Delivery-only combos (Solo Smash, Double Smash Burger, Wings and Things and the rest) exist only on Talabat and Careem, so they have no Shopify photo and show a category icon instead.",
+  },
   never_sold: {
     label: "Never sold",
     meaning:

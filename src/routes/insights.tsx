@@ -33,6 +33,8 @@ import { aggregateItems, buildZeroSalesRows } from "@/lib/items";
 import { moneyTrail } from "@/lib/money-trail";
 import { categoryFor } from "@/lib/categories";
 import { canonicalItemName } from "@/lib/costs";
+import { useItemView } from "@/lib/item-view";
+import { ProductBlocks, type BlockItem } from "@/components/fyxx/product-blocks";
 
 export const Route = createFileRoute("/insights")({
   ssr: false,
@@ -132,6 +134,29 @@ export function InsightsPage() {
         .slice(0, 10),
     [items, anyRevenue],
   );
+
+  // Product-blocks view (photo grid vs ranked rows), persisted per user; guests get the grid default.
+  const { mode: itemViewMode, setMode: setItemViewMode } = useItemView();
+  // The full item table stays, collapsed by default beneath the blocks.
+  const [showAllItems, setShowAllItems] = useState(false);
+
+  // The top ten resolved to block items: photo (Shopify, by canonical name) + category for the
+  // fallback icon. Same items, same order as topProducts; no calculation here.
+  const blockItems: BlockItem[] = useMemo(() => {
+    const catMap = data?.itemCategories ?? {};
+    const photoMap = data?.itemPhotos ?? {};
+    const aliases = data?.itemAliases ?? {};
+    return topProducts.map((r) => {
+      const canon = canonicalItemName(r.item, aliases);
+      return {
+        name: r.item,
+        revenue: r.revenue,
+        units: r.units,
+        category: categoryFor(r.item, catMap, aliases),
+        photoUrl: photoMap[canon] ?? null,
+      };
+    });
+  }, [topProducts, data]);
 
   // --- Sales rolled up by category, from the SAME per-item aggregation as the table above.
   //     Summing `items` guarantees the category totals reconcile exactly to the item totals
@@ -447,65 +472,34 @@ export function InsightsPage() {
           </div>
         )}
 
-        {/* TOP PRODUCTS */}
-        <SectionLabel>Top Products · Ranked by Units Sold</SectionLabel>
+        {/* TOP PRODUCTS (photo blocks) */}
+        <SectionLabel>Top Products</SectionLabel>
         <Panel
           title="Top 10 items"
+          info="product_photos"
           sub={
             anyRevenue
-              ? "Ranked by revenue (JOD) from popular-dishes / gross-breakdown imports."
+              ? "The headline for what is selling. Ranked by revenue (JOD); switch between the photo grid and ranked rows."
               : "Ranked by units, no revenue values imported yet. Re-import with the Revenue column mapped to populate."
           }
+          action={
+            topProducts.length > 0 ? (
+              <Segmented
+                options={[
+                  { v: "grid", l: "Grid" },
+                  { v: "rows", l: "Rows" },
+                ]}
+                value={itemViewMode}
+                onChange={setItemViewMode}
+              />
+            ) : undefined
+          }
         >
-          <div className="h-[320px]">
-            {topProducts.length === 0 ? (
-              <Empty text="No item-level data for this range." />
-            ) : (
-              <ResponsiveContainer>
-                <BarChart
-                  data={topProducts}
-                  layout="vertical"
-                  margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
-                >
-                  <CartesianGrid stroke="var(--border)" horizontal={false} />
-                  <XAxis
-                    type="number"
-                    stroke="var(--muted-foreground)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="item"
-                    stroke="var(--muted-foreground)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    width={140}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--popover)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    formatter={(v: number) =>
-                      anyRevenue
-                        ? [`${Math.round(v).toLocaleString()} JOD`, "Revenue"]
-                        : [`${v.toLocaleString()} units`, "Units"]
-                    }
-                  />
-                  <Bar isAnimationActive={false} dataKey={anyRevenue ? "revenue" : "units"} radius={[0, 3, 3, 0]}>
-                    {topProducts.map((_, i) => (
-                      <Cell key={i} fill={i === 0 ? "var(--series-6)" : "var(--series-4)"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+          {topProducts.length === 0 ? (
+            <Empty text="No item-level data for this range." />
+          ) : (
+            <ProductBlocks items={blockItems} mode={itemViewMode} metric={anyRevenue ? "revenue" : "units"} />
+          )}
         </Panel>
 
         {/* SALES BY CATEGORY */}
@@ -571,9 +565,24 @@ export function InsightsPage() {
         <Panel
           title="Per-item breakdown"
           sub="Units, revenue, avg price, COGS, product margin (menu price), and net margin (allocated payout). Tap a column to sort."
+          action={
+            items.length > 0 ? (
+              <button
+                onClick={() => setShowAllItems((v) => !v)}
+                className="text-[11.5px] font-semibold px-4 py-2 rounded-full border border-border bg-card hover:bg-background transition-colors"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                {showAllItems ? "Hide table" : "Show all items"}
+              </button>
+            ) : undefined
+          }
         >
           {items.length === 0 ? (
             <Empty text="No item-level data for this range." />
+          ) : !showAllItems ? (
+            <div className="text-[12px] md:text-[11px] text-muted-foreground">
+              {items.length} {items.length === 1 ? "item" : "items"} with units, revenue, average selling price, cost per unit and margin. Hidden by default so the photo blocks stay the headline.
+            </div>
           ) : (
             <div className="overflow-auto overscroll-contain max-h-[520px]">
               <table className="min-w-[700px] w-full text-[12px]">
@@ -777,12 +786,15 @@ function Panel({
   title,
   sub,
   info,
+  action,
   children,
 }: {
   title: string;
   sub?: string;
   /** Optional explainer id: renders an InfoTip next to the panel title. */
   info?: string;
+  /** Optional control rendered at the right of the panel header (e.g. a view toggle). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -795,6 +807,7 @@ function Panel({
           </h3>
           {sub && <div className="text-[12px] md:text-[10.5px] text-muted-foreground mt-0.5">{sub}</div>}
         </div>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
       {children}
     </div>

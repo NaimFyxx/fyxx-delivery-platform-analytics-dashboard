@@ -80,7 +80,7 @@ describe("data health check 2: order-count floor gates the COGS band", () => {
     return {
       paceDaily: [], daily, financials, costs: [{ item: "unit", cost: 1, effective_from: "2025-01-01" }],
       prices: [], itemSales, targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
-      adjustments: [], itemCategories: {}, lastOrderDates, itemAliases: {}, stretchTargets: [],
+      adjustments: [], itemCategories: {}, itemPhotos: {}, lastOrderDates, itemAliases: {}, stretchTargets: [],
     };
   };
 
@@ -143,7 +143,7 @@ describe("data health check 10: pace sheet vs imported sales", () => {
     return {
       paceDaily, daily, financials, costs: [{ item: "unit", cost: 1, effective_from: "2025-01-01" }],
       prices: [], itemSales: [], targets: [], lastImportAt: "2026-08-31T00:00:00Z", imports: [], customers: [],
-      adjustments: [], itemCategories: {}, lastOrderDates: [], itemAliases: {}, stretchTargets: [],
+      adjustments: [], itemCategories: {}, itemPhotos: {}, lastOrderDates: [], itemAliases: {}, stretchTargets: [],
     };
   };
 
